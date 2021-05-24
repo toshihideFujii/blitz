@@ -45,7 +45,7 @@ struct Cpu {
     is_atom_: bool,
     has_osxsave_: bool,
     has_avx_: bool,
-    has_avx2: bool,
+    has_avx2_: bool,
     has_fma3_: bool,
     has_bmi1_: bool,
     has_bmi2_: bool,
@@ -93,18 +93,18 @@ impl Cpu {
     fn has_sse2(&self) -> bool { self.has_sse2_ }
     fn has_sse3(&self) -> bool { self.has_sse3_ }
     fn has_ssse3(&self) -> bool { self.has_ssse3_ }
-    fn has_sse41() {}
-    fn has_sse42() {}
-    fn has_osxsave() {}
-    fn has_avx() {}
-    fn has_avx2() {}
-    fn has_fma3() {}
-    fn has_bmi1() {}
-    fn has_bmi2() {}
-    fn has_lzcnt() {}
-    fn has_popcnt() {}
-    fn is_atom() {}
-    fn has_non_stop_time_stamp_counter() {}
+    fn has_sse41(&self) -> bool { self.has_sse41_ }
+    fn has_sse42(&self) -> bool { self.has_sse42_ }
+    fn has_osxsave(&self) -> bool { self.has_osxsave_ }
+    fn has_avx(&self) -> bool { self.has_avx_ }
+    fn has_avx2(&self) -> bool { self.has_avx2_ }
+    fn has_fma3(&self) -> bool { self.has_fma3_ }
+    fn has_bmi1(&self) -> bool { self.has_bmi1_ }
+    fn has_bmi2(&self) -> bool { self.has_bmi2_ }
+    fn has_lzcnt(&self) -> bool { self.has_lzcnt_ }
+    fn has_popcnt(&self) -> bool { self.has_popcnt_ }
+    fn is_atom(&self) -> bool { self.is_atom_ }
+    fn has_non_stop_time_stamp_counter(&self) -> bool { self.has_non_stop_time_stamp_counter_ }
 
     // arm features
     fn has_idiva() {}
