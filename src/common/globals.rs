@@ -19,21 +19,21 @@ const STACK_LIMIT_SLACK_FOR_DEOPTIMIZATION_IN_BYTES: i32 = 256;
 type Byte = u8;
 
 // Constants
-const MAX_INT: i32 = 0x7FFFFFFF;
-const MIN_INT: i32 = -MAX_INT - 1;
-const MAX_INT8: i32 = (1 << 7) - 1;
-const MIN_INT8: i32 = -(1 << 7);
-const MAX_UINT8: i32 = (1 << 8) - 1;
-const MIN_UINT8: i32 = 0;
-const MAX_INT16: i32 = (1 << 15) - 1;
-const MIN_INT16: i32 = -(1 << 15);
-const MAX_UINT16: i32 = (1 << 16) - 1;
-const MIN_UINT16: i32 = 0;
-const MAX_INT31: i32 = MAX_INT / 2;
-const MIN_INT31: i32 = MIN_INT / 2;
+pub const MAX_INT: i64 = 0x7FFFFFFF;
+pub const MIN_INT: i64 = -MAX_INT - 1;
+pub const MAX_INT8: i32 = (1 << 7) - 1;
+pub const MIN_INT8: i32 = -(1 << 7);
+pub const MAX_UINT8: i32 = (1 << 8) - 1;
+pub const MIN_UINT8: i32 = 0;
+pub const MAX_INT16: i32 = (1 << 15) - 1;
+pub const MIN_INT16: i32 = -(1 << 15);
+pub const MAX_UINT16: i32 = (1 << 16) - 1;
+pub const MIN_UINT16: i32 = 0;
+pub const MAX_INT31: i64 = MAX_INT / 2;
+pub const MIN_INT31: i64 = MIN_INT / 2;
 
-const MAX_UINT32: u32 = 0xFFFFFFFF;
-const MIN_UINT32: i32 = 0;
+pub const MAX_UINT32: u32 = 0xFFFFFFFF;
+pub const MIN_UINT32: i32 = 0;
 
-const UINT8_SIZE: usize = mem::size_of::<u8>();
-const BYTE_SIZE: usize = mem::size_of::<Byte>();
+pub const UINT8_SIZE: usize = mem::size_of::<u8>();
+pub const BYTE_SIZE: usize = mem::size_of::<Byte>();
