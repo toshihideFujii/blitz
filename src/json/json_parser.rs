@@ -57,6 +57,10 @@ impl JsonString {
     }
 }
 
+struct JsonProperty {
+    string_: JsonString
+}
+
 #[derive(Copy, Clone, PartialEq)]
 pub enum JsonToken {
     Number,
@@ -84,6 +88,11 @@ struct JsonParser {
     elements_: u32,
     cursor_: u32,
     next_: JsonToken,
+    chars_may_relocate_: bool,
+    //original_source_: &str,
+    //source_: &str,
+    end_: u32,
+    chars_: u32
 }
 
 impl JsonParser {
@@ -112,16 +121,59 @@ impl JsonParser {
         return self.advance()
     }
 
-    pub fn expect(&mut self, _token: JsonToken) {
-        if self.peek() == _token {
+    pub fn expect(&mut self, token: JsonToken) {
+        if self.peek() == token {
             return self.advance()
         } else {
             return self.report_unexpected_token(self.peek())
         }
     }
 
-    // Mark that a parsing error has happened at the current token.
-    pub fn report_unexpected_token(self, _token: JsonToken) {
+    pub fn expect_next(&mut self, token: JsonToken) {
+        self.skip_white_space();
+        self.expect(token)
+    }
 
+    pub fn check(&mut self, token: JsonToken) -> bool {
+        self.skip_white_space();
+        if self.next_ != token {
+            return false;
+        }
+        self.advance();
+        return true;
+    }
+
+    pub fn scan_literal(self) {}
+
+    pub fn skip_white_space(self) {}
+
+    pub fn scan_json_string(self, _needs_internalization: bool) {}
+
+    pub fn scan_json_property_key(self) {}
+
+    pub fn scan_unicode_character(self) -> u32 {
+        return 0;
+    }
+
+    pub fn make_string(self) -> String {
+        return "".to_string();
+    }
+
+    pub fn decode_string(self) {}
+
+    pub fn parse_json_number(self) {}
+
+    pub fn parse_json_value(self) {}
+
+    pub fn build_json_object(self) {}
+    pub fn build_json_array(self) {}
+
+    pub fn report_unexpected_character(self) {}
+    
+    // Mark that a parsing error has happened at the current token.
+    pub fn report_unexpected_token(self, _token: JsonToken) {}
+
+    fn is_at_end(self) -> bool {
+        return self.cursor_ == self.end_
     }
 }
