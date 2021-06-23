@@ -7,6 +7,7 @@ mod date;
 mod json;
 mod logging;
 mod objects;
+mod strings;
 mod util;
 
 fn main() {

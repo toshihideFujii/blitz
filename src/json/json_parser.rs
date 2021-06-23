@@ -1,3 +1,5 @@
+use std::char;
+
 
 
 pub enum ParseElementResult {
@@ -70,7 +72,7 @@ pub enum JsonToken {
     Lbrack,
     Rbrack,
     TrueLiteral,
-    FlaseLiteral,
+    FalseLiteral,
     NullLiteral,
     WhiteSpace,
     Colon,
@@ -86,11 +88,11 @@ struct JsonParser {
     index_: u32,
     max_index: u32,
     elements_: u32,
-    cursor_: u32,
     next_: JsonToken,
     chars_may_relocate_: bool,
     //original_source_: &str,
     //source_: &str,
+    cursor_: u32,
     end_: u32,
     chars_: u32
 }
@@ -173,7 +175,31 @@ impl JsonParser {
     // Mark that a parsing error has happened at the current token.
     pub fn report_unexpected_token(self, _token: JsonToken) {}
 
-    fn is_at_end(self) -> bool {
+    fn is_at_end(&self) -> bool {
         return self.cursor_ == self.end_
+    }
+
+    fn position(&self) -> u32 {
+        self.cursor_ - self.chars_
+    }
+}
+
+fn get_one_char_json_token(code: u8) -> JsonToken {
+    let c = code as char;
+    match c {
+        '"' => JsonToken::String,
+        '-' => JsonToken::Number,
+        '[' => JsonToken::Lbrack,
+        '{' => JsonToken::Lbrace,
+        't' => JsonToken::TrueLiteral,
+        'f' => JsonToken::FalseLiteral,
+        'n' => JsonToken::NullLiteral,
+        ' ' => JsonToken::WhiteSpace,
+        '\t' => JsonToken::WhiteSpace,
+        '\r' => JsonToken::WhiteSpace,
+        '\n' => JsonToken::WhiteSpace,
+        ':' => JsonToken::Colon,
+        ',' => JsonToken::Conma,
+        _ => JsonToken::Illegal
     }
 }
