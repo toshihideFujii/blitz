@@ -1,4 +1,3 @@
-
 /*
 use generic_array::{ArrayLength, GenericArray};
 
@@ -10,15 +9,14 @@ struct Vector<T, N: ArrayLength<usize>> {
 
 struct Vector<T> {
     start_: T,
-    length_: usize
+    length_: usize,
 }
 
 impl<T> Vector<T> {
-
     pub fn new(data: T, length: usize) -> Vector<T> {
         Vector {
             start_: data,
-            length_: length
+            length_: length,
         }
     }
 
@@ -26,17 +24,17 @@ impl<T> Vector<T> {
     // Only use this if you really need an integer return value.
     // Use {size()} otherwise.
     pub fn length(self) -> usize {
-        return self.length_
+        return self.length_;
     }
 
     // Reutrns the length of the vector as a size_t.
     pub fn size(self) -> usize {
-        return self.length_
+        return self.length_;
     }
 
     // Returns whether or not the vector is empty.
     pub fn empty(self) -> bool {
-        return self.length_ == 0
+        return self.length_ == 0;
     }
     /*
     pub fn at(self, index: usize) -> T {
@@ -52,7 +50,7 @@ impl<T> Vector<T> {
 
     // For consistency with other containers. do also provide a {data} accessor.
     pub fn data(self) -> T {
-        return self.start_
+        return self.start_;
     }
 
     // Returns a pointer past the end of the data in the vector.

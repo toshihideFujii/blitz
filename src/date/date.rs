@@ -1,4 +1,3 @@
-
 use crate::common::globals;
 
 pub const MS_PER_MIN: i64 = 60 * 1000;
@@ -23,9 +22,7 @@ pub const INVALID_LOCAL_OFFSET_IN_MS: i64 = globals::MAX_INT;
 // It is an invariant of DateCache that cache stamp is non-negative.
 pub const INVALID_STAMP: i64 = -1;
 
-struct DateCache {
-
-}
+struct DateCache {}
 
 // Computes modulo(time_ms, MS_PER_DAY) given that
 // days = floor(time_ms / MS_PER_DAY)

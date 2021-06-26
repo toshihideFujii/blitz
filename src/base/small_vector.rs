@@ -1,5 +1,3 @@
-
-
 // Minimal SmallVector implementation. Uses inline storage first, switches to
 // malloc when it overflows.
 //#[derive(Copy, Clone)]
@@ -9,8 +7,7 @@ struct SmallVector<T> {
     //end_of_storage_: T,
 }
 
-impl<T> Copy for SmallVector<T> {
-}
+impl<T> Copy for SmallVector<T> {}
 
 impl<T> Clone for SmallVector<T> {
     fn clone(&self) -> Self {
@@ -19,10 +16,7 @@ impl<T> Clone for SmallVector<T> {
 }
 
 impl<T> SmallVector<T> {
-
-    pub fn data() {
-
-    }
+    pub fn data() {}
 
     pub fn begin(&self) -> std::marker::PhantomData<T> {
         return self.begin_;
@@ -40,48 +34,32 @@ impl<T> SmallVector<T> {
         return self.begin_ == self.end_;
     }
 
-    pub fn capacity() {
+    pub fn capacity() {}
 
-    }
-
-    pub fn back() {
-
-    }
+    pub fn back() {}
 
     pub fn at(&self, _index: usize) {
         //self.begin_[index]
     }
 
-    pub fn emplace_back() {
-
-    }
+    pub fn emplace_back() {}
 
     pub fn pop_back(&self, _count: usize) {
         //self.end_ -= count
     }
 
-    pub fn resize_no_init() {
-
-    }
+    pub fn resize_no_init() {}
 
     // Clear without freeing any storage.
     pub fn clear(&mut self) {
         //self.end_ = self.begin_
     }
 
-    pub fn reset() {
+    pub fn reset() {}
 
-    }
+    fn grow() {}
 
-    fn grow() {
+    fn is_big() {}
 
-    }
-
-    fn is_big() {
-
-    }
-
-    fn inline_storage_begin() {
-
-    }
+    fn inline_storage_begin() {}
 }

@@ -1,5 +1,3 @@
-
-
 // CPU
 // Query information about the processor.
 // This class also has static methods for the architecture specific functions.
@@ -7,7 +5,7 @@
 // For each architecture the file cpu_<arch> contains the implementation of these functions.
 
 // ARM-specific part codes
-const ARM_CORTEX_A5: i32 = 0xc05; 
+const ARM_CORTEX_A5: i32 = 0xc05;
 const ARM_CORTEX_A7: i32 = 0xc07;
 const ARM_CORTEX_A8: i32 = 0xc08;
 const ARM_CORTEX_A9: i32 = 0xc09;
@@ -61,14 +59,18 @@ struct Cpu {
     is_fp64_mode_: bool,
     has_non_stop_time_stamp_counter_: bool,
     is_running_in_vm_: bool,
-    has_msa_: bool
+    has_msa_: bool,
 }
 
 impl Cpu {
-    // x86 CPUID information 
+    // x86 CPUID information
     fn vendor() {}
-    fn stepping(&self) -> i32 { self.stepping_ }
-    fn model(&self) -> i32 { self.model_ }
+    fn stepping(&self) -> i32 {
+        self.stepping_
+    }
+    fn model(&self) -> i32 {
+        self.model_
+    }
     fn ext_model() {}
     fn family() {}
     fn ext_family() {}
@@ -86,25 +88,63 @@ impl Cpu {
     fn dcache_line_size() {}
 
     // x86 features
-    fn has_cmov(&self) -> bool { self.has_cmov_ }
-    fn has_sahf(&self) -> bool { self.has_sahf_ }
-    fn has_mmx(&self) -> bool { self.has_mmx_ }
-    fn has_sse(&self) -> bool { self.has_sse_ }
-    fn has_sse2(&self) -> bool { self.has_sse2_ }
-    fn has_sse3(&self) -> bool { self.has_sse3_ }
-    fn has_ssse3(&self) -> bool { self.has_ssse3_ }
-    fn has_sse41(&self) -> bool { self.has_sse41_ }
-    fn has_sse42(&self) -> bool { self.has_sse42_ }
-    fn has_osxsave(&self) -> bool { self.has_osxsave_ }
-    fn has_avx(&self) -> bool { self.has_avx_ }
-    fn has_avx2(&self) -> bool { self.has_avx2_ }
-    fn has_fma3(&self) -> bool { self.has_fma3_ }
-    fn has_bmi1(&self) -> bool { self.has_bmi1_ }
-    fn has_bmi2(&self) -> bool { self.has_bmi2_ }
-    fn has_lzcnt(&self) -> bool { self.has_lzcnt_ }
-    fn has_popcnt(&self) -> bool { self.has_popcnt_ }
-    fn is_atom(&self) -> bool { self.is_atom_ }
-    fn has_non_stop_time_stamp_counter(&self) -> bool { self.has_non_stop_time_stamp_counter_ }
+    fn has_cmov(&self) -> bool {
+        self.has_cmov_
+    }
+    fn has_sahf(&self) -> bool {
+        self.has_sahf_
+    }
+    fn has_mmx(&self) -> bool {
+        self.has_mmx_
+    }
+    fn has_sse(&self) -> bool {
+        self.has_sse_
+    }
+    fn has_sse2(&self) -> bool {
+        self.has_sse2_
+    }
+    fn has_sse3(&self) -> bool {
+        self.has_sse3_
+    }
+    fn has_ssse3(&self) -> bool {
+        self.has_ssse3_
+    }
+    fn has_sse41(&self) -> bool {
+        self.has_sse41_
+    }
+    fn has_sse42(&self) -> bool {
+        self.has_sse42_
+    }
+    fn has_osxsave(&self) -> bool {
+        self.has_osxsave_
+    }
+    fn has_avx(&self) -> bool {
+        self.has_avx_
+    }
+    fn has_avx2(&self) -> bool {
+        self.has_avx2_
+    }
+    fn has_fma3(&self) -> bool {
+        self.has_fma3_
+    }
+    fn has_bmi1(&self) -> bool {
+        self.has_bmi1_
+    }
+    fn has_bmi2(&self) -> bool {
+        self.has_bmi2_
+    }
+    fn has_lzcnt(&self) -> bool {
+        self.has_lzcnt_
+    }
+    fn has_popcnt(&self) -> bool {
+        self.has_popcnt_
+    }
+    fn is_atom(&self) -> bool {
+        self.is_atom_
+    }
+    fn has_non_stop_time_stamp_counter(&self) -> bool {
+        self.has_non_stop_time_stamp_counter_
+    }
 
     // arm features
     fn has_idiva() {}

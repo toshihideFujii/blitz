@@ -1,4 +1,3 @@
-
 //use rlimit::{getrlimit, Resource};
 
 // Returns the number of logical processors/core on the current machine.

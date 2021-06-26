@@ -1,4 +1,3 @@
-
 pub fn ascii_alpha_to_lower(c: u32) -> u32 {
     c | 0x20
 }

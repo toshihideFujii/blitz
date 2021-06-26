@@ -1,9 +1,8 @@
-
 pub mod bits;
 pub mod cpu;
 pub mod elapsed_timer;
-pub mod hashmap_entry;
 pub mod hashmap;
+pub mod hashmap_entry;
 pub mod small_vector;
 pub mod sys_info;
 pub mod time;

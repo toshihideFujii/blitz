@@ -1,10 +1,6 @@
-
-
 // HeapObject is the superclass for all classes describing heap
 // allocated objects.
-struct HeapObject {
-
-}
+struct HeapObject {}
 
 impl HeapObject {
     pub fn is_null(self) -> bool {
@@ -36,4 +32,29 @@ impl HeapObject {
     pub fn is_external() {}
 
     pub fn from_address() {}
+
+    // Returns the address of this HeapObject.
+    pub fn address() {}
+
+    pub fn iterate() {}
+
+    pub fn is_valid_slot() {}
+
+    // Returns the heap object's size in bytes.
+    pub fn size() {}
+
+    pub fn size_from_map() {}
+
+    pub fn raw_field() {}
+    pub fn raw_may_be_weak_field() {}
+
+    pub fn get_write_barrier_mode() {}
+    pub fn heap_object_short_print() {}
+
+    pub fn needs_rehadhing() {}
+
+    pub fn can_be_rehashed() {}
+
+    // Rehash the object based on the layout inferred from its map.
+    pub fn rehash_based_on_map() {}
 }

@@ -1,5 +1,3 @@
-
-
 // Type hints for an binary operation.
 pub enum BinaryOperationHint {
     None,
@@ -9,7 +7,7 @@ pub enum BinaryOperationHint {
     NumberOrOddball,
     String,
     BigInt,
-    Any
+    Any,
 }
 
 // The hints for an compare operation.
@@ -25,7 +23,7 @@ pub enum CompareOperationHint {
     BigInt,
     Receiver,
     ReceiverOrNullOrUndefined,
-    Any
+    Any,
 }
 
 // Type hints for for..in statements.
@@ -33,11 +31,11 @@ pub enum ForInHint {
     None,
     EnumCacheKeysAndIndices,
     EnumCacheKeys,
-    Any
+    Any,
 }
 
 pub enum StringAddFlags {
     StringAddCheckNone,
     StringAddConvertLeft,
-    StringAddConvertRight
+    StringAddConvertRight,
 }

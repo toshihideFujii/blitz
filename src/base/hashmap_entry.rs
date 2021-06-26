@@ -1,9 +1,8 @@
-
 struct TemplateHashMapEntry<Key, Value> {
     key: Key,
     value: Value,
     hash: u32, // The full hash value for key
-    exists_: bool
+    exists_: bool,
 }
 
 // HashMap entries are (key, value, hash) triplets, with a boolean indicating

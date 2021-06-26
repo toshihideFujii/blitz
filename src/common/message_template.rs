@@ -1,4 +1,3 @@
-
 enum MessageTemplate {
     None,
     CyclicProto,
@@ -10,5 +9,5 @@ enum MessageTemplate {
     Unsupported,
     WrongServiceType,
     WrongValueType,
-    IcuError
+    IcuError,
 }

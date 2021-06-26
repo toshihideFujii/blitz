@@ -1,8 +1,6 @@
-
 #[allow(unused_imports)]
 #[allow(unused_variables)]
 //#[allow(dead_code)]
-
 use super::hashmap_entry;
 
 // The default capacity.
@@ -12,50 +10,44 @@ const DEFAULT_HASH_MAP_CAPACITY: u32 = 8;
 
 //type Entry = TemplateHashMapEntry<Key, Value>;
 
-struct TemplateHashMap<Key, Value, /*MatchFun, AllocationPolicy*/> {
+struct TemplateHashMap<Key, Value /*MatchFun, AllocationPolicy*/> {
     key: Key,
-    val: Value
+    val: Value,
 }
 
-impl<Key, Value/*, MatchFun, AllocationPolicy*/> TemplateHashMap<Key, Value/*, MatchFun, AllocationPolicy*/> {
-
+impl<Key, Value /*, MatchFun, AllocationPolicy*/>
+    TemplateHashMap<Key, Value /*, MatchFun, AllocationPolicy*/>
+{
     // If an entry with matching key is found, returns that entry.
     // Otherwise, nullptr is returned.
-    fn lookup(/*key: Key, hash: u32*/) {
-    }
+    fn lookup(/*key: Key, hash: u32*/) {}
 
     // If an entry with matching key is found, returns that entry.
     // If no matching entry is found, a new entry is inserted with corresponding key,
     // key hash, and default initialized value.
-    fn lookup_or_insert(/*key: Key, hash: u32*/) {
-    }
+    fn lookup_or_insert(/*key: Key, hash: u32*/) {}
 
-    fn insert_new(/*key: Key, hash: u32*/) {
-    }
+    fn insert_new(/*key: Key, hash: u32*/) {}
 
     // Removes the entry with matching key.
     // It returns the value of the deleted entry or null if there is no value for such key.
-    fn remove(self, /*key: Key, hash: u32*/) -> Value {
+    fn remove(self /*key: Key, hash: u32*/) -> Value {
         self.val
     }
 
     // Empties the hash map (occupancy() === 0).
-    fn clear() {
-    }
+    fn clear() {}
 
     // The number of (non-empty) entries in the table.
     fn occupancy() -> u32 {
         return 0;
     }
 
-    fn start() {
-    }
+    fn start() {}
 
-    fn next() {
-    }
+    fn next() {}
 
-    fn allocator() {
-    }
+    fn allocator() {}
 
     fn resize() {}
 }
