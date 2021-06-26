@@ -3,29 +3,31 @@
 //   - HeapObject   (superclass for everything allocated in the heap)
 //     - JSReceiver (suitable for property access)
 //       - JSObject
+//         - JSArray
+//         - JSArrayBuffer
 
 pub enum WriteBarrierMode {
-    SkipWriteBarrier,
-    UnsafeSkipWriteBarrier,
-    UpdateWeakWriteBarrier,
-    UpdateEphemeronKeyWriteBarrier,
-    UpdateWriteBarrier,
+  SkipWriteBarrier,
+  UnsafeSkipWriteBarrier,
+  UpdateWeakWriteBarrier,
+  UpdateEphemeronKeyWriteBarrier,
+  UpdateWriteBarrier,
 }
 
 pub enum PropertyNormalizationMode {
-    ClearInobjectProperties,
-    KeepInobjectProperties,
+  ClearInobjectProperties,
+  KeepInobjectProperties,
 }
 
 pub enum TransitionFlag {
-    InsertTransition,
-    OmitTransition,
+  InsertTransition,
+  OmitTransition,
 }
 
 pub enum SimpleTransitionFlag {
-    SimplePropertyTransition,
-    PropertyTransition,
-    SpecialTransition,
+  SimplePropertyTransition,
+  PropertyTransition,
+  SpecialTransition,
 }
 
 // Instance size sentinel for objects of variable size.
@@ -35,21 +37,21 @@ pub const STUB_MAJOR_KEY_BITS: i64 = 8;
 //pub const STUB_MINOR_KEY_BITS: i64 = SMI_VALUE_SIZE - STUB_MAJOR_KEY_BITS - 1;
 
 pub enum ComparisonResult {
-    LessThan,    // x < y
-    Equal,       // x = y
-    GreaterThan, // x > y
-    Undefined,   // at least one of x or y was undefined or NaN
+  LessThan,    // x < y
+  Equal,       // x = y
+  GreaterThan, // x > y
+  Undefined,   // at least one of x or y was undefined or NaN
 }
 
 pub enum OnNonExistent {
-    ThrowReferenceError,
-    ReturnUndefined,
+  ThrowReferenceError,
+  ReturnUndefined,
 }
 
 // The element types selection for CreateListFromArrayLike.
 pub enum ElementTypes {
-    All,
-    StringAndSymbol,
+  All,
+  StringAndSymbol,
 }
 
 pub struct Object {}
@@ -57,14 +59,14 @@ pub struct Object {}
 pub struct MapWord {}
 
 pub enum EnsureElementsMode {
-    DontAllowDoubleElements,
-    AllowCopiedDoubleElements,
-    AllowConvertedDoubleElements,
+  DontAllowDoubleElements,
+  AllowCopiedDoubleElements,
+  AllowConvertedDoubleElements,
 }
 
 pub enum AccessorComponent {
-    AccessorGetter,
-    AccessorSetter,
+  AccessorGetter,
+  AccessorSetter,
 }
 
 // Utility superclass for stack-allocated objects that must be updated on gc.

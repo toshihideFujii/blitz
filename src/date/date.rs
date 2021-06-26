@@ -27,19 +27,19 @@ struct DateCache {}
 // Computes modulo(time_ms, MS_PER_DAY) given that
 // days = floor(time_ms / MS_PER_DAY)
 pub fn time_in_day(time_ms: i64, days: i64) -> i64 {
-    return time_ms - days * MS_PER_DAY;
+  return time_ms - days * MS_PER_DAY;
 }
 
 // Given the number of days since the epoch, computes the weekday.
 pub fn week_day(days: i64) -> i64 {
-    let result: i64 = (days + 4) % 7;
-    if result > 0 {
-        return result;
-    } else {
-        return result + 7;
-    }
+  let result: i64 = (days + 4) % 7;
+  if result > 0 {
+    return result;
+  } else {
+    return result + 7;
+  }
 }
 
 pub fn is_leap(year: i64) -> bool {
-    return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+  return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
 }

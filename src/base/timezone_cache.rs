@@ -1,6 +1,6 @@
 enum TimeZoneDetection {
-    Skip,
-    Redetect,
+  Skip,
+  Redetect,
 }
 
 struct TimezoneCache {}

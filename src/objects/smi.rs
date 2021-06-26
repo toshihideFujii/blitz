@@ -6,28 +6,28 @@
 pub struct Smi {}
 
 impl Smi {
-    pub fn new() {}
+  pub fn new() {}
 
-    // Returns the integer value.
-    pub fn value() {}
+  // Returns the integer value.
+  pub fn value() {}
 
-    pub fn to_uint32_ami() {}
+  pub fn to_uint32_ami() {}
 
-    // Convert a Smi object to an int.
-    pub fn to_int() {}
+  // Convert a Smi object to an int.
+  pub fn to_int() {}
 
-    // Convert a value to a Smi object.
-    pub fn from_int() {}
+  // Convert a value to a Smi object.
+  pub fn from_int() {}
 
-    pub fn from_31_bit_pattern() {}
+  pub fn from_31_bit_pattern() {}
 
-    // Returns whether value can be represented in a Smi.
-    pub fn is_valid_smi() {}
+  // Returns whether value can be represented in a Smi.
+  pub fn is_valid_smi() {}
 
-    pub fn lexicographic_compare() {}
+  pub fn lexicographic_compare() {}
 
-    // Dispatched behavior.
-    pub fn smi_print() {}
+  // Dispatched behavior.
+  pub fn smi_print() {}
 
-    pub fn zero() {}
+  pub fn zero() {}
 }
