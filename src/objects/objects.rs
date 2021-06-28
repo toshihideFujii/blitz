@@ -5,6 +5,12 @@
 //       - JSObject
 //         - JSArray
 //         - JSArrayBuffer
+//         - JSCollection
+//           - JSSet
+//           - JSMap
+//         - JSWeakCollection
+//           - JSWeakSet
+//           - JSWeakMap
 
 pub enum WriteBarrierMode {
   SkipWriteBarrier,

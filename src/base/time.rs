@@ -363,6 +363,15 @@ impl Add<TimeDelta> for Time {
   }
 }
 
+impl Sub for Time {
+  type Output = TimeDelta;
+  fn sub(self, other: Time) -> TimeDelta {
+    TimeDelta {
+      delta_: self.us_ - other.us_,
+    }
+  }
+}
+
 impl Sub<TimeDelta> for Time {
   type Output = Time;
   fn sub(self, delta: TimeDelta) -> Time {
@@ -599,7 +608,65 @@ mod tests {
     assert_eq!(t.to_js_time(), 70000.3);
   }
 
+  #[test]
+  fn test_time_now_resolution() {
+    let target_granularity = TimeDelta::from_milliseconds(16);
+
+    let expiration_timeout = TimeDelta::from_seconds(1);
+    let mut timer = ElapsedTimer::new();
+    timer.start();
+    let mut delta;
+    loop {
+      let start = Time::now();
+      // Loop until we can detect that the clock has changed.
+      // Non highres timers will increment in chunks, i.e. 15ms.
+      // By spinning until we see a clock change, we detect the minimum time between measurements.
+      loop {
+        let now = Time::now();
+        delta = now - start;
+        if now > start {
+          break;
+        }
+      }
+      assert_ne!(delta.in_microseconds(), 0);
+      if delta <= target_granularity || timer.has_expired(expiration_timeout) {
+        break;
+      }
+    }
+    assert!(delta <= target_granularity);
+  }
+
   // TimeTicks
+  #[test]
+  fn test_timeticks_now_resolution() {
+    let target_granularity = match TimeTicks::is_high_resolution() {
+      true => TimeDelta::from_microseconds(1),
+      false => TimeDelta::from_milliseconds(16),
+    };
+    let expiration_timeout = TimeDelta::from_seconds(1);
+    let mut timer = ElapsedTimer::new();
+    timer.start();
+    let mut delta;
+    loop {
+      let start = TimeTicks::now();
+      // Loop until we can detect that the clock has changed.
+      // Non highres timers will increment in chunks, i.e. 15ms.
+      // By spinning until we see a clock change, we detect the minimum time between measurements.
+      loop {
+        let now = TimeTicks::now();
+        delta = now - start;
+        if now > start {
+          break;
+        }
+      }
+      assert_ne!(delta.in_microseconds(), 0);
+      if delta <= target_granularity || timer.has_expired(expiration_timeout) {
+        break;
+      }
+    }
+    assert!(delta <= target_granularity);
+  }
+
   #[test]
   fn test_timeticks_is_monotonic() {
     let mut prev_normal_ticks = TimeTicks::new(0);
