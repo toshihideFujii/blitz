@@ -1,4 +1,4 @@
-use std::u64;
+use std::{ops::Div, u64};
 
 pub trait BitOp<T> {
   // Returns the number of bits set in |value|.
@@ -26,6 +26,18 @@ pub trait BitOp<T> {
   // equal to |value|. If you pass in a |value| that is already
   // a power of two, it is returned as is.
   fn round_down_to_power_of_two(value: T) -> T;
+
+  fn rotate_left(value: T, shift: u32) -> T;
+
+  fn rotate_right(value: T, shift: u32) -> T;
+
+  // Divides |lhs| by |rhs| and returns the quotient truncated to u32.
+  // If |rhs| is zero, then zero is returned.
+  fn unsigned_div(lhs: T, rhs: T) -> T;
+
+  // Divides |lhs| by |rhs| and returns the remainder truncated to u32.
+  // If |rhs| is zero, then zero is returned.
+  fn unsigned_mod(lhs: T, rhs: T) -> T;
 }
 
 pub struct Bits {}
@@ -56,6 +68,24 @@ impl BitOp<u8> for Bits {
   fn round_down_to_power_of_two(_value: u8) -> u8 {
     panic!("Not supported.")
   }
+  fn rotate_left(value: u8, shift: u32) -> u8 {
+    value.rotate_left(shift)
+  }
+  fn rotate_right(value: u8, shift: u32) -> u8 {
+    value.rotate_right(shift)
+  }
+  fn unsigned_div(lhs: u8, rhs: u8) -> u8 {
+    if rhs == 0 {
+      return 0 as u8;
+    }
+    lhs.div(rhs)
+  }
+  fn unsigned_mod(lhs: u8, rhs: u8) -> u8 {
+    if rhs == 0 {
+      return 0 as u8;
+    }
+    lhs % rhs
+  }
 }
 
 impl BitOp<u16> for Bits {
@@ -83,6 +113,24 @@ impl BitOp<u16> for Bits {
   }
   fn round_down_to_power_of_two(_value: u16) -> u16 {
     panic!("Not supported.")
+  }
+  fn rotate_left(value: u16, shift: u32) -> u16 {
+    value.rotate_left(shift)
+  }
+  fn rotate_right(value: u16, shift: u32) -> u16 {
+    value.rotate_right(shift)
+  }
+  fn unsigned_div(lhs: u16, rhs: u16) -> u16 {
+    if rhs == 0 {
+      return 0 as u16;
+    }
+    lhs.div(rhs)
+  }
+  fn unsigned_mod(lhs: u16, rhs: u16) -> u16 {
+    if rhs == 0 {
+      return 0 as u16;
+    }
+    lhs % rhs
   }
 }
 
@@ -119,6 +167,24 @@ impl BitOp<u32> for Bits {
     }
     return result;
   }
+  fn rotate_left(value: u32, shift: u32) -> u32 {
+    value.rotate_left(shift)
+  }
+  fn rotate_right(value: u32, shift: u32) -> u32 {
+    value.rotate_right(shift)
+  }
+  fn unsigned_div(lhs: u32, rhs: u32) -> u32 {
+    if rhs == 0 {
+      return 0 as u32;
+    }
+    lhs.div(rhs)
+  }
+  fn unsigned_mod(lhs: u32, rhs: u32) -> u32 {
+    if rhs == 0 {
+      return 0 as u32;
+    }
+    lhs % rhs
+  }
 }
 
 impl BitOp<u64> for Bits {
@@ -147,31 +213,29 @@ impl BitOp<u64> for Bits {
   fn round_down_to_power_of_two(_value: u64) -> u64 {
     panic!("Not supported.")
   }
+  fn rotate_left(value: u64, shift: u32) -> u64 {
+    value.rotate_left(shift)
+  }
+  fn rotate_right(value: u64, shift: u32) -> u64 {
+    value.rotate_right(shift)
+  }
+  fn unsigned_div(lhs: u64, rhs: u64) -> u64 {
+    if rhs == 0 {
+      return 0 as u64;
+    }
+    lhs.div(rhs)
+  }
+  fn unsigned_mod(lhs: u64, rhs: u64) -> u64 {
+    if rhs == 0 {
+      return 0 as u64;
+    }
+    lhs % rhs
+  }
 }
 
 impl Bits {
   // Returns |value| in reverse bit order.
   pub fn reverse_bits() {}
-
-  // Precondition: 0 <= shift < 32
-  pub fn rotate_right_32(value: u32, shift: u32) -> u32 {
-    return (value >> shift) | (value << ((32 - shift) & 31));
-  }
-
-  // Precondition: 0 <= shift < 32
-  pub fn rotate_left_32(value: u32, shift: u32) -> u32 {
-    return (value << shift) | (value >> ((32 - shift) & 31));
-  }
-
-  // Precondition: 0 <= shift < 64
-  pub fn rotate_right_64(value: u64, shift: u64) -> u64 {
-    return (value >> shift) | (value << ((64 - shift) & 63));
-  }
-
-  // Precondition: 0 <= shift < 64
-  pub fn rotate_left_64(value: u64, shift: u64) -> u64 {
-    return (value << shift) | (value >> ((64 - shift) & 63));
-  }
 
   // Multiplies two signed 32-bit values |lhs| and |rhs|,
   // extracts the most significant 32 bits of the result, and returns those.
@@ -211,26 +275,6 @@ impl Bits {
       return 0;
     }
     return lhs % rhs;
-  }
-
-  // Divides |lhs| by |rhs| and returns the quotient truncated to u32.
-  // If |rhs| is zero, then zero is returned.
-  pub fn unsigned_div_32(lhs: u32, rhs: u32) -> u32 {
-    if rhs != 0 {
-      return lhs / rhs;
-    } else {
-      return 0;
-    }
-  }
-
-  // Divides |lhs| by |rhs| and returns the remainder truncated to u32.
-  // If |rhs| is zero, then zero is returned.
-  pub fn unsigned_mod_32(lhs: u32, rhs: u32) -> u32 {
-    if rhs != 0 {
-      return lhs % rhs;
-    } else {
-      return 0;
-    }
   }
 
   // Adds |lhs| and |rhs|, checks and returns the result.
@@ -528,5 +572,59 @@ mod tests {
       Bits::round_down_to_power_of_two(0x80000001 as u32),
       0x80000000
     );
+  }
+
+  #[test]
+  fn test_bits_rotate_right_u32() {
+    let mut shift: u32;
+    for i in 0..32 {
+      shift = i;
+      println!("shift = {}", shift);
+      assert_eq!(Bits::rotate_right(0 as u32, shift), 0)
+    }
+    assert_eq!(Bits::rotate_right(1 as u32, 0 as u32), 1);
+    assert_eq!(Bits::rotate_right(2 as u32, 1 as u32), 1);
+    assert_eq!(Bits::rotate_right(1 as u32, 1 as u32), 0x80000000);
+  }
+
+  #[test]
+  fn test_bits_rotate_right_u64() {
+    let mut shift: u64;
+    for i in 0..64 {
+      shift = i;
+      println!("shift = {}", shift);
+      assert_eq!(Bits::rotate_right(0 as u64, shift as u32), 0)
+    }
+    assert_eq!(Bits::rotate_right(1 as u64, 0 as u32), 1);
+    assert_eq!(Bits::rotate_right(2 as u64, 1 as u32), 1);
+    assert_eq!(Bits::rotate_right(1 as u64, 1 as u32), 0x8000000000000000);
+  }
+
+  #[test]
+  fn test_bits_unsigned_div_u32() {
+    let mut shift: u32;
+    for i in 0..51 {
+      shift = i;
+      println!("shift = {}", shift);
+      assert_eq!(Bits::unsigned_div(i, 0), 0);
+      for j in i + 1..101 {
+        assert_eq!(Bits::unsigned_div(j, j), 1);
+        assert_eq!(Bits::unsigned_div(i, j), i / j);
+      }
+    }
+  }
+
+  #[test]
+  fn test_bits_unsigned_mod_u32() {
+    let mut shift: u32;
+    for i in 0..51 {
+      shift = i;
+      println!("shift = {}", shift);
+      assert_eq!(Bits::unsigned_mod(i, 0), 0);
+      for j in i + 1..101 {
+        assert_eq!(Bits::unsigned_mod(j, j), 0);
+        assert_eq!(Bits::unsigned_mod(i, j), i % j);
+      }
+    }
   }
 }
