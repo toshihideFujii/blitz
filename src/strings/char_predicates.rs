@@ -88,6 +88,8 @@ pub fn is_white_space(c: u32) -> bool {
   ch.is_whitespace()
 }
 
+pub fn is_white_space_slow() {}
+
 pub fn is_white_space_or_line_terminator(c: u32) -> bool {
   if Bounds::is_in_range(c, 0 as u32, 255 as u32) != true {
     return is_line_terminator(c); // TODO: is_white_space_slow
@@ -95,6 +97,10 @@ pub fn is_white_space_or_line_terminator(c: u32) -> bool {
   let ch = (c as u8) as char;
   ch.is_ascii_whitespace()
 }
+
+pub fn is_white_space_or_line_terminator_slow() {}
+
+pub fn is_line_terminator_sequence() {}
 
 #[cfg(test)]
 mod tests {
