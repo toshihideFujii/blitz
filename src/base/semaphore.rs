@@ -6,14 +6,16 @@
 pub struct Semaphore {}
 
 impl Semaphore {
-  pub fn new() {}
+  pub fn new(_count: u32) -> Self {
+    Semaphore {}
+  }
 
   // Imcrements the semaphore counter.
-  pub fn signal() {}
+  pub fn signal(&self) {}
 
   // Decrements the semaphore counter if it is positive, or blocks until
   // it becomes positive and then decrements the counter.
-  pub fn wait() {}
+  pub fn wait(&self) {}
 
   pub fn wait_for() {}
 
