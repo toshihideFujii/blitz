@@ -1,9 +1,14 @@
 pub mod heap_object;
 pub mod js_array;
 pub mod js_array_buffer;
+pub mod js_collator;
 pub mod js_collection;
+pub mod js_date_time_format;
+pub mod js_display_names;
+pub mod js_function;
 pub mod js_objects;
 pub mod js_promise;
+pub mod name;
 pub mod objects;
 pub mod smi;
 pub mod string;
