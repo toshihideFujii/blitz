@@ -7,6 +7,7 @@ pub mod hashmap_entry;
 pub mod iterator;
 pub mod mutex;
 pub mod platform;
+pub mod random_number_generator;
 pub mod semaphore;
 pub mod small_vector;
 pub mod sys_info;

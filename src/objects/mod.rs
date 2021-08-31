@@ -1,3 +1,4 @@
+pub mod bigint;
 pub mod heap_object;
 pub mod js_array;
 pub mod js_array_buffer;
