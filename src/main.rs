@@ -3,6 +3,8 @@
 mod base;
 mod common;
 mod date;
+mod heap;
+mod init;
 mod json;
 mod logging;
 mod objects;
