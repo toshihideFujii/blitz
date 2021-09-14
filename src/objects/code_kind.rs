@@ -35,7 +35,6 @@ pub fn code_kind_to_string(kind: CodeKind) -> String {
     CodeKind::Baseline => "Baseline".to_string(),
     CodeKind::TurboProp => "TurboProp".to_string(),
     CodeKind::TurboFan => "TurboFan".to_string(),
-    _ => panic!("Unsupported CodeKind."),
   }
 }
 
