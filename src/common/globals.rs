@@ -36,3 +36,10 @@ pub const MIN_UINT32: i32 = 0;
 
 pub const UINT8_SIZE: usize = mem::size_of::<u8>();
 pub const BYTE_SIZE: usize = mem::size_of::<Byte>();
+
+pub enum OptimizationTier {
+  None = 0b00,
+  MidTier = 0b01,
+  TopTier = 0b10,
+  LastOptimizationTier,
+}

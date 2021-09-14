@@ -3,6 +3,7 @@
 mod base;
 mod common;
 mod date;
+mod flags;
 mod heap;
 mod init;
 mod json;
