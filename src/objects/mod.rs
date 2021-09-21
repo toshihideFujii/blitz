@@ -1,6 +1,9 @@
 pub mod bigint;
 pub mod code;
 pub mod code_kind;
+pub mod debug_objects;
+pub mod function_kind;
+pub mod heap_number;
 pub mod heap_object;
 pub mod js_array;
 pub mod js_array_buffer;
