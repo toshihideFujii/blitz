@@ -1,8 +1,8 @@
 use std::mem;
 
-const KB: i32 = 1024;
-const MB: i32 = KB * 1024;
-const GB: i32 = MB * 1024;
+pub const KB: usize = 1024;
+pub const MB: usize = KB * 1024;
+pub const GB: usize = MB * 1024;
 
 // Minimum stack size in KB required by compilers.
 const STACK_SPACE_REQUIRED_FOR_COMPILATION: i32 = 40;
@@ -42,4 +42,10 @@ pub enum OptimizationTier {
   MidTier = 0b01,
   TopTier = 0b10,
   LastOptimizationTier,
+}
+
+pub enum GarbageCollector {
+  Scavenger,
+  MarkCompactor,
+  MinorMarkCompactor,
 }

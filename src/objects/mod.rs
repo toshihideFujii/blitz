@@ -30,6 +30,7 @@ pub mod js_segments;
 pub mod js_weak_refs;
 pub mod keys;
 pub mod literal_objects;
+pub mod lookup;
 pub mod lookup_cache;
 pub mod name;
 pub mod objects;

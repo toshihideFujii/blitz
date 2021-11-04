@@ -4,6 +4,7 @@ mod base;
 mod common;
 mod date;
 mod flags;
+mod gc;
 mod heap;
 mod init;
 mod json;
