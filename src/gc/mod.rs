@@ -1,4 +1,7 @@
+pub mod compaction_worklists;
+pub mod compactor;
 pub mod concurrent_marker;
+pub mod free_list;
 pub mod garbage_collector;
 pub mod incremental_marking_schedule;
 pub mod marker;
