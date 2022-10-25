@@ -1,4 +1,5 @@
 
+#![allow(dead_code)]
 /*
 An implementation of the RecordVisitor which generates a mapping
 between a thread and a range of records representing a block.

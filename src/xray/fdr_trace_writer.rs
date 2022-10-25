@@ -1,4 +1,4 @@
-
+#![allow(dead_code)]
 /*
 Test a utility that can write out xray FDR mode formatted trace files.
 */
