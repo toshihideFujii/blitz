@@ -2,6 +2,7 @@
 
 #![allow(unused_imports)]
 use blitz::adt;
+use blitz::passes;
 use blitz::support;
 use blitz::xray;
 

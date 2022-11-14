@@ -1,6 +1,12 @@
+pub mod code_gen_coverage;
+pub mod code_gen;
+pub mod compression;
 pub mod debug;
+pub mod file_output_buffer;
 pub mod file_system;
+pub mod glob_pattern;
 pub mod json;
+pub mod memory;
 pub mod process;
 pub mod sha1;
 pub mod sha256;
