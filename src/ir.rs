@@ -1,6 +1,10 @@
+pub mod attributes;
 pub mod basic_block;
+pub mod blits_context;
 pub mod cfg;
 pub mod constant;
+pub mod constants;
+pub mod function;
 pub mod type_;
 pub mod use_;
 pub mod user;

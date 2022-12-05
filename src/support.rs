@@ -6,6 +6,8 @@ pub mod file_output_buffer;
 pub mod file_system;
 pub mod glob_pattern;
 pub mod json;
+pub mod math_extras;
+pub mod mem_alloc;
 pub mod memory;
 pub mod process;
 pub mod sha1;

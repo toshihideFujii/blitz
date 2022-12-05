@@ -7,18 +7,38 @@ process and other processes on the operating systems.
 Also provides means of spawning subprocess for commands.
 */
 
+use std::process;
+use std::env;
+use page_size;
+use rand;
+use crate::adt::string_ref::StringRef;
+
 // A collection of legacy interfaces for querying information
 // about the current executing process.
 struct Process {
-  pid_: i32
+  pid_: u32
 }
 
 impl Process {
-  pub fn get_process_id() {}
+  // Get the process's identifier.
+  pub fn get_process_id() -> u32 {
+    process::id()
+  }
 
-  pub fn get_page_size() {}
+  // Get the process's page size.
+  pub fn get_page_size() -> usize {
+    page_size::get()
+  }
 
-  pub fn get_page_size_estimate() {}
+  // Get the process's estimated page size.
+  pub fn get_page_size_estimate() -> usize {
+    let page_size = Process::get_page_size();
+    if page_size != 0 {
+      return page_size;
+    } else {
+      return 4096;
+    }
+  }
 
   // Return process memory usage.
   // This static function will return the total amount of memory
@@ -31,7 +51,14 @@ impl Process {
 
   pub fn are_core_files_prevented() {}
 
-  pub fn get_env() {}
+  // This function returns the environment variable name's
+  // value as a UTF-8 string.
+  pub fn get_env(name: StringRef) -> String {
+    match env::var(name.data().as_str()) {
+      Ok(val) => return val,
+      Err(e) => return e.to_string(),
+    }
+  }
 
   pub fn find_in_env_path() {}
 
@@ -69,8 +96,31 @@ impl Process {
 
   pub fn reset_color() {}
 
-  pub fn get_random_number() {}
+  // Get the result of a process wide random number generator.
+  pub fn get_random_number() -> u32 {
+    rand::random::<u32>()
+  }
 
-  pub fn exit() {}
+  pub fn exit(code: i32) {
+    process::exit(code)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_get_process_id() {
+    let pid = Process::get_process_id();
+    assert_eq!(pid, process::id())
+  }
+
+  #[test]
+  fn test_get_random_number() {
+    let r1 = Process::get_random_number();
+    let r2 = Process::get_random_number();
+    assert_ne!((r1 | r2), 0)
+  }
 }
 

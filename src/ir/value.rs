@@ -4,7 +4,13 @@
 This file declares the value class.
 */
 
-pub trait Value {
+//use super::type_::Type;
+
+struct Value {
+  //vtype_: Type
+}
+
+impl Value {
   fn get_name() {}
 
   fn set_name() {}

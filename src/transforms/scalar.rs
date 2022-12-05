@@ -62,3 +62,41 @@ pub fn create_loop_versioning_licm_pass() {}
 pub fn create_demote_register_to_memory_pass() {}
 
 pub fn create_reassociate_pass() {}
+
+pub fn create_jump_threading_pass() {}
+
+pub fn create_dfa_jump_threading_pass() {}
+
+pub fn create_cfg_simplification_pass() {}
+
+pub fn create_flatten_cfg_pass() {}
+
+pub fn create_structurize_cfg_pass() {}
+
+pub fn create_tail_call_elimination_pass() {}
+
+pub fn create_early_cse_pass() {}
+
+pub fn create_gvn_hoist_pass() {}
+
+pub fn create_gvn_sink_pass() {}
+
+pub fn create_merged_load_store_motion_pass() {}
+
+pub fn create_new_gvn_pass() {}
+
+pub fn create_div_rem_pairs_pass() {}
+
+pub fn create_mem_cpy_opt_pass() {}
+
+pub fn create_loop_deletion_pass() {}
+
+pub fn create_constant_hoisting_pass() {}
+
+pub fn create_constraint_elimination_pass() {}
+
+pub fn create_sinking_pass() {}
+
+pub fn create_lower_atomic_pass() {}
+
+pub fn create_lower_guard_intrinsic_pass() {}
