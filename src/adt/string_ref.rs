@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use std::cmp;
+use std::{cmp};
 
 const NPOS: usize = 99999999999; // TODO
 
 // Represent a constant reference to a string.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StringRef {
   // The start of the string, in an external buffer.
   data_: String,
@@ -151,20 +151,53 @@ impl StringRef {
   }
 
   // Search for the first character c in the string.
-  pub fn find(&self, c: char) -> usize {
-    let pos = self.data().find(c);
-    if pos != None {
-      return pos.unwrap();
-    } else {
-      return NPOS;
+  pub fn find(&self, c: char, from: usize) -> usize {
+    let str = self.data().clone();
+    let find_begin = cmp::min(from, self.length_);
+    if find_begin < self.length_ {
+      let (abandoned, remained) = str.split_at(find_begin);
+      let pos = remained.find(c);
+      if pos != None {
+        return pos.unwrap() + abandoned.len();
+      } else {
+        return NPOS;
+      }
     }
+    NPOS
+  }
+
+  // Search for the first string str in the string.
+  pub fn find_str(&self, str: StringRef, from: usize) -> usize {
+    let s = self.data().clone();
+    let find_begin = cmp::min(from, self.length_);
+    if find_begin < self.length_ {
+      let (abandoned, remained) = s.split_at(find_begin);
+      let remained_str = String::from(remained);
+      let result = remained_str.match_indices(str.data().as_str()).next();
+      if result != None {
+        return result.unwrap().0 + abandoned.len();
+      } else {
+        return NPOS;
+      }
+    }
+    NPOS
   }
 
   // Search for the first character c in the string, ignoring case.
-  pub fn find_insensitive(&self, c: char) -> usize {
-    let original = self.data_.to_ascii_lowercase();
+  pub fn find_insensitive(&self, c: char, from: usize) -> usize {
+    let orig_lower = self.data_.to_ascii_lowercase();
+    let s = StringRef::new_from_string(&orig_lower);
     let c_lower = c.to_ascii_lowercase();
-    return original.find(c_lower).unwrap();
+    s.find(c_lower, from)
+  }
+
+  // Search for the first string str in the string, ignoring case.
+  pub fn find_str_insensitive(&self, str: StringRef, from: usize) -> usize {
+    let orig_lower = self.data_.to_ascii_lowercase();
+    let s = StringRef::new_from_string(&orig_lower);
+    let str_lower = str.data().to_ascii_lowercase();
+    let str_lower_ref = StringRef::new_from_string(&str_lower);
+    s.find_str(str_lower_ref, from)
   }
 
   // Search for the first character satisfying the predicate f.
@@ -188,30 +221,142 @@ impl StringRef {
   }
 
   // Search for the last character c in the string.
-  pub fn rfind(&self, c: char) -> usize {
-    self.data_.rfind(c).unwrap()
+  pub fn rfind(&self, c: char, from: usize) -> usize {
+    let str = self.data().clone();
+    let rfind_begin = cmp::min(from, self.length_);
+    let (remained, abandoned) = str.split_at(rfind_begin);
+    let pos = String::from(remained).rfind(c);
+    if pos != None {
+      return pos.unwrap() + abandoned.len();
+    } else {
+      return NPOS;
+    }
+  }
+
+  // Search for the last string str in the string.
+  pub fn rfind_str(&self, str: StringRef) -> usize {
+    let s = self.data().clone();
+    let result = s.rmatch_indices(str.data().as_str()).next();
+    if result != None {
+      return result.unwrap().0;
+    } else {
+      return NPOS;
+    }
+  }
+
+  // Search for the last string str in the string.
+  pub fn rfind_str_insensitive(&self, str: StringRef) -> usize {
+    let orig_lower = self.data_.to_ascii_lowercase();
+    let s = StringRef::new_from_string(&orig_lower);
+    let str_lower = str.data().to_ascii_lowercase();
+    let str_lower_ref = StringRef::new_from_string(&str_lower);
+    s.rfind_str(str_lower_ref)
   }
 
   // Search for the last character c in the string, ignoring case.
-  pub fn rfind_insensitive(&self, c: char) -> usize {
-    let original = self.data_.to_ascii_lowercase();
+  pub fn rfind_insensitive(&self, c: char, from: usize) -> usize {
+    let orig_lower = self.data_.to_ascii_lowercase();
+    let s = StringRef::new_from_string(&orig_lower);
     let c_lower = c.to_ascii_lowercase();
-    return original.rfind(c_lower).unwrap();
+    s.rfind(c_lower, from)
   }
 
   // Find the first character in the sring that is c.
   pub fn find_first_of(&self, c: char, from: usize) -> usize {
-    self.find(c)
+    self.find(c, from)
   }
 
-  pub fn find_first_not_of() {}
+  // Find the first character in the string that is in str.
+  pub fn find_first_of_str(&self, str: StringRef, from: usize) -> usize {
+    self.find_str(str, from)
+  }
+
+  // Find the first character in the string that is not c.
+  pub fn find_first_not_of(&self, c: char, from: usize) -> usize {
+    let str = self.data().clone();
+    let begin = cmp::min(from, self.length_);
+    if begin < self.length_ {
+      let (abandoned, remained) = str.split_at(begin);
+      let mut chars = remained.char_indices();
+      loop {
+        let val = chars.next();
+        if val == None {
+          break;
+        }
+        if val.unwrap().1 != c {
+          return val.unwrap().0 + abandoned.len();
+        }
+      }
+    }
+    NPOS
+  }
+
+  // Find the first character in the string that is not in the string str.
+  pub fn find_first_not_of_str(&self, str: StringRef, from: usize) -> usize {
+    let s = self.data().clone();
+    let begin = cmp::min(from, self.length_);
+    if begin < self.length_ {
+      let (abandoned, remained) = s.split_at(begin);
+      let mut chars = remained.char_indices();
+      let str_clone = str.data().clone();
+      loop {
+        let val = chars.next();
+        if val == None {
+          break;
+        }
+        if str_clone.contains(val.unwrap().1) {
+          continue;
+        } else {
+          return val.unwrap().0 + abandoned.len();
+        }
+      }
+    }
+    NPOS
+  }
 
   // Find the last character in the string that is c.
   pub fn find_last_of(&self, c: char, from: usize) -> usize {
-    self.rfind(c)
+    self.rfind(c, from)
   }
 
-  pub fn find_last_not_of() {}
+  // Find the last character in the string that is not c.
+  pub fn find_last_not_of(&self, c: char, from: usize) -> usize {
+    let str = self.data().clone();
+    let rfind_begin = cmp::min(from, self.length_);
+    let (remained, abandoned) = str.split_at(rfind_begin);
+    let mut chars = remained.char_indices().rev();
+    loop {
+      let val = chars.next();
+      if val == None {
+        break;
+      }
+      if val.unwrap().1 != c {
+        return val.unwrap().0 + abandoned.len();
+      }
+    }
+    NPOS
+  }
+
+  // Find the last character in the string that is not in str.
+  pub fn find_last_not_of_str(&self, str: StringRef, from: usize) -> usize {
+    let s = self.data().clone();
+    let begin = cmp::min(from, self.length_);
+    let (remained, abandoned) = s.split_at(begin);
+    let mut chars = remained.char_indices().rev();
+    let str_clone = str.data().clone();
+    loop {
+      let val = chars.next();
+      if val == None {
+        break;
+      }
+      if str_clone.contains(val.unwrap().1) {
+        continue;
+      } else {
+        return val.unwrap().0 + abandoned.len();
+      }
+    }
+    NPOS
+  }
 
   // Return true if the given string is a substring of this,
   // and false otherwise.
@@ -430,7 +575,7 @@ impl StringRef {
 
   // Detect the line ending style of the string.
   pub fn detect_eol(&self) -> Self {
-    let pos = self.find('\r');
+    let pos = self.find('\r', 0);
     if pos == NPOS {
       return StringRef::new_from_string("\n");
     }
@@ -455,6 +600,8 @@ struct StringLiteral {}
 
 #[cfg(test)]
 mod tests {
+use std::vec;
+
 use super::*;
 
   #[test]
@@ -664,8 +811,117 @@ use super::*;
     assert_eq!(s.consume_back_insensitive(""), true);
   }
 
-  //#[test]
-  //fn test_find() {}
+  #[test]
+  fn test_find() {
+    let s = StringRef::new_from_string("helloHELLO");
+    let long_s =
+      StringRef::new_from_string("hellx xello hell ello world foo bar hello HELLO");
+
+    #[derive(Debug, PartialEq)]
+    struct CharExpectation {
+      s_: StringRef,
+      c_: char,
+      from_: usize,
+      pos_: usize,
+      insensitive_pos_: usize
+    }
+    impl CharExpectation {
+      pub fn new(s: StringRef, c: char, from: usize, pos: usize, insensitive_pos: usize) -> Self {
+        Self { s_: s, c_: c, from_: from, pos_: pos, insensitive_pos_: insensitive_pos }
+      }
+    }
+    let mut char_expectations: Vec<CharExpectation> = vec![
+      CharExpectation::new(s.clone(), 'h', 0, 0, 0),
+      CharExpectation::new(s.clone(), 'e', 0, 1, 1),
+      CharExpectation::new(s.clone(), 'l', 0, 2, 2),
+      CharExpectation::new(s.clone(), 'l', 3, 3, 3),
+      CharExpectation::new(s.clone(), 'o', 0, 4, 4),
+      CharExpectation::new(s.clone(), 'L', 0, 7, 2),
+      CharExpectation::new(s.clone(), 'z', 0, NPOS, NPOS)
+    ];
+    let mut iter = char_expectations.iter_mut();
+    loop {
+      let c_expect = iter.next();
+      if c_expect == None {
+        break;
+      }
+      let val = c_expect.unwrap();
+      assert_eq!(val.pos_, val.s_.find(val.c_, val.from_));
+      assert_eq!(val.insensitive_pos_, val.s_.find_insensitive(val.c_, val.from_));
+      assert_eq!(val.insensitive_pos_, val.s_.find_insensitive(val.c_.to_ascii_uppercase(), val.from_));
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct StrExpectation {
+      s_: StringRef,
+      str_: StringRef,
+      from_: usize,
+      pos_: usize,
+      insensitive_pos_: usize
+    }
+    impl StrExpectation {
+      pub fn new(s: StringRef, str: StringRef, from: usize, pos: usize, insensitive_pos: usize) -> Self {
+        Self { s_: s, str_: str, from_: from, pos_: pos, insensitive_pos_: insensitive_pos }
+      }
+    }
+    let mut str_expectations: Vec<StrExpectation> = vec![
+      StrExpectation::new(s.clone(), StringRef::new_from_string("helloworld"), 0, NPOS, NPOS),
+      StrExpectation::new(s.clone(), StringRef::new_from_string("hello"), 0, 0, 0),
+      StrExpectation::new(s.clone(), StringRef::new_from_string("ello"), 0, 1, 1),
+      StrExpectation::new(s.clone(), StringRef::new_from_string("zz"), 0, NPOS, NPOS),
+      StrExpectation::new(s.clone(), StringRef::new_from_string("ll"), 2, 2, 2),
+      StrExpectation::new(s.clone(), StringRef::new_from_string("ll"), 3, NPOS, 7),
+      StrExpectation::new(s.clone(), StringRef::new_from_string("LL"), 2, 7, 2),
+      StrExpectation::new(s.clone(), StringRef::new_from_string("LL"), 3, 7, 7),
+      StrExpectation::new(s.clone(), StringRef::new_from_string(""), 0, 0, 0),
+      StrExpectation::new(long_s.clone(), StringRef::new_from_string("hello"), 0, 36, 36),
+      StrExpectation::new(long_s.clone(), StringRef::new_from_string("foo"), 0, 28, 28),
+      StrExpectation::new(long_s.clone(), StringRef::new_from_string("hell"), 2, 12, 12),
+      StrExpectation::new(long_s.clone(), StringRef::new_from_string("HELL"), 2, 42, 12),
+      StrExpectation::new(long_s.clone(), StringRef::new_from_string(""), 0, 0, 0)
+    ];
+    let mut iter_str = str_expectations.iter_mut();
+    loop {
+      let str_expect = iter_str.next();
+      if str_expect == None {
+        break;
+      }
+      let val = str_expect.unwrap();
+      assert_eq!(val.pos_, val.s_.find_str(val.str_.clone(), val.from_));
+      assert_eq!(val.insensitive_pos_, val.s_.find_str_insensitive(val.str_.clone(), val.from_));
+      let str_upper = val.str_.data().to_ascii_uppercase();
+      let str_upper_ref = StringRef::new_from_string(str_upper.as_str());
+      assert_eq!(val.insensitive_pos_, val.s_.find_str_insensitive(str_upper_ref, val.from_));
+    }
+
+    assert_eq!(s.rfind('l', NPOS), 3);
+    assert_eq!(s.rfind('z', NPOS), NPOS);
+    assert_eq!(s.rfind_str(StringRef::new_from_string("helloworld")), NPOS);
+    assert_eq!(s.rfind_str(StringRef::new_from_string("hello")), 0);
+    assert_eq!(s.rfind_str(StringRef::new_from_string("ello")), 1);
+    assert_eq!(s.rfind_str(StringRef::new_from_string("zz")), NPOS);
+
+    assert_eq!(s.rfind_insensitive('l', NPOS), 8);
+    assert_eq!(s.rfind_insensitive('L', NPOS), 8);
+    assert_eq!(s.rfind_insensitive('z', NPOS), NPOS);
+    assert_eq!(s.rfind_str_insensitive(StringRef::new_from_string("HELLOWORLD")), NPOS);
+    assert_eq!(s.rfind_str(StringRef::new_from_string("HELLO")), 5);
+    assert_eq!(s.rfind_str(StringRef::new_from_string("ELLO")), 6);
+    assert_eq!(s.rfind_str(StringRef::new_from_string("ZZ")), NPOS);
+
+    assert_eq!(s.find_first_of('l', 0), 2);
+    assert_eq!(s.find_first_of_str(StringRef::new_from_string("el"), 0), 1);
+    assert_eq!(s.find_first_of_str(StringRef::new_from_string("xyz"), 0), NPOS);
+
+    let s1 = StringRef::new_from_string("hello");
+    assert_eq!(s1.find_first_not_of('h', 0), 1);
+    assert_eq!(s1.find_first_not_of_str(StringRef::new_from_string("hel"), 0), 4);
+    assert_eq!(s1.find_first_not_of_str(StringRef::new_from_string("hello"), 0), NPOS);
+
+    assert_eq!(s1.find_last_not_of('o', NPOS), 3);
+    assert_eq!(s1.find_last_not_of_str(StringRef::new_from_string("lo"), NPOS), 1);
+    assert_eq!(s1.find_last_not_of_str(StringRef::new_from_string("helo"), NPOS), NPOS);
+  }
 
   #[test]
   fn test_count() {

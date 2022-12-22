@@ -19,3 +19,21 @@ pub fn is_shifted_mask_64(value: u64) -> bool {
 pub fn is_power_of_2_64(value: u64) -> bool {
   false
 }
+
+// Sign-extend the number in the bottom b bits of x to a 32-bit integer.
+// Requires 0 < b <= 32.
+pub fn sign_extend_32(x: u32, b: u32) -> i32 {
+  debug_assert!(b > 0, "Bit width can't be 0.");
+  debug_assert!(b <= 32, "Bit width out of range.");
+  let val = ((x << (32 - b)) >> (32 - b)) as i32;
+  val
+}
+
+// Sign-extend the number in the bottom b bits of x to a 64-bit integer.
+// Requires 0 < b <= 64.
+pub fn sign_extend_64(x: u64, b: u32) -> i64 {
+  debug_assert!(b > 0, "Bit width can't be 0.");
+  debug_assert!(b <= 64, "Bit width out of range.");
+  let val = ((x << (64 - b)) >> (64 - b)) as i64;
+  val
+}

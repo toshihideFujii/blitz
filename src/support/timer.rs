@@ -184,12 +184,15 @@ impl Timer {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+struct PrintRecord {}
+
+#[derive(Debug, PartialEq, Clone)]
 struct TimerGroup {
   name_: String,
   description_: String,
   timer_vec_: Vec<Timer>,
-  //prev_: Box<TimerGroup>,
-  //next_: Box<TimerGroup>
+  timer_group_vec_: Vec<TimerGroup>,
+  timers_to_print_vec_: Vec<PrintRecord>
 }
 
 impl TimerGroup {
@@ -197,7 +200,9 @@ impl TimerGroup {
     Self {
       name_: String::from("misc"),
       description_: String::from("Miscellaneous Ungrouped Timers"),
-      timer_vec_: Vec::new()
+      timer_vec_: Vec::new(),
+      timer_group_vec_: Vec::new(),
+      timers_to_print_vec_: Vec::new()
     }
   }
 
@@ -206,17 +211,64 @@ impl TimerGroup {
     self.description_ = new_description_.data();
   }
 
-  pub fn print() {}
+  // Print any started timers in this group, optionally resetting timers
+  // after printing them.
+  pub fn print(&self, reset_after_print: bool) {
+    self.prepare_to_print_list(reset_after_print);
+    if !self.timers_to_print_vec_.is_empty() {
+      self.print_queued_timers();
+    }
+  }
 
-  pub fn clear() {}
+  // Clear all timers in this group.
+  pub fn clear(&mut self) {
+    let mut iter = self.timer_vec_.iter_mut();
+    loop {
+      let timer = iter.next();
+      if timer == None {
+        break;
+      }
+      timer.unwrap().clear();
+    }
+  }
 
-  pub fn print_all() {}
+  // This method prints all timers.
+  pub fn print_all(&mut self) {
+    let mut iter = self.timer_group_vec_.iter_mut();
+    loop {
+      let tg = iter.next();
+      if tg == None {
+        break;
+      }
+      tg.unwrap().print(false);
+    }
+  }
 
-  pub fn clear_all() {}
+  // Clear out all timers.
+  pub fn clear_all(&mut self) {
+    let mut iter = self.timer_group_vec_.iter_mut();
+    loop {
+      let tg = iter.next();
+      if tg == None {
+        break;
+      }
+      tg.unwrap().clear();
+    }
+  }
 
-  pub fn print_json_values() {}
+  pub fn print_json_values(&self, _delim: char) {}
 
-  pub fn print_all_json_values() {}
+  // Prints all timers as JSON key/value pairs.
+  pub fn print_all_json_values(&mut self, delim: char) {
+    let mut iter = self.timer_group_vec_.iter_mut();
+    loop {
+      let tg = iter.next();
+      if tg == None {
+        break;
+      }
+      tg.unwrap().print_json_values(delim);
+    }
+  }
 
   pub fn construct_for_statistics() {}
 
@@ -227,15 +279,15 @@ impl TimerGroup {
   }
 
   fn remove_timer(&mut self, t: &Timer) {
-    let mut it = self.timer_vec_.iter();
-    let index = it.position(|x| x == t).unwrap();
+    let mut iter = self.timer_vec_.iter();
+    let index = iter.position(|x| x == t).unwrap();
     let result = self.timer_vec_.remove(index);
     assert_eq!(&result, t);
   }
 
-  fn prepare_to_print_list() {}
+  fn prepare_to_print_list(&self, _reset_time: bool) {}
 
-  fn print_queued_timers() {}
+  fn print_queued_timers(&self) {}
 
   fn print_json_value() {}
 }
@@ -251,9 +303,24 @@ fn get_current_instruction_executed() -> u64 {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::thread;
 
-  //#[test]
-  //fn test_additivity() {}
+  #[test]
+  fn test_additivity() {
+    let mut t1 = Timer::new(StringRef::new_from_string("T1"),
+    StringRef::new_from_string("T1"));
+
+    t1.start_timer();
+    t1.stop_timer();
+    let tr1 = t1.get_total_time();
+
+    t1.start_timer();
+    thread::sleep(Duration::from_millis(5));
+    t1.stop_timer();
+    let tr2 = t1.get_total_time();
+
+    assert_eq!(tr1 < tr2, true);
+  }
 
   #[test]
   fn test_check_if_triggered() {
