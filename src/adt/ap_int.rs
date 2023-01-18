@@ -6,8 +6,8 @@ This file implements a class to represent arbitrary precision
 integral constant values and operations on them.
 */
 
-use crate::support::math_extras::*;
-use std::ops;
+use crate::support::{math_extras::*};
+use std::{ops::*};
 
 // Byte size of a word.
 const APINT_WORD_SIZE: u32 = 8;
@@ -22,10 +22,10 @@ enum Rounding {
   Up
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct APInt {
-  val_: u64, // Used to store the <= 64 bits integer value.
-  pval_: u64, // Used to store the > 64 bits integer value.
+  val_: i64, // Used to store the <= 64 bits integer value.
+  pval_: i64, // Used to store the > 64 bits integer value.
   bit_width_: u32 // The number of bits in this APInt.
 }
 
@@ -36,30 +36,31 @@ impl APInt {
   }
 
   // Create a new APInt of num_bits width, initialized as val.
-  pub fn new_from_val(num_bits: u32, val: u64, is_signed: bool) -> Self {
-    if num_bits <= APINT_BITS_PER_WORD {
-      APInt { // TODO
-        val_: val,
-        pval_: 0,
-        bit_width_: num_bits
-      }
-    } else { // TODO
-      APInt {
-        val_: val,
-        pval_: 0,
-        bit_width_: 1
-      }
+  // If is_signed is true then val is treated as if it were a signed value
+  // and the appropriate sign extension to the bit width will be done.
+  pub fn new(num_bits: u32, val: i64, is_signed: bool) -> Self {
+    let mut instance = APInt::new_zero();
+    instance.bit_width_ = num_bits;
+    if instance.is_single_word() {
+      instance.val_ = val;
+      instance.clear_unused_bits();
+    } else {
+      instance.init_slow_case(val, is_signed);
     }
+    instance
   }
 
   // Determine if this APInt just has one word to store value.
+  // Returns true if the number of bits <= 64, false otherwise.
   pub fn is_single_word(&self) -> bool {
     self.bit_width_ <= APINT_BITS_PER_WORD
   }
 
   // Determine sign of this APInt.
+  // This tests the high bit of APInt to determine if it is set.
+  // Returns true if this APint is negative, false otherwise.
   pub fn is_negative(&self) -> bool {
-    false
+    self.at(self.bit_width_ - 1)
   }
 
   // Determine if this APInt value is non-negative (>=0).
@@ -68,8 +69,10 @@ impl APInt {
   }
 
   // Determine if sign bit of this APInt is set.
+  // This tests the high bit of this APInt to determine if it is set.
+  // Return true if this APInt has its sign bit set, false otherwise.
   pub fn is_sign_bit_set(&self) -> bool {
-    false // TODO
+    self.at(self.bit_width_ - 1)
   }
 
   // Determine if sign bit of this APInt is clear.
@@ -93,7 +96,7 @@ impl APInt {
       return true;
     }
     if self.is_single_word() {
-      return self.val_ == WORD_TYPE_MAX >> (APINT_BITS_PER_WORD - self.bit_width_);
+      return self.val_ as u64 == WORD_TYPE_MAX >> (APINT_BITS_PER_WORD - self.bit_width_);
     }
     self.count_trailing_ones_slow_case() == self.bit_width_
   }
@@ -133,7 +136,7 @@ impl APInt {
     self.is_zero()
   }
 
-  // Determine ifthis is the smallest signed value.
+  // Determine if this is the smallest signed value.
   pub fn is_min_signed_value(&self) -> bool {
     if self.is_single_word() {
       return self.val_ == (1 << (self.bit_width_ - 1));
@@ -156,7 +159,7 @@ impl APInt {
   // than zero.
   pub fn is_power_of_2(&self) -> bool {
     if self.is_single_word() {
-      return is_power_of_2_64(self.val_);
+      return is_power_of_2_64(self.val_ as u64);
     }
     return self.count_population_slow_case() == 1;
   }
@@ -187,7 +190,7 @@ impl APInt {
     if self.ugt(limit) {
       return limit;
     } else {
-      return self.get_zext_value();
+      return self.get_z_ext_value();
     }
   }
 
@@ -197,7 +200,7 @@ impl APInt {
   // at the least significant bit with the remainder zero.
   pub fn is_mask(&self) -> bool {
     if self.is_single_word() {
-      return is_mask_64(self.val_);
+      return is_mask_64(self.val_ as u64);
     }
     let ones = self.count_trailing_ones_slow_case();
     ones > 0 && ((ones + self.count_leading_zeros_slow_case()) == self.bit_width_)
@@ -207,7 +210,7 @@ impl APInt {
   // with the remainder zero.
   pub fn is_shifted_mask(&self) -> bool {
     if self.is_single_word() {
-      return is_shifted_mask_64(self.val_);
+      return is_shifted_mask_64(self.val_ as u64);
     }
     let ones = self.count_population_slow_case();
     let leadz = self.count_leading_zeros_slow_case();
@@ -236,7 +239,7 @@ impl APInt {
   pub fn hash_value() {}
 
   // This function returns an internal storage of the APInt.
-  pub fn get_raw_data(&self) -> u64 {
+  pub fn get_raw_data(&self) -> i64 {
     if self.is_single_word() {
       return self.val_;
     }
@@ -254,11 +257,11 @@ impl APInt {
   pub fn ashr_in_place(&mut self, shift_amt: u32) {
     debug_assert!(shift_amt <= self.bit_width_, "Invalid shift amount");
     if self.is_single_word() {
-      let s_ext_val = sign_extend_64(self.val_, self.bit_width_);
+      let s_ext_val = sign_extend_64(self.val_ as u64, self.bit_width_);
       if shift_amt == self.bit_width_ {
-        self.val_ = (s_ext_val >> (APINT_BITS_PER_WORD - 1)) as u64;
+        self.val_ = s_ext_val >> (APINT_BITS_PER_WORD - 1);
       } else {
-        self.val_ = (s_ext_val >> shift_amt) as u64;
+        self.val_ = s_ext_val >> shift_amt;
       }
       self.clear_unused_bits();
       return;
@@ -341,7 +344,7 @@ impl APInt {
   pub fn concat(&self, new_lsb: APInt) -> Self {
     let new_width = self.bit_width_ + new_lsb.bit_width_;
     if new_width <= APINT_BITS_PER_WORD {
-      return APInt::new_from_val(new_width,
+      return APInt::new(new_width,
         (self.val_ << new_lsb.bit_width_) | new_lsb.val_, false);
     }
     self.concat_slow_case(new_lsb)
@@ -354,7 +357,7 @@ impl APInt {
 
     // First, deal with easy case
     if self.is_single_word() {
-      return APInt::new_from_val(self.bit_width_, self.val_ / rhs, false);
+      return APInt::new(self.bit_width_, self.val_ / rhs as i64, false);
     }
 
     // Get some facts about the lhs words.
@@ -362,19 +365,19 @@ impl APInt {
 
     // Deal with some degenerate cases
     if lhs_words == 0 { // 0 / x => 0
-      return APInt::new_from_val(self.bit_width_, 0, false);
+      return APInt::new(self.bit_width_, 0, false);
     }
     if rhs == 1 { // x / 1 => x
-      return APInt::new_from_val(self.bit_width_, self.val_, self.is_sign_bit_set());
+      return APInt::new(self.bit_width_, self.val_, self.is_sign_bit_set());
     }
-    if self.val_ == rhs { // x / x => 1 
-      return APInt::new_from_val(self.bit_width_, 1, false);
+    if self.val_ as u64 == rhs { // x / x => 1 
+      return APInt::new(self.bit_width_, 1, false);
     }
     if lhs_words == 1 {
-      return APInt::new_from_val(self.bit_width_, self.pval_ / rhs, false);
+      return APInt::new(self.bit_width_, self.pval_ / rhs as i64, false);
     }
 
-    let quotient = APInt::new_from_val(self.bit_width_, 0, false);
+    let quotient = APInt::new(self.bit_width_, 0, false);
     quotient
   }
 
@@ -383,9 +386,9 @@ impl APInt {
   pub fn sdiv(&self, rhs: i64) -> Self {
     if self.is_negative() {
       if rhs < 0 {
-        //return APInt::new_from_val(self.bit_width_, -self.val_, false).udiv(-rhs as u64);
+        //return APInt::new(self.bit_width_, -self.val_, false).udiv(-rhs as u64);
       }
-      //return APInt::new_from_val(self.bit_width_, -self.val_, false).udiv(rhs as u64);
+      //return APInt::new(self.bit_width_, -self.val_, false).udiv(rhs as u64);
     }
     if rhs < 0 {
       return self.udiv(-rhs as u64);
@@ -402,40 +405,94 @@ impl APInt {
   pub fn sdiv_rem() {}
 
   pub fn sadd_ov(&self, rhs: &APInt) -> (APInt, bool) {
-    let res = APInt::new_from_val(self.bit_width_, self.val_ + rhs.val_, false);
+    let res = APInt::new(self.bit_width_, self.val_ + rhs.val_, false);
     let overflow = self.is_non_negative() == rhs.is_non_negative() && res.is_non_negative() != self.is_non_negative();
     (res, overflow)
   }
 
   pub fn uadd_ov(&self, rhs: &APInt) -> (APInt, bool) {
-    let res = APInt::new_from_val(self.bit_width_, self.val_ + rhs.val_, false);
-    let overflow = res.ult(rhs.val_);
+    let res = APInt::new(self.bit_width_, self.val_ + rhs.val_, false);
+    let overflow = res.ult(rhs.val_ as u64);
     (res, overflow)
   }
 
   pub fn ssub_ov(&self, rhs: &APInt) -> (APInt, bool) {
-    let res = APInt::new_from_val(self.bit_width_, self.val_ - rhs.val_, false);
+    let res = APInt::new(self.bit_width_, self.val_ - rhs.val_, false);
     let overflow = self.is_non_negative() != rhs.is_non_negative() && res.is_non_negative() != self.is_non_negative();
     (res, overflow)
   }
 
   pub fn usub_ov(&self, rhs: &APInt) -> (APInt, bool) {
-    let res = APInt::new_from_val(self.bit_width_, self.val_ - rhs.val_, false);
-    let overflow = res.ugt(self.val_);
+    let res = APInt::new(self.bit_width_, self.val_ - rhs.val_, false);
+    let overflow = res.ugt(self.val_ as u64);
     (res, overflow)
   }
 
-  pub fn sdiv_ov() {}
+  pub fn sdiv_ov(&self, rhs: &APInt) -> (APInt, bool) {
+    let overflow = self.is_min_signed_value() && rhs.is_all_ones();
+    (self.sdiv(rhs.val_ as i64), overflow)
+  }
 
-  pub fn smul_ov() {}
+  pub fn smul_ov(&self, rhs: &APInt) -> (APInt, bool) {
+    let val = self.val_ * rhs.val_;
+    let res = APInt::new(self.bit_width_, val, false);
+    let mut overflow = false;
+    if rhs.val_ != 0{
+      overflow = res.sdiv(rhs.val_ as i64) != *self ||
+        (self.is_min_signed_value() && rhs.is_all_ones())
+    }
+    (res, overflow)
+  }
 
-  pub fn umul_ov() {}
+  pub fn umul_ov(&self, rhs: &APInt) -> (APInt, bool) {
+    if self.count_leading_zeros() + rhs.count_leading_zeros() + 2 <= self.bit_width_ {
+      let val = self.val_ * rhs.val_;
+      let res = APInt::new(self.bit_width_, val, false);
+      return (res, true);
+    }
+    let rhs2 = rhs.clone();
+    let val = self.lshr(1); // TODO * (*rhs2);
+    let mut res = APInt::new(self.bit_width_, val.val_, false);
+    let mut overflow = res.is_negative();
+    res.val_ <<= 1;
+    if self.val_ != 0 { // TODO
+      res.val_ += rhs.val_;
+      if res.ult(rhs.val_ as u64) {
+        overflow = true;
+      }
+    }
+    (res, overflow)
+  }
 
-  pub fn sshl_ov() {}
+  pub fn sshl_ov(&self, shamt: &APInt) -> (APInt, bool) {
+    let mut overflow = shamt.uge(self.get_bit_width() as u64);
+    if overflow {
+      let res = APInt::new(self.bit_width_, 0, false);
+      return (res, overflow);
+    }
+    if self.is_non_negative() {
+      overflow = shamt.uge(self.count_leading_zeros() as u64);
+    } else {
+      overflow = shamt.uge(self.count_leading_ones() as u64);
+    }
+    let val = self.val_ << shamt.val_;
+    let res = APInt::new(self.bit_width_, val, false);
+    (res, overflow)
+  }
 
-  pub fn ushl_ov() {}
+  pub fn ushl_ov(&self, shamt: &APInt) -> (APInt, bool) {
+    let mut overflow = shamt.uge(self.get_bit_width() as u64);
+    if overflow {
+      let res = APInt::new(self.bit_width_, 0, false);
+      return (res, overflow);
+    }
+    overflow = shamt.ugt(self.count_leading_zeros() as u64);
+    let val = self.val_ << shamt.val_;
+    let res = APInt::new(self.bit_width_, val, false);
+    (res, overflow)
+  }
 
-  pub fn sadd_sat() {}
+  pub fn sadd_sat(&self, _rhs: &APInt) {}
 
   pub fn uadd_sat() {}
 
@@ -455,29 +512,70 @@ impl APInt {
 
   // Unsigned less than comparison
   pub fn ult(&self, rhs: u64) -> bool {
-    (self.is_single_word() || self.get_active_bits() <= 64) && self.get_zext_value() < rhs
+    (self.is_single_word() || self.get_active_bits() <= 64) && self.get_z_ext_value() < rhs
   }
 
-  pub fn slt() {}
+  // Signed less than comparison
+  pub fn slt(&self, rhs: i64) -> bool {
+    if !self.is_single_word() && self.get_significant_bits() > 64 {
+      self.is_negative()
+    } else {
+      self.get_s_ext_value() < rhs
+    }
+  }
 
-  pub fn ule() {}
+  // Unsigned less or equal comparison
+  pub fn ule(&self, rhs: u64) -> bool {
+    !self.ugt(rhs)
+  }
 
-  pub fn sle() {}
+  // Signed less or equal comparison
+  pub fn sle(&self, rhs: u64) -> bool {
+    !self.sgt(rhs as i64)
+  }
 
   // Unsigned greater than comparison.
   pub fn ugt(&self, rhs: u64) -> bool {
-    false
+    (!self.is_single_word() && self.get_active_bits() > 64) || self.get_z_ext_value() > rhs
   }
 
-  pub fn sgt() {}
+  // Signed greater than comparison
+  pub fn sgt(&self, rhs: i64) -> bool {
+    if !self.is_single_word() && self.get_significant_bits() > 64 {
+      !self.is_negative()
+    } else {
+      self.get_s_ext_value() > rhs
+    }
+  }
 
-  pub fn uge() {}
+  // Unsigned greater or equal comparison
+  pub fn uge(&self, rhs: u64) -> bool {
+    !self.ult(rhs)
+  }
 
-  pub fn sge() {}
+  // Signed greater or equal comparison
+  pub fn sge(&self, rhs: i64) -> bool {
+    !self.slt(rhs)
+  }
 
-  pub fn intersects() {}
+  // This operation tests if there are any pairs of corresponding
+  // bits between this APInt and RHS that are both set.
+  pub fn intersects(&self, rhs: &APInt) -> bool {
+    debug_assert!(self.bit_width_ == rhs.bit_width_, "Bit widths must be the same");
+    if self.is_single_word() {
+      return (self.val_ & rhs.val_) != 0;
+    }
+    self.intersects_slow_case(rhs)
+  }
 
-  pub fn is_subset_of() {}
+  // This operation checks that all bits sest in this APInt are also set in RHS.
+  pub fn is_subset_of(&self, rhs: &APInt) -> bool {
+    debug_assert!(self.bit_width_ == rhs.bit_width_, "Bit widths must be the same");
+    if self.is_single_word() {
+      return (self.val_ & !rhs.val_) == 0;
+    }
+    self.is_subset_of_slow_case(rhs)
+  }
 
   pub fn trunc() {}
 
@@ -487,7 +585,15 @@ impl APInt {
 
   pub fn sext() {}
 
+  // Zero extend to a new width.
   pub fn zext(&self, width: u32) -> APInt {
+    debug_assert!(width >= self.bit_width_, "Invalid APInt zero extend request");
+
+    if width <= APINT_BITS_PER_WORD || width == self.bit_width_ {
+      return APInt::new(width, self.val_, false);
+    }
+
+    // TODO memcpy
     APInt::new_zero()
   }
 
@@ -495,37 +601,129 @@ impl APInt {
 
   pub fn zext_or_trunc() {}
 
-  pub fn set_all_bits() {}
+  // Set every bit to 1.
+  pub fn set_all_bits(&mut self) {
+    if self.is_single_word() {
+      self.val_ = WORD_TYPE_MAX as i64;
+    } // TODO else case
+    self.clear_unused_bits();
+  }
 
-  pub fn set_bit() {}
+  // Set the given bit to 1 whose position is given as "bit_position".
+  pub fn set_bit(&mut self, bit_position: u32) {
+    debug_assert!(bit_position < self.bit_width_, "bit_position out of range");
+    let mask = APInt::mask_bit(bit_position);
+    if self.is_single_word() {
+      self.val_ |= mask as i64;
+    } // TODO else case
+  }
 
-  pub fn set_sign_bit() {}
+  // Set the sign bit to 1.
+  pub fn set_sign_bit(&mut self) {
+    self.set_bit(self.bit_width_ - 1)
+  }
 
-  pub fn set_bit_val() {}
+  // Set a given bit to a given value.
+  pub fn set_bit_val(&mut self, bit_position: u32, bit_value: bool) {
+    if bit_value {
+      self.set_bit(bit_position);
+    } else {
+      self.clear_bit(bit_position);
+    }
+  }
 
-  pub fn set_bits_with_wrap() {}
+  // Set the bits from lo_bit to hi_bit to 1.
+  pub fn set_bits_with_wrap(&mut self, lo_bit: u32, hi_bit: u32) {
+    debug_assert!(hi_bit <= self.bit_width_, "hi_bit out of range");
+    debug_assert!(lo_bit <= self.bit_width_, "lo_bit out of range");
+    if lo_bit < hi_bit {
+      self.set_bits(lo_bit, hi_bit);
+      return;
+    }
+    self.set_low_bits(hi_bit);
+    self.set_high_bits(self.bit_width_ - lo_bit);
+  }
 
-  pub fn set_bits() {}
+  // Set the bits from lo_bit to hi_bit to 1.
+  pub fn set_bits(&mut self, lo_bit: u32, hi_bit: u32) {
+    debug_assert!(hi_bit <= self.bit_width_, "hi_bit out of range");
+    debug_assert!(lo_bit <= self.bit_width_, "lo_bit out of range");
+    debug_assert!(lo_bit <= hi_bit, "lo_bit greater than hi_bit");
+    if lo_bit == hi_bit {
+      return;
+    }
+    if lo_bit < APINT_BITS_PER_WORD && hi_bit <= APINT_BITS_PER_WORD {
+      let mut mask = WORD_TYPE_MAX >> (APINT_BITS_PER_WORD - (hi_bit - lo_bit));
+      mask <<= lo_bit;
+      if self.is_single_word() {
+        self.val_ |= mask as i64;
+      } // TODO else case
+    } else {
+      self.set_bits_slow_case(lo_bit, hi_bit);
+    }
+  }
 
-  pub fn set_bits_from() {}
+  // Set the top bits starting from lo_bit.
+  pub fn set_bits_from(&mut self, lo_bit: u32) {
+    self.set_bits(lo_bit, self.bit_width_)
+  }
 
-  pub fn set_low_bits() {}
+  // Set the bottom lo_bits bits.
+  pub fn set_low_bits(&mut self, lo_bits: u32) {
+    self.set_bits(0, lo_bits)
+  }
 
-  pub fn set_high_bits() {}
+  // Set the top hi_bits bits.
+  pub fn set_high_bits(&mut self, hi_bits: u32) {
+    self.set_bits(self.bit_width_ - hi_bits, self.bit_width_)
+  }
 
-  pub fn clear_all_bits() {}
+  // Set every bit to 0.
+  pub fn clear_all_bits(&mut self) {
+    if self.is_single_word() {
+      self.val_ = 0;
+    } // TODO else case
+  }
 
-  pub fn clear_bit() {}
+  // Set a given bit to 0.
+  pub fn clear_bit(&mut self, bit_position: u32) {
+    debug_assert!(bit_position < self.bit_width_, "bit_position out of range");
+    let mask = !APInt::mask_bit(bit_position);
+    if self.is_single_word() {
+      self.val_ &= mask as i64;
+    } // TODO else case
+  }
 
-  pub fn clear_low_bits() {}
+  // Set bottom lo_bits bits to 0.
+  pub fn clear_low_bits(&mut self, lo_bits: u32) {
+    debug_assert!(lo_bits <= self.bit_width_, "More bits than bit_width");
+    let keep = APInt::get_high_bits_set(self.bit_width_,
+      self.bit_width_ - lo_bits);
+    self.val_ &= keep.val_;
+  }
 
-  pub fn clear_sign_bit() {}
+  // Set the sign bit to 0.
+  pub fn clear_sign_bit(&mut self) {
+    self.clear_bit(self.bit_width_ - 1)
+  }
 
-  pub fn flip_all_bits() {}
+  // Toggle every bit to its opposite value.
+  pub fn flip_all_bits(&mut self) {
+    if self.is_single_word() {
+      self.val_ ^= WORD_TYPE_MAX as i64;
+      self.clear_unused_bits();
+    } else {
+      self.flip_all_bits_slow_case();
+    }
+  }
 
   pub fn flip_bit() {}
 
-  pub fn negate() {}
+  // Negate this APInt in place.
+  pub fn negate(&mut self) {
+    self.flip_all_bits();
+    self.val_ += 1;
+  }
 
   pub fn insert_bits() {}
 
@@ -539,8 +737,13 @@ impl APInt {
   }
 
   // Get the number of words.
+  pub fn get_num_words_own(&self) -> u32 {
+    self.get_num_words(self.bit_width_)
+  }
+
+  // Get the number of words.
   pub fn get_num_words(&self, bit_width: u32) -> u32 {
-    (self.bit_width_ + APINT_BITS_PER_WORD - 1) / APINT_BITS_PER_WORD
+    (bit_width + APINT_BITS_PER_WORD - 1) / APINT_BITS_PER_WORD
   }
 
   // Compute the number of active bits in the value.
@@ -556,33 +759,44 @@ impl APInt {
   }
 
   // Get zero extended value.
-  pub fn get_zext_value(&self) -> u64 {
+  pub fn get_z_ext_value(&self) -> u64 {
     if self.is_single_word() {
-      return self.val_;
+      return self.val_ as u64;
     }
     if self.get_active_bits() > 64 {
       panic!("Too many bits for u64.");
     }
-    self.pval_ // TODO
+    self.pval_ as u64// TODO
   }
 
-  pub fn get_sext_value() {}
+  // Get sign extended value
+  pub fn get_s_ext_value(&self) -> i64 {
+    if self.is_single_word() {
+      return sign_extend_64(self.val_ as u64, self.bit_width_);
+    }
+    debug_assert!(self.get_significant_bits() <= 64, "Too meny bits for i64");
+    0
+  }
 
   // It counts the number of zeros from the significant bit to
   // the first one bit. 
   pub fn count_leading_zeros(&self) -> u32 {
     if self.is_single_word() {
-      return 0; // TODO
+      let unused_bits = APINT_BITS_PER_WORD - self.bit_width_;
+      return count_leading_zeros(self.val_) - unused_bits;
     }
-    return self.count_trailing_zeros_slow_case();
+    self.count_trailing_zeros_slow_case()
   }
 
   // Count the number of leading one bits.
   pub fn count_leading_ones(&self) -> u32 {
     if self.is_single_word() {
-      return 0; // TODO
+      if self.bit_width_ == 0 {
+        return 0;
+      }
+      return count_leading_ones((self.val_ << APINT_BITS_PER_WORD - self.bit_width_) as u64);
     }
-    return self.count_trailing_ones_slow_case();
+    self.count_leading_ones_slow_case()
   }
 
   // Computes the number of leading bits of this APInt that are equal
@@ -596,22 +810,43 @@ impl APInt {
   }
 
   // Count the number of trailing zero bits.
+  // This function is an APInt version of the count_trailing_zeros functions
+  // in math_extra.
+  // It counts the number of zeros from the least significant bit to the
+  // first set bit.
+  // Returns bit_width if the value is zero, otherwise returns the number of
+  // zeros from the least significant bit to the first one bit.
   pub fn count_trailing_zeros(&self) -> u32 {
     if self.is_single_word() {
-      return 0; // TODO
+      let trailing_zeros = count_trailing_zeros(self.val_ as u64);
+      if trailing_zeros > self.bit_width_ {
+        return self.bit_width_;
+      } else {
+        return trailing_zeros;
+      }
     }
-    return self.count_trailing_zeros_slow_case();
+    self.count_trailing_zeros_slow_case()
   }
 
   // Count the number of trailing one bits.
+  // This function is an APInt version of the count_trailing_ones functions
+  // in math_extra.
+  // It counts the number of ones from the least significant bit to the
+  // first zero bit.
   pub fn count_trailing_ones(&self) -> u32 {
     if self.is_single_word() {
-      return 0; // TODO
+      return count_trailing_ones(self.val_ as u64);
     }
-    return self.count_trailing_ones_slow_case();
+    self.count_trailing_ones_slow_case()
   }
 
-  pub fn count_population() {}
+  // Count the number of bits set.
+  pub fn count_population(&self) -> u32 {
+    if self.is_single_word() {
+      return count_population(self.val_ as u64);
+    }
+    self.count_population_slow_case()
+  }
 
   pub fn print() {}
 
@@ -623,7 +858,12 @@ impl APInt {
 
   pub fn byte_swap() {}
 
-  pub fn reverse_bits() {}
+  // Returns the value with the bit representation reversed of this
+  // APInt vlaue.
+  pub fn reverse_bits(&self) -> APInt {
+    let val = reverse_bits(self.val_ as u64);
+    APInt::new(self.bit_width_, val as i64, false)
+  }
 
   pub fn round_to_double() {}
 
@@ -637,17 +877,42 @@ impl APInt {
 
   pub fn float_to_bits() {}
 
-  pub fn log_base_2() {}
+  // Returns the floor log base 2 of this APInt.
+  pub fn log_base_2(&self) -> u32 {
+    self.get_active_bits() - 1
+  }
 
-  pub fn ceil_log_base_2() {}
+  // Returns the ceil log base 2 of this APInt.
+  pub fn ceil_log_base_2(&self) -> u32 {
+    let mut temp = APInt::new(self.bit_width_, self.val_, false);
+    temp.val_ -= 1;
+    temp.get_active_bits()
+  }
 
   pub fn nearest_log_base_2() {}
 
-  pub fn exact_log_base_2() {}
+  // Returns the log base 2 of this APInt if its an exact power of two,
+  // -1 otherwise.
+  pub fn exact_log_base_2(&self) -> i32 {
+    if !self.is_power_of_2() {
+      return -1;
+    }
+    self.log_base_2() as i32
+  }
 
   pub fn sqrt() {}
 
-  pub fn abs() {}
+  // Get the absolute value.
+  pub fn abs(&self) /*-> APInt*/ {
+    /*
+    if self.is_negative() {
+      let val = self.val_ as i64 * (-1);
+      let res = APInt::new(self.bit_width_, val, false);
+      return res;
+    }
+    APInt::new(self.bit_width_, self.val_, false)
+    */
+  }
 
   pub fn multiplicative_inverse() {}
 
@@ -655,19 +920,60 @@ impl APInt {
 
   pub fn dump() {}
 
-  pub fn needs_cleanup() {}
+  // Returns whether this instance allocated memory.
+  pub fn needs_cleanup(&self) -> bool{
+    !self.is_single_word()
+  }
 
-  fn clear_unused_bits(&self) {}
+  // Clear unused high order bits.
+  fn clear_unused_bits(&mut self) -> &APInt {
+    // Compute how many bits are used in the final word.
+    let word_bits = ((self.bit_width_ - 1) % APINT_BITS_PER_WORD) + 1;
 
-  fn get_word() {}
+    // Mask out the high bits.
+    let mut mask = WORD_TYPE_MAX >> (APINT_BITS_PER_WORD - word_bits);
+    if self.bit_width_ == 0 {
+      mask = 0;
+    }
 
-  fn reallocate() {}
+    if self.is_single_word() {
+      self.val_ &= mask as i64;
+    } else {
+      self.pval_ &= mask as i64;
+    }
+
+    self
+  }
+
+  // Get the word corresponding to a bit position.
+  fn get_word(&self, bit_position: u32) -> u64 {
+    if self.is_single_word() {
+      return self.val_ as u64;
+    } // TODO else case
+    0
+  }
+
+  // Utility method to change the bit width of this ApInt to a
+  // nyew bit width.
+  fn reallocate(&mut self, new_bit_width: u32) {
+    if self.get_num_words_own() == self.get_num_words(new_bit_width) {
+      self.bit_width_ = new_bit_width;
+      return;
+    }
+    // TODO !is_single_word
+    self.bit_width_ = new_bit_width
+  }
 
   fn from_string() {}
 
   fn divide() {}
 
-  fn init_slow_case() {}
+  // TODO
+  // out-of-line slow case for inline constructor
+  fn init_slow_case(&mut self, val: i64, is_signed: bool) {
+    self.pval_ = val;
+    self.clear_unused_bits();
+  }
 
   fn init_from_array() {}
 
@@ -686,7 +992,9 @@ impl APInt {
     0
   }
 
-  fn count_leading_ones_slow_case() {}
+  fn count_leading_ones_slow_case(&self) -> u32 {
+    self.pval_.leading_ones()
+  }
 
   // out-of-line slow case for count_trailing_zeros.
   fn count_trailing_zeros_slow_case(&self) -> u32 {
@@ -702,134 +1010,226 @@ impl APInt {
     0 // TODO
   }
 
-  fn intersects_slow_case() {}
+  fn intersects_slow_case(&self, rhs: &APInt) -> bool {
+    false
+  }
 
-  fn is_subset_of_slow_case() {}
+  fn is_subset_of_slow_case(&self, rhs: &APInt) -> bool {
+    false
+  }
 
-  fn set_bits_slow_case() {}
+  fn set_bits_slow_case(&self, lo_bit: u32, hi_bit: u32) {}
 
-  fn flip_all_bits_slow_case() {}
+  fn flip_all_bits_slow_case(&self) {}
 
   // out-of-line slow case for concat.
   fn concat_slow_case(&self, new_lsb: APInt) -> Self {
     APInt::new_zero() // TODO
   }
 
-  fn and_assign_slow_case() {}
+  fn and_assign_slow_case(&self) {}
 
-  fn or_assing_slow_case() {}
+  fn or_assing_slow_case(&self) {}
 
-  fn xor_assign_slow_case() {}
+  fn xor_assign_slow_case(&self) {}
 
-  fn compare() {}
+  // Unsigned comparizon.
+  fn compare(&self, rhs: &APInt) -> i64 {
+    debug_assert!(self.bit_width_ == rhs.bit_width_, "Bit widths must be same for comparizon");
+    if self.is_single_word() {
+      if self.val_ < rhs.val_ {
+        return -1;
+      } else if self.val_ > rhs.val_ {
+        return 1;
+      } else {
+        return 0;
+      }
+    }
+    self.tc_compare(rhs.val_ as u64, self.bit_width_)
+  }
 
   fn compare_signed() {}
 
   // Get the '0' value for the specified bit-width.
-pub fn get_zero(num_bits: u32) -> APInt {
-  APInt::new_from_val(num_bits, 0, false)
+  pub fn get_zero(num_bits: u32) -> APInt {
+    APInt::new(num_bits, 0, false)
+  }
+
+  // Return an APInt zero bits wide.
+  pub fn get_zero_width() -> APInt {
+    APInt::get_zero(0)
+  }
+
+  // Gets maximum unsigned value of APInt for specific bit width.
+  pub fn get_max_value(num_bits: u32) -> APInt {
+    APInt::get_all_ones(num_bits)
+  }
+
+  // Gets maximum signed value of APInt for a specific bit width
+  pub fn get_signed_max_value(num_bits: u32) -> APInt {
+    let mut api = APInt::get_all_ones(num_bits);
+    api.clear_bit(num_bits - 1);
+    api
+  }
+
+  // Gets minimum unsigned value of APInt for specific bit width.
+  pub fn get_min_value(num_bits: u32) -> APInt {
+    APInt::new(num_bits, 0, false)
+  }
+
+  // Get minimum signed value of APInt for a specific bit width.
+  pub fn get_signed_min_value(num_bits: u32) -> APInt {
+    let mut api = APInt::new(num_bits, 0, false);
+    api.set_bit(num_bits - 1);
+    api
+  }
+
+  // Get the SignMask for a specific bit width.
+  pub fn get_sign_mask(bit_width: u32) -> APInt {
+    APInt::get_signed_min_value(bit_width)
+  }
+
+  // Return an APInt of a specified width with all bits set.
+  pub fn get_all_ones(num_bits: u32) -> APInt {
+    APInt::new(num_bits, WORD_TYPE_MAX as i64, true)
+  }
+
+  // Return an APInt with exactly one bit set in the result.
+  pub fn get_one_bit_set(num_bits: u32, bit_no: u32) -> APInt {
+    let mut res = APInt::new(num_bits, 0, false);
+    res.set_bit(bit_no);
+    res
+  }
+
+  // Get a value with a block of bits set.
+  pub fn get_bits_set(num_bits: u32, lo_bit: u32, hi_bit: u32) -> APInt {
+    let mut res = APInt::new(num_bits, 0, false);
+    res.set_bits(lo_bit, hi_bit);
+    res
+  }
+
+  // Wrap version of get_bits_set.
+  pub fn get_bits_set_with_wrap(num_bits: u32, lo_bit: u32, hi_bit: u32) -> APInt {
+    let mut res = APInt::new(num_bits, 0, false);
+    res.set_bits_with_wrap(lo_bit, hi_bit);
+    res
+  }
+
+  // Constructs an APInt value that has a contiguous range of bits set.
+  pub fn get_bits_set_from(num_bits: u32, lo_bit: u32) -> APInt {
+    let mut res = APInt::new(num_bits, 0, false);
+    res.set_bits_from(lo_bit);
+    res
+  }
+
+  // Constructs an APInt value that has the top hi_bits_set bits set.
+  pub fn get_high_bits_set(num_bits: u32, hi_bits_set: u32) -> APInt {
+    let mut res = APInt::new(num_bits, 0, false);
+    res.set_high_bits(hi_bits_set);
+    res
+  }
+
+  // Constructs an APInt value that has the bottom lo_bits_set bits set.
+  pub fn get_low_bits_set(num_bits: u32, lo_bits_set: u32) -> APInt {
+    let mut res = APInt::new(num_bits, 0, false);
+    res.set_low_bits(lo_bits_set);
+    res
+  }
+
+  pub fn get_splat() {}
+
+  pub fn get_bits_needed() {}
+
+  pub fn get_sufficient_bits_needed() {}
+
+  pub fn tc_set() {}
+
+  pub fn tc_assign() {}
+
+  pub fn tc_is_zero() {}
+
+  pub fn tc_extract_bit() {}
+
+  pub fn tc_extract() {}
+
+  pub fn ts_set_bit() {}
+
+  pub fn tc_clear_bit() {}
+
+  pub fn tc_lsb() {}
+
+  pub fn tc_msb() {}
+
+  pub fn tc_negate() {}
+
+  pub fn tc_add() {}
+
+  pub fn tc_add_part() {}
+
+  pub fn tc_subtract() {}
+
+  pub fn tc_subtract_part() {}
+
+  pub fn tc_multiply_part() {}
+
+  pub fn tc_multiply() {}
+
+  pub fn tc_full_multiply() {}
+
+  pub fn tc_divide() {}
+
+  pub fn tc_shift_left() {}
+
+  pub fn tc_shift_right() {}
+
+  // Comparison (unsigned) of two bignums.
+  pub fn tc_compare(&self, rhs: u64, num_words: u32) -> i64 {
+    0
+  }
+
+  pub fn tc_increment() {}
+
+  pub fn tc_decrement() {}
+
+  // Determine which word a bit is in.
+  fn which_word(bit_position: u32) -> u32 {
+    bit_position / APINT_BITS_PER_WORD
+  }
+
+  // Determine which bit in a word the specified bit position is in.
+  fn which_bit(bit_position: u32) -> u32 {
+    bit_position % APINT_BITS_PER_WORD
+  }
+
+  // Get a single bit mask.
+  fn mask_bit(bit_position: u32) -> u64 {
+    let bit = APInt::which_bit(bit_position) as u64;
+    1 << bit
+  }
+
+  // Array-indexing support.
+  // Returns the bit value at bit_position.
+  fn at(&self, bit_position: u32) -> bool {
+    debug_assert!(bit_position < self.bit_width_, "Bit position out of bounds!");
+    APInt::mask_bit(bit_position) & self.get_word(bit_position) != 0
+  }
 }
 
-// Return an APInt zero bits wide.
-pub fn get_zero_width() -> APInt {
-  APInt::get_zero(0)
+// Array-indexing support.
+// Returns the bit value at bit position.
+impl Index<u32> for APInt {
+  type Output = bool;
+  fn index(&self, bit_position: u32) -> &Self::Output {
+    debug_assert!(bit_position < self.get_bit_width(), "Bit position out of bounds!");
+    if (APInt::mask_bit(bit_position) & self.get_word(bit_position)) != 0 {
+      return &true;
+    } else {
+      return &false;
+    }
+  }
 }
 
-// Gets maximum unsigned value of APInt for specific bit width.
-pub fn get_max_value(num_bits: u32) -> APInt {
-  APInt::get_all_ones(num_bits)
-}
-
-pub fn get_signed_max_value() {}
-
-// Gets minimum unsigned value of APInt for specific bit width.
-pub fn get_min_value(num_bits: u32) -> APInt {
-  APInt::new_from_val(num_bits, 0, false)
-}
-
-pub fn get_signed_min_value() {}
-
-pub fn get_sign_mask() {}
-
-// Return an APInt of a specified width with all bits set.
-pub fn get_all_ones(num_bits: u32) -> APInt {
-  APInt::new_from_val(num_bits, WORD_TYPE_MAX, true)
-}
-
-pub fn get_all_ones_value() {}
-
-pub fn get_one_bit_set() {}
-
-pub fn get_bits_set() {}
-
-pub fn get_bits_set_with_wrap() {}
-
-pub fn get_bits_set_from() {}
-
-pub fn get_high_bits_set() {}
-
-pub fn get_low_bits_set() {}
-
-pub fn get_splat() {}
-
-pub fn get_bits_needed() {}
-
-pub fn get_sufficient_bits_needed() {}
-
-pub fn tc_set() {}
-
-pub fn tc_assign() {}
-
-pub fn tc_is_zero() {}
-
-pub fn tc_extract_bit() {}
-
-pub fn tc_extract() {}
-
-pub fn ts_set_bit() {}
-
-pub fn tc_clear_bit() {}
-
-pub fn tc_lsb() {}
-
-pub fn tc_msb() {}
-
-pub fn tc_negate() {}
-
-pub fn tc_add() {}
-
-pub fn tc_add_part() {}
-
-pub fn tc_subtract() {}
-
-pub fn tc_subtract_part() {}
-
-pub fn tc_multiply_part() {}
-
-pub fn tc_multiply() {}
-
-pub fn tc_full_multiply() {}
-
-pub fn tc_divide() {}
-
-pub fn tc_shift_left() {}
-
-pub fn tc_shift_right() {}
-
-pub fn tc_compare() {}
-
-pub fn tc_increment() {}
-
-pub fn tc_decrement() {}
-
-fn which_word() {}
-
-fn which_bit() {}
-
-fn mask_bit() {}
-}
-
-impl ops::BitAndAssign<APInt> for APInt {
+impl BitAndAssign<APInt> for APInt {
   fn bitand_assign(&mut self, rhs: APInt) {
     if self.is_single_word() {
       self.val_ &= rhs.val_;
@@ -839,17 +1239,17 @@ impl ops::BitAndAssign<APInt> for APInt {
   }
 }
 
-impl ops::BitAndAssign<u64> for APInt {
+impl BitAndAssign<u64> for APInt {
   fn bitand_assign(&mut self, rhs: u64) {
     if self.is_single_word() {
-      self.val_ &= rhs;
+      self.val_ &= rhs as i64;
     } else {
       // self.pval_ = rhs
     }
   }
 }
 
-impl ops::BitOrAssign<APInt> for APInt {
+impl BitOrAssign<APInt> for APInt {
   fn bitor_assign(&mut self, rhs: APInt) {
     if self.is_single_word() {
       self.val_ |= rhs.val_;
@@ -859,17 +1259,17 @@ impl ops::BitOrAssign<APInt> for APInt {
   }
 }
 
-impl ops::BitOrAssign<u64> for APInt {
+impl BitOrAssign<u64> for APInt {
   fn bitor_assign(&mut self, rhs: u64) {
     if self.is_single_word() {
-      self.val_ |= rhs;
+      self.val_ |= rhs as i64;
     } else {
       // self.pval_ |= rhs
     }
   }
 }
 
-impl ops::BitXorAssign<APInt> for APInt {
+impl BitXorAssign<APInt> for APInt {
   fn bitxor_assign(&mut self, rhs: APInt) {
     if self.is_single_word() {
       self.val_ ^= rhs.val_;
@@ -879,17 +1279,17 @@ impl ops::BitXorAssign<APInt> for APInt {
   }
 }
 
-impl ops::BitXorAssign<u64> for APInt {
+impl BitXorAssign<u64> for APInt {
   fn bitxor_assign(&mut self, rhs: u64) {
     if self.is_single_word() {
-      self.val_ ^= rhs;
+      self.val_ ^= rhs as i64;
     } else {
       // TODO
     }
   }
 }
 
-impl ops::MulAssign<APInt> for APInt {
+impl MulAssign<APInt> for APInt {
   fn mul_assign(&mut self, rhs: APInt) {
     if self.is_single_word() {
       self.val_ *= rhs.val_;
@@ -899,17 +1299,28 @@ impl ops::MulAssign<APInt> for APInt {
   }
 }
 
-impl ops::MulAssign<u64> for APInt {
+impl MulAssign<u64> for APInt {
   fn mul_assign(&mut self, rhs: u64) {
     if self.is_single_word() {
-      self.val_ *= rhs;
+      self.val_ *= rhs as i64;
     } else {
       // TODO
     }
   }
 }
 
-impl ops::AddAssign<APInt> for APInt {
+impl Add<APInt> for APInt {
+  type Output = APInt;
+  fn add(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() && rhs.is_single_word() {
+      APInt::new(self.bit_width_ , self.val_ + rhs.val_, false)
+    } else { // TODO
+      APInt::new(self.bit_width_ , self.val_ + rhs.val_, false)
+    }
+  }
+}
+
+impl AddAssign<APInt> for APInt {
   fn add_assign(&mut self, rhs: APInt) {
     if self.is_single_word() && rhs.is_single_word() {
       self.val_ = rhs.val_;
@@ -920,10 +1331,10 @@ impl ops::AddAssign<APInt> for APInt {
   }
 }
 
-impl ops::AddAssign<u64> for APInt {
+impl AddAssign<u64> for APInt {
   fn add_assign(&mut self, rhs: u64) {
     if self.is_single_word() {
-      self.val_ = rhs;
+      self.val_ = rhs as i64;
       self.clear_unused_bits();
       return;
     }
@@ -932,7 +1343,7 @@ impl ops::AddAssign<u64> for APInt {
   }
 }
 
-impl ops::SubAssign<APInt> for APInt {
+impl SubAssign<APInt> for APInt {
   fn sub_assign(&mut self, rhs: APInt) {
     if self.is_single_word() {
       self.val_ -= rhs.val_;
@@ -942,33 +1353,33 @@ impl ops::SubAssign<APInt> for APInt {
   }
 }
 
-impl ops::SubAssign<u64> for APInt {
+impl SubAssign<u64> for APInt {
   fn sub_assign(&mut self, rhs: u64) {
     if self.is_single_word() {
-      self.val_ -= rhs;
+      self.val_ -= rhs as i64;
     } else {
       // TODO
     }
   }
 }
 
-impl ops::ShlAssign<APInt> for APInt {
+impl ShlAssign<APInt> for APInt {
   fn shl_assign(&mut self, rhs: APInt) {
     // TODO
   }
 }
 
-impl ops::ShlAssign<u32> for APInt {
+impl ShlAssign<u32> for APInt {
   fn shl_assign(&mut self, rhs: u32) {
     // TODO
   }
 }
 
-impl ops::Mul<APInt> for APInt {
+impl Mul<APInt> for APInt {
   type Output = APInt;
   fn mul(self, rhs: APInt) -> Self::Output {
     if self.is_single_word() {
-      APInt::new_from_val(self.bit_width_, self.val_*rhs.val_, false)
+      APInt::new(self.bit_width_, self.val_*rhs.val_, false)
     } else {
       // TODO
       APInt { val_: self.val_ * rhs.val_, pval_: self.pval_, bit_width_: self.bit_width_ }
@@ -976,7 +1387,7 @@ impl ops::Mul<APInt> for APInt {
   }
 }
 
-impl ops::Shl<APInt> for APInt {
+impl Shl<APInt> for APInt {
   type Output = APInt;
   fn shl(self, rhs: APInt) -> Self::Output {
     // TODO
@@ -984,7 +1395,7 @@ impl ops::Shl<APInt> for APInt {
   }
 }
 
-impl ops::Shl<u32> for APInt {
+impl Shl<u32> for APInt {
   type Output = APInt;
   fn shl(self, rhs: u32) -> Self::Output {
     // TODO
@@ -996,15 +1407,104 @@ impl ops::Shl<u32> for APInt {
 mod tests {
   use super::*;
 
-  #[test]
+  /*
+  //#[test]
   fn test_value_init() {
     let zero = APInt::new_zero();
     assert_eq!(zero.val_, 0);
+    assert_eq!(zero.zext(64).val_, 0);
+    // TODO zero.sext
+  }
+  */
+
+  //#[test]
+  //fn test_shift_left_by_zero() {
+    //let one = APInt::get_zero(65) + 
+      //APInt::new(65, 1, false);
+    //let shl = one.shl(0);
+    //assert_eq!(shl.at(0), true);
+    //assert_eq!(shl.at(1), false);
+  //}
+
+  #[test]
+  fn test_i64_arithmetic_right_shift_negative() {
+    let neg_one = APInt::new(64, -1, true);
+    assert_eq!(neg_one.ashr(7), neg_one);
+  }
+
+  /*
+  #[test]
+  fn test_i128_negative_count() {
+    let minus3 = APInt::new(128, -3, true);
+    assert_eq!(minus3.count_leading_ones(), 126);
+    assert_eq!(minus3.get_s_ext_value(), -3);
+  }
+  */
+
+  #[test]
+  fn test_i33_count() {
+    let i33minus2= APInt::new(33, -2, true);
+    assert_eq!(i33minus2.count_leading_zeros(), 0);
+    assert_eq!(i33minus2.count_leading_ones(), 32);
+    assert_eq!(i33minus2.get_active_bits(), 33);
+    assert_eq!(i33minus2.count_trailing_zeros(), 1);
+    assert_eq!(i33minus2.count_population(), 32);
+    assert_eq!(i33minus2.get_s_ext_value(), -2);
+    //assert_eq!(i33minus2.get_z_ext_value(), -2 & 1 << 33 - 1);
   }
 
   #[test]
-  fn test_shift_left_by_zero() {
-    //let one = APInt::get_zero(65) + 1;
-    //let shl = one
+  fn test_i61_count() {
+    let mut i61 = APInt::new(61, 1 << 15, false);
+    assert_eq!(i61.count_leading_zeros(), 45);
+    assert_eq!(i61.count_leading_ones(), 0);
+    assert_eq!(i61.get_active_bits(), 16);
+    assert_eq!(i61.count_trailing_zeros(), 15);
+    assert_eq!(i61.count_population(), 1);
+    assert_eq!(i61.get_s_ext_value(), 1 << 15 as i64);
+    assert_eq!(i61.get_z_ext_value(), 1 << 15);
+
+    i61.set_bits(8, 19);
+    assert_eq!(i61.count_leading_zeros(), 42);
+    assert_eq!(i61.count_leading_ones(), 0);
+    assert_eq!(i61.get_active_bits(), 19);
+    assert_eq!(i61.count_trailing_zeros(), 8);
+    assert_eq!(i61.count_population(), 11);
+    assert_eq!(i61.get_s_ext_value(), ((1 << 19) - (1 << 8)) as i64);
+    assert_eq!(i61.get_z_ext_value(), ((1 << 19) - (1 << 8)));
+  }
+
+  #[test]
+  fn test_i1() {
+    let neg_two = APInt::new(1, -2, true);
+    let neg_one = APInt::new(1, -1, true);
+    let zero = APInt::new(1, 0, false);
+    let one = APInt::new(1, 1, false);
+    let two = APInt::new(1, 2, false);
+
+    assert_eq!(neg_two.get_s_ext_value(), 0);
+    assert_eq!(neg_one.get_s_ext_value(), -1);
+    assert_eq!(neg_one.get_z_ext_value(), 1);
+    assert_eq!(zero.get_z_ext_value(), 0);
+    assert_eq!(one.get_s_ext_value(), -1);
+    assert_eq!(one.get_z_ext_value(), 1);
+    assert_eq!(two.get_z_ext_value(), 0);
+    assert_eq!(two.get_s_ext_value(), 0);
+
+    // Basic equalities for 1-bit values.
+    assert_eq!(zero, two);
+    assert_eq!(zero, neg_two);
+    assert_eq!(one, neg_one);
+    assert_eq!(two, neg_two);
+
+    // Min/max signed values.
+    assert_eq!(zero.is_max_signed_value(), true);
+    assert_eq!(one.is_max_signed_value(), false);
+    assert_eq!(zero.is_min_signed_value(), false);
+    assert_eq!(one.is_min_signed_value(), true);
+
+    // Additions.
+    let one_c= one.clone();
+    assert_eq!(two, one + one_c);
   }
 }

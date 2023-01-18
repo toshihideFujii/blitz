@@ -1,4 +1,6 @@
 pub mod adt;
+pub mod analysis;
+pub mod execution_engine;
 pub mod ir;
 pub mod passes;
 pub mod profile_data;
