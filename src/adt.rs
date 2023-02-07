@@ -1,8 +1,12 @@
 pub mod ap_int;
 pub mod array_ref;
 pub mod dense_map_info;
+pub mod dense_map;
+pub mod dense_set;
+pub mod directed_graph;
 pub mod immutable_list;
 pub mod none;
+pub mod set_vector;
 pub mod small_vector;
 pub mod string_extras;
 pub mod string_map;

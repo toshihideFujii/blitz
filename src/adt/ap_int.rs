@@ -1229,6 +1229,17 @@ impl Index<u32> for APInt {
   }
 }
 
+impl BitAnd<APInt> for APInt {
+  type Output = APInt;
+  fn bitand(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() && rhs.is_single_word() {
+      APInt::new(self.bit_width_ , self.val_ & rhs.val_, false)
+    } else { // TODO
+      APInt::new(self.bit_width_ , self.val_ & rhs.val_, false)
+    }
+  }
+}
+
 impl BitAndAssign<APInt> for APInt {
   fn bitand_assign(&mut self, rhs: APInt) {
     if self.is_single_word() {
@@ -1245,6 +1256,17 @@ impl BitAndAssign<u64> for APInt {
       self.val_ &= rhs as i64;
     } else {
       // self.pval_ = rhs
+    }
+  }
+}
+
+impl BitOr<APInt> for APInt {
+  type Output = APInt;
+  fn bitor(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() && rhs.is_single_word() {
+      APInt::new(self.bit_width_ , self.val_ | rhs.val_, false)
+    } else { // TODO
+      APInt::new(self.bit_width_ , self.val_ | rhs.val_, false)
     }
   }
 }
@@ -1269,6 +1291,17 @@ impl BitOrAssign<u64> for APInt {
   }
 }
 
+impl BitXor<APInt> for APInt {
+  type Output = APInt;
+  fn bitxor(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() && rhs.is_single_word() {
+      APInt::new(self.bit_width_ , self.val_ ^ rhs.val_, false)
+    } else { // TODO
+      APInt::new(self.bit_width_ , self.val_ ^ rhs.val_, false)
+    }
+  }
+}
+
 impl BitXorAssign<APInt> for APInt {
   fn bitxor_assign(&mut self, rhs: APInt) {
     if self.is_single_word() {
@@ -1285,6 +1318,18 @@ impl BitXorAssign<u64> for APInt {
       self.val_ ^= rhs as i64;
     } else {
       // TODO
+    }
+  }
+}
+
+impl Mul<APInt> for APInt {
+  type Output = APInt;
+  fn mul(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() {
+      APInt::new(self.bit_width_, self.val_*rhs.val_, false)
+    } else {
+      // TODO
+      APInt { val_: self.val_ * rhs.val_, pval_: self.pval_, bit_width_: self.bit_width_ }
     }
   }
 }
@@ -1343,6 +1388,17 @@ impl AddAssign<u64> for APInt {
   }
 }
 
+impl Sub<APInt> for APInt {
+  type Output = APInt;
+  fn sub(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() && rhs.is_single_word() {
+      APInt::new(self.bit_width_ , self.val_ - rhs.val_, false)
+    } else { // TODO
+      APInt::new(self.bit_width_ , self.val_ - rhs.val_, false)
+    }
+  }
+}
+
 impl SubAssign<APInt> for APInt {
   fn sub_assign(&mut self, rhs: APInt) {
     if self.is_single_word() {
@@ -1363,6 +1419,17 @@ impl SubAssign<u64> for APInt {
   }
 }
 
+impl Shl<APInt> for APInt {
+  type Output = APInt;
+  fn shl(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() && rhs.is_single_word() {
+      APInt::new(self.bit_width_ , self.val_ << rhs.val_, false)
+    } else { // TODO
+      APInt::new(self.bit_width_ , self.val_ << rhs.val_, false)
+    }
+  }
+}
+
 impl ShlAssign<APInt> for APInt {
   fn shl_assign(&mut self, rhs: APInt) {
     // TODO
@@ -1372,34 +1439,6 @@ impl ShlAssign<APInt> for APInt {
 impl ShlAssign<u32> for APInt {
   fn shl_assign(&mut self, rhs: u32) {
     // TODO
-  }
-}
-
-impl Mul<APInt> for APInt {
-  type Output = APInt;
-  fn mul(self, rhs: APInt) -> Self::Output {
-    if self.is_single_word() {
-      APInt::new(self.bit_width_, self.val_*rhs.val_, false)
-    } else {
-      // TODO
-      APInt { val_: self.val_ * rhs.val_, pval_: self.pval_, bit_width_: self.bit_width_ }
-    }
-  }
-}
-
-impl Shl<APInt> for APInt {
-  type Output = APInt;
-  fn shl(self, rhs: APInt) -> Self::Output {
-    // TODO
-    APInt::new_zero()
-  }
-}
-
-impl Shl<u32> for APInt {
-  type Output = APInt;
-  fn shl(self, rhs: u32) -> Self::Output {
-    // TODO
-    APInt::new_zero()
   }
 }
 
@@ -1504,7 +1543,45 @@ mod tests {
     assert_eq!(one.is_min_signed_value(), true);
 
     // Additions.
-    let one_c= one.clone();
-    assert_eq!(two, one + one_c);
+    assert_eq!(one.clone() + one.clone(), two);
+    assert_eq!(neg_one.clone() + one.clone(), zero);
+    assert_eq!(neg_one.clone() + neg_one.clone(), neg_two);
+
+    // Subtractions.
+    assert_eq!(neg_one.clone() - one.clone(), neg_two);
+    assert_eq!(one.clone() - neg_one.clone(), two);
+    assert_eq!(one.clone() - one.clone(), zero);
+
+    // And
+    assert_eq!(zero.clone() & zero.clone(), zero);
+    assert_eq!(one.clone() & zero.clone(), zero);
+    assert_eq!(zero.clone() & one.clone(), zero);
+    assert_eq!(one.clone() & one.clone(), one);
+    assert_eq!(neg_one.clone() & zero.clone(), zero);
+    assert_eq!(zero.clone() & neg_one.clone(), zero);
+    assert_eq!(neg_one.clone() & neg_one.clone(), neg_one);
+
+    // Or
+    assert_eq!(zero.clone() | zero.clone(), zero);
+    assert_eq!(one.clone() | zero.clone(), one);
+    assert_eq!(zero.clone() | one.clone(), one);
+    assert_eq!(one.clone() | one.clone(), one);
+    assert_eq!(neg_one.clone() | zero.clone(), neg_one);
+    assert_eq!(zero.clone() | neg_one.clone(), neg_one);
+    assert_eq!(neg_one.clone() | neg_one.clone(), neg_one);
+
+    // Xor
+    assert_eq!(zero.clone() ^ zero.clone(), zero);
+    assert_eq!(one.clone() ^ zero.clone(), one);
+    assert_eq!(zero.clone() ^ one.clone(), one);
+    assert_eq!(one.clone() ^ one.clone(), zero);
+    assert_eq!(neg_one.clone() ^ zero.clone(), neg_one);
+    assert_eq!(zero.clone() ^ neg_one.clone(), neg_one);
+    assert_eq!(neg_one.clone() ^ neg_one.clone(), zero);
+
+    // Shifts.
+    assert_eq!(one.clone() << one.clone(), zero);
+    assert_eq!(one.clone() << zero.clone(), one);
+
   }
 }

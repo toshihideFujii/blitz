@@ -3,7 +3,7 @@
 
 fn combine_hash_value() {}
 
-struct DenseMapInfo<T>(T);
+pub struct DenseMapInfo<T>(T);
 
 const LOG_2_MAX_ALIGN: u64 = 12;
 

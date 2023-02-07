@@ -625,7 +625,7 @@ use super::*;
   fn test_iteration() {
     let mut s = StringRef::new_from_string("hello");
     let p = "hello";
-    for it in s.next() {
+    if let Some(it) = s.next() {
       assert_eq!(it, p.chars().next().unwrap());
     }
   }
