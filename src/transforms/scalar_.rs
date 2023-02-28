@@ -1,9 +1,7 @@
 #![allow(dead_code)]
 
-/*
-This file defines prototypes for accessor functions
-that expose passes in the Scalar transformations library.
-*/
+// This file defines prototypes for accessor functions
+// that expose passes in the Scalar transformations library.
 
 pub fn create_alignment_from_assumptions_pass() {}
 

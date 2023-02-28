@@ -7,7 +7,7 @@ use crate::adt::dense_map::DenseMap;
 struct DenseSetEmpty {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct DenseSet<Key> where Key: Debug + Clone +  Eq + Hash {
+pub struct DenseSet<Key> where Key: Debug + Clone +  Eq + Hash {
   map: DenseMap<Key, DenseSetEmpty>
 }
 
@@ -105,6 +105,7 @@ mod tests {
     let mut set: DenseSet<i64> = DenseSet::new();
     set.insert(0);
     set.insert(1);
+    assert_eq!(set.size(), 2);
     assert_eq!(set.count(2), false);
   }
 

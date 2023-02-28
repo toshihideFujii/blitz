@@ -1,35 +1,33 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use std::{cmp};
+use std::cmp;
 
 const NPOS: usize = 99999999999; // TODO
 
 // Represent a constant reference to a string.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StringRef {
-  // The start of the string, in an external buffer.
-  data_: String,
-  // The length of the string.
-  length_: usize
+  data: String,
+  length: usize
 }
 
 impl StringRef {
   // Construct an empty string ref.
   pub fn new() -> Self {
-    StringRef { data_: String::new(), length_: 0 }
+    StringRef { data: String::new(), length: 0 }
   }
 
   // Construct a string ref from a string.
   pub fn new_from_string(data: &str) -> Self {
     let string = data;
-    StringRef { data_: String::from(string), length_: string.len() }
+    StringRef { data: String::from(string), length: string.len() }
   }
 
   // Construct a string ref from a pointer and length.
   pub fn new_from_string_and_length(data: &str, length: usize) -> Self {
     let string = data;
-    StringRef { data_: String::from(string), length_: length }
+    StringRef { data: String::from(string), length: length }
   }
 
   // Iterators
@@ -51,42 +49,42 @@ impl StringRef {
 
   // Get a pointer to the start of the string (which may not be null terminated).
   pub fn data(&self) -> String {
-    self.data_.clone()
+    self.data.clone()
   }
 
   // Check if the string is empty.
   pub fn empty(&self) -> bool {
-    self.data_.is_empty()
+    self.data.is_empty()
   }
 
   // Get the string size.
   pub fn size(&self) -> usize {
-    self.data_.len()
+    self.data.len()
   }
 
   // Get the first character in the string.
   pub fn front(&self) -> char {
-    self.data_.chars().nth(0).unwrap()
+    self.data.chars().nth(0).unwrap()
   }
 
   // Get the last character in the string.
   pub fn back(&self) -> char {
-    self.data_.chars().last().unwrap()
+    self.data.chars().last().unwrap()
   }
 
   // Allocate copy in allocator and return StringRef to it.
   pub fn copy(&self) -> StringRef {
-    StringRef { data_: self.data_.clone(), length_: self.length_ }
+    StringRef { data: self.data.clone(), length: self.length }
   }
 
   // Check for string equality.
   pub fn equals(&self, rhs: StringRef) -> bool {
-    self.data_.eq(&rhs.data_)
+    self.data.eq(&rhs.data)
   }
 
   // Check for string equality, ignoring case.
   pub fn equals_insensitive(&self, rhs: StringRef) -> bool {
-    self.data_.eq_ignore_ascii_case(&rhs.data_)
+    self.data.eq_ignore_ascii_case(&rhs.data)
   }
 
   // Compare two strings; the result is -1, 0, or 1 if this string 
@@ -123,29 +121,29 @@ impl StringRef {
   pub fn str() {}
 
   pub fn at(&self, index: usize) -> char {
-    self.data_.chars().nth(index).unwrap()
+    self.data.chars().nth(index).unwrap()
   }
 
   // Check if this string starts with the given prefix.
   pub fn starts_with(&self, prefix: &str) -> bool {
-    self.data_.starts_with(prefix)
+    self.data.starts_with(prefix)
   }
 
   // Check if this string starts with the given prefix, ignoring case.
   pub fn starts_with_insensitive(&self, prefix: &str) -> bool {
-    let original = self.data_.to_ascii_lowercase();
+    let original = self.data.to_ascii_lowercase();
     let other = prefix.to_ascii_lowercase();
     return original.starts_with(other.as_str());
   }
 
   // Check if this string ends with the given suffix.
   pub fn ends_with(&self, suffix: &str) -> bool {
-    self.data_.ends_with(suffix)
+    self.data.ends_with(suffix)
   }
 
   // Check if this string ends with the given suffix, ignoring case.
   pub fn ends_with_insensitive(&self, suffix: &str) -> bool {
-    let original = self.data_.to_ascii_lowercase();
+    let original = self.data.to_ascii_lowercase();
     let other = suffix.to_ascii_lowercase();
     return original.ends_with(other.as_str());
   }
@@ -153,8 +151,8 @@ impl StringRef {
   // Search for the first character c in the string.
   pub fn find(&self, c: char, from: usize) -> usize {
     let str = self.data().clone();
-    let find_begin = cmp::min(from, self.length_);
-    if find_begin < self.length_ {
+    let find_begin = cmp::min(from, self.length);
+    if find_begin < self.length {
       let (abandoned, remained) = str.split_at(find_begin);
       let pos = remained.find(c);
       if pos != None {
@@ -169,8 +167,8 @@ impl StringRef {
   // Search for the first string str in the string.
   pub fn find_str(&self, str: StringRef, from: usize) -> usize {
     let s = self.data().clone();
-    let find_begin = cmp::min(from, self.length_);
-    if find_begin < self.length_ {
+    let find_begin = cmp::min(from, self.length);
+    if find_begin < self.length {
       let (abandoned, remained) = s.split_at(find_begin);
       let remained_str = String::from(remained);
       let result = remained_str.match_indices(str.data().as_str()).next();
@@ -185,7 +183,7 @@ impl StringRef {
 
   // Search for the first character c in the string, ignoring case.
   pub fn find_insensitive(&self, c: char, from: usize) -> usize {
-    let orig_lower = self.data_.to_ascii_lowercase();
+    let orig_lower = self.data.to_ascii_lowercase();
     let s = StringRef::new_from_string(&orig_lower);
     let c_lower = c.to_ascii_lowercase();
     s.find(c_lower, from)
@@ -193,7 +191,7 @@ impl StringRef {
 
   // Search for the first string str in the string, ignoring case.
   pub fn find_str_insensitive(&self, str: StringRef, from: usize) -> usize {
-    let orig_lower = self.data_.to_ascii_lowercase();
+    let orig_lower = self.data.to_ascii_lowercase();
     let s = StringRef::new_from_string(&orig_lower);
     let str_lower = str.data().to_ascii_lowercase();
     let str_lower_ref = StringRef::new_from_string(&str_lower);
@@ -223,7 +221,7 @@ impl StringRef {
   // Search for the last character c in the string.
   pub fn rfind(&self, c: char, from: usize) -> usize {
     let str = self.data().clone();
-    let rfind_begin = cmp::min(from, self.length_);
+    let rfind_begin = cmp::min(from, self.length);
     let (remained, abandoned) = str.split_at(rfind_begin);
     let pos = String::from(remained).rfind(c);
     if pos != None {
@@ -246,7 +244,7 @@ impl StringRef {
 
   // Search for the last string str in the string.
   pub fn rfind_str_insensitive(&self, str: StringRef) -> usize {
-    let orig_lower = self.data_.to_ascii_lowercase();
+    let orig_lower = self.data.to_ascii_lowercase();
     let s = StringRef::new_from_string(&orig_lower);
     let str_lower = str.data().to_ascii_lowercase();
     let str_lower_ref = StringRef::new_from_string(&str_lower);
@@ -255,7 +253,7 @@ impl StringRef {
 
   // Search for the last character c in the string, ignoring case.
   pub fn rfind_insensitive(&self, c: char, from: usize) -> usize {
-    let orig_lower = self.data_.to_ascii_lowercase();
+    let orig_lower = self.data.to_ascii_lowercase();
     let s = StringRef::new_from_string(&orig_lower);
     let c_lower = c.to_ascii_lowercase();
     s.rfind(c_lower, from)
@@ -274,8 +272,8 @@ impl StringRef {
   // Find the first character in the string that is not c.
   pub fn find_first_not_of(&self, c: char, from: usize) -> usize {
     let str = self.data().clone();
-    let begin = cmp::min(from, self.length_);
-    if begin < self.length_ {
+    let begin = cmp::min(from, self.length);
+    if begin < self.length {
       let (abandoned, remained) = str.split_at(begin);
       let mut chars = remained.char_indices();
       loop {
@@ -294,8 +292,8 @@ impl StringRef {
   // Find the first character in the string that is not in the string str.
   pub fn find_first_not_of_str(&self, str: StringRef, from: usize) -> usize {
     let s = self.data().clone();
-    let begin = cmp::min(from, self.length_);
-    if begin < self.length_ {
+    let begin = cmp::min(from, self.length);
+    if begin < self.length {
       let (abandoned, remained) = s.split_at(begin);
       let mut chars = remained.char_indices();
       let str_clone = str.data().clone();
@@ -322,7 +320,7 @@ impl StringRef {
   // Find the last character in the string that is not c.
   pub fn find_last_not_of(&self, c: char, from: usize) -> usize {
     let str = self.data().clone();
-    let rfind_begin = cmp::min(from, self.length_);
+    let rfind_begin = cmp::min(from, self.length);
     let (remained, abandoned) = str.split_at(rfind_begin);
     let mut chars = remained.char_indices().rev();
     loop {
@@ -340,7 +338,7 @@ impl StringRef {
   // Find the last character in the string that is not in str.
   pub fn find_last_not_of_str(&self, str: StringRef, from: usize) -> usize {
     let s = self.data().clone();
-    let begin = cmp::min(from, self.length_);
+    let begin = cmp::min(from, self.length);
     let (remained, abandoned) = s.split_at(begin);
     let mut chars = remained.char_indices().rev();
     let str_clone = str.data().clone();
@@ -361,12 +359,12 @@ impl StringRef {
   // Return true if the given string is a substring of this,
   // and false otherwise.
   pub fn contains(&self, other: StringRef) -> bool {
-    self.data_.contains(other.data_.as_str())
+    self.data.contains(other.data.as_str())
   }
 
   pub fn contains_insensitive(&self, other: StringRef) -> bool {
-    let original = self.data_.to_ascii_lowercase();
-    let other_lower = other.data_.to_ascii_lowercase();
+    let original = self.data.to_ascii_lowercase();
+    let other_lower = other.data.to_ascii_lowercase();
     return original.contains(other_lower.as_str());
   }
 
@@ -386,13 +384,13 @@ impl StringRef {
   pub fn count_str(&self, str: &str) -> usize {
     let mut count = 0;
     let n = str.len();
-    if n == 0 || n > self.length_ {
+    if n == 0 || n > self.length {
       return 0;
     }
     let mut skip = false;
     let mut skip_count = 0;
     // TODO: ugly
-    for i in 0..(self.length_-n+1) {
+    for i in 0..(self.length-n+1) {
       if skip == true && i < skip_count {
         continue;
       }
@@ -417,29 +415,29 @@ impl StringRef {
 
   // Convert the given ASCII string to lowercase.
   pub fn lower(&self) -> String {
-    self.data_.to_ascii_lowercase()
+    self.data.to_ascii_lowercase()
   }
 
   // Convert the given ASCII string to uppercase.
   pub fn upper(&self) -> String {
-    self.data_.to_ascii_uppercase()
+    self.data.to_ascii_uppercase()
   }
 
   // Return a reference to the substring from [start, start+n).
   pub fn substr(&self, start: usize, n: usize) -> Self { 
-    let start_min = cmp::min(start, self.length_);
-    let length_min = cmp::min(n, self.length_-start_min);
+    let start_min = cmp::min(start, self.length);
+    let length_min = cmp::min(n, self.length-start_min);
     
-    //let sub = &self.data_[start_min..self.length_];
-    let sub = &self.data_[start_min..(start_min+length_min)];
-    StringRef { data_: sub.to_string(), length_: length_min }
+    //let sub = &self.data[start_min..self.length];
+    let sub = &self.data[start_min..(start_min+length_min)];
+    StringRef { data: sub.to_string(), length: length_min }
   }
 
   // Return a StringRef equal to this but with only the first n
   // elements remaining.
   pub fn take_front(&self, n: usize) -> Self {
     if n >= self.size() {
-      return StringRef { data_: self.data_.clone(), length_: self.length_ };
+      return StringRef { data: self.data.clone(), length: self.length };
     }
     self.drop_back(self.size()-n)
   }
@@ -448,7 +446,7 @@ impl StringRef {
   // elements remaining.
   pub fn take_back(&self, n: usize) -> Self {
     if n >= self.size() {
-      return StringRef { data_: self.data_.clone(), length_: self.length_ };
+      return StringRef { data: self.data.clone(), length: self.length };
     }
     self.drop_front(self.size()-n)
   }
@@ -495,8 +493,8 @@ impl StringRef {
       return false;
     }
     let s = self.drop_front(n);
-    self.data_ = s.data_.clone();
-    self.length_ = s.length_;
+    self.data = s.data.clone();
+    self.length = s.length;
     true
   }
 
@@ -508,8 +506,8 @@ impl StringRef {
       return false;
     }
     let s = self.drop_front(n);
-    self.data_ = s.data_.clone();
-    self.length_ = s.length_;
+    self.data = s.data.clone();
+    self.length = s.length;
     true
   }
 
@@ -521,8 +519,8 @@ impl StringRef {
       return false;
     }
     let s = self.drop_back(n);
-    self.data_ = s.data_.clone();
-    self.length_ = s.length_;
+    self.data = s.data.clone();
+    self.length = s.length;
     true
   }
 
@@ -534,29 +532,55 @@ impl StringRef {
       return false;
     }
     let s = self.drop_back(n);
-    self.data_ = s.data_.clone();
-    self.length_ = s.length_;
+    self.data = s.data.clone();
+    self.length = s.length;
     true
   }
 
   // Return a reference to the substring from [start, end).
   pub fn slice(&self, start: usize, end: usize) -> Self {
-    let new_start = cmp::min(start, self.length_);
-    let new_end = cmp::min(cmp::max(new_start, end), self.length_);
-    let data = &self.data_[new_start..new_end];
-    StringRef { data_: data.to_string(), length_: data.len() }
+    let new_start = cmp::min(start, self.length);
+    let new_end = cmp::min(cmp::max(new_start, end), self.length);
+    let data = &self.data[new_start..new_end];
+    StringRef { data: data.to_string(), length: data.len() }
   }
 
-  pub fn split() {}
+  // Split into two substrings around the first occurrence of a
+  // separator character.
+  pub fn split(&self, separator: char) -> (String, String) {
+    let original = self.data.clone();
+    let val = original.split_once(separator);
+    let mut result = (String::new(), String::new());
+    if val.is_none() {
+      result.0 = self.data.clone();
+    } else {
+      result.0 = String::from(val.unwrap().0);
+      result.1 = String::from(val.unwrap().1);
+    }
+    result
+  }
 
-  pub fn rsplit() {}
+  // Split into two substrings around the last occurrence of a
+  // separator string.
+  pub fn rsplit(&self, separator: char) -> (String, String) {
+    let original = self.data.clone();
+    let val = original.rsplit_once(separator);
+    let mut result = (String::new(), String::new());
+    if val.is_none() {
+      result.0 = self.data.clone();
+    } else {
+      result.0 = String::from(val.unwrap().0);
+      result.1 = String::from(val.unwrap().1);
+    }
+    result
+  }
 
   // Return string with consecutive " \t\n\v\f\r" characters starting from 
   // the left removed.
   pub fn ltrim(&self) -> Self {
     let data = self.data().trim_start().to_string();
     let length = data.len();
-    StringRef { data_: data, length_: length }
+    StringRef { data: data, length: length }
   }
 
   // Return string with consecutive " \t\n\v\f\r" characters starting from
@@ -564,7 +588,7 @@ impl StringRef {
   pub fn rtrim(&self) -> Self {
     let data = self.data().trim_end().to_string();
     let length = data.len();
-    StringRef { data_: data, length_: length }
+    StringRef { data: data, length: length }
   }
 
   // Return string with consecutive " \t\n\v\f\r" characters starting from
@@ -579,7 +603,7 @@ impl StringRef {
     if pos == NPOS {
       return StringRef::new_from_string("\n");
     }
-    if pos+1 < self.length_ && self.data().chars().nth(pos+1).unwrap() == '\n' {
+    if pos+1 < self.length && self.data().chars().nth(pos+1).unwrap() == '\n' {
       return StringRef::new_from_string("\r\n");
     }
     if pos > 0 && self.data().chars().nth(pos-1).unwrap() == '\n' {
@@ -666,6 +690,42 @@ use super::*;
     assert_eq!(s.slice(2, 100).data(), "llo");
     assert_eq!(s.slice(2, 1).data(), "");
     assert_eq!(s.slice(10, 20).data(), "");
+  }
+
+  #[test]
+  fn test_split() {
+    let s = StringRef::new_from_string("hello");
+    let mut result = s.split('X');
+    assert_eq!(result.0.as_str(), "hello");
+    assert_eq!(result.1.as_str(), "");
+    result = s.split('e');
+    assert_eq!(result.0.as_str(), "h");
+    assert_eq!(result.1.as_str(), "llo");
+    result = s.split('h');
+    assert_eq!(result.0.as_str(), "");
+    assert_eq!(result.1.as_str(), "ello");
+    result = s.split('l');
+    assert_eq!(result.0.as_str(), "he");
+    assert_eq!(result.1.as_str(), "lo");
+    result = s.split('o');
+    assert_eq!(result.0.as_str(), "hell");
+    assert_eq!(result.1.as_str(), "");
+
+    result = s.rsplit('X');
+    assert_eq!(result.0.as_str(), "hello");
+    assert_eq!(result.1.as_str(), "");
+    result = s.rsplit('e');
+    assert_eq!(result.0.as_str(), "h");
+    assert_eq!(result.1.as_str(), "llo");
+    result = s.rsplit('h');
+    assert_eq!(result.0.as_str(), "");
+    assert_eq!(result.1.as_str(), "ello");
+    result = s.rsplit('l');
+    assert_eq!(result.0.as_str(), "hel");
+    assert_eq!(result.1.as_str(), "o");
+    result = s.rsplit('o');
+    assert_eq!(result.0.as_str(), "hell");
+    assert_eq!(result.1.as_str(), "");
   }
 
   #[test]

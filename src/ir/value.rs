@@ -6,11 +6,35 @@ This file declares the value class.
 
 //use super::type_::Type;
 
-struct Value {
+#[derive(Debug, Clone)]
+pub struct Value {
   //vtype_: Type
+  is_used_by_md: u32,
+  has_name: u32,
+  has_meta_data: u32,
+  has_hung_off_uses: u32,
+  has_descriptor: u32
 }
 
 impl Value {
+  pub fn new() {}
+  pub fn dump() {}
+  pub fn print() {}
+  pub fn print_as_operand() {}
+  pub fn get_type() {}
+  pub fn get_context() {}
+
+  pub fn has_name(&self) -> bool {
+    if self.has_name != 0 {
+      return true;
+    } else {
+      return false;
+    }
+  }
+  
+  pub fn get_value_name() {}
+  pub fn set_value_name() {}
+
   fn get_name() {}
 
   fn set_name() {}

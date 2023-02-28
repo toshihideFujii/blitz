@@ -5,7 +5,7 @@ This class defines the interface that one who uses
 a Value must implement.
 */
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct User {}
 
 impl User {

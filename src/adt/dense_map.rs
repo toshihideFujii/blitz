@@ -53,7 +53,9 @@ impl<Key, Value> DenseMap<Key, Value>
   // and doesn't update the value.
   pub fn insert(&mut self, k: Key, v: Value) -> Option<Value> {
     if !self.map.contains_key(&k) {
-      self.map.insert(k, v)
+      let v_clone = v.clone();
+      self.map.insert(k, v);
+      return Some(v_clone);
     } else {
       None
     }

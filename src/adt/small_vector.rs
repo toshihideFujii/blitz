@@ -116,6 +116,15 @@ impl<T> SmallVector<T> {
   pub fn insert(&mut self, index: usize, element: T) {
     self.vec.insert(index, element)
   }
+
+  pub fn find(&self, x: &T) -> Option<usize> where T: PartialEq {
+    for i in 0..self.vec.len() {
+      if *self.vec.get(i).unwrap() == *x {
+        return Some(i);
+      }
+    }
+    None
+  }
 }
 
 impl<T> Index<usize> for SmallVector<T> {
@@ -125,15 +134,13 @@ impl<T> Index<usize> for SmallVector<T> {
   }
 }
 
-/*
-impl<T> Iterator for SmallVector<T> {
+impl<T> Iterator for SmallVector<T> where T: Clone {
   type Item = T;
   fn next(&mut self) -> Option<Self::Item> {
-    let val = *(self.vec.iter().next().unwrap());
-    Some(val)
+    let mut iter = self.vec.iter();
+    iter.next().cloned()
   }
 }
-*/
 
 #[cfg(test)]
 mod tests {
