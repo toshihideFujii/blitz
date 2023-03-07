@@ -10,6 +10,7 @@ pub mod dominators;
 pub mod function;
 pub mod global_func;
 pub mod global_object;
+pub mod pass_manager;
 pub mod type_;
 pub mod use_;
 pub mod user;

@@ -1,16 +1,16 @@
 #![allow(dead_code)]
 
-/*
-This file declares the value class.
-*/
+// This file declares the value class.
 
 //use super::type_::Type;
 
 #[derive(Debug, Clone)]
 pub struct Value {
-  //vtype_: Type
+  //vtype: Type,
+  subclass_id: u32, // subclass identifier (for isa/dyn_cast)
+  has_value_handle: bool,
   is_used_by_md: u32,
-  has_name: u32,
+  has_name: bool,
   has_meta_data: u32,
   has_hung_off_uses: u32,
   has_descriptor: u32
@@ -25,11 +25,7 @@ impl Value {
   pub fn get_context() {}
 
   pub fn has_name(&self) -> bool {
-    if self.has_name != 0 {
-      return true;
-    } else {
-      return false;
-    }
+    self.has_name
   }
   
   pub fn get_value_name() {}
