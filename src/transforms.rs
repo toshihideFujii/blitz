@@ -72,5 +72,16 @@ pub mod scalar {
   pub mod tls_variable_hoist;
   pub mod warn_missed_transforms;
 }
+pub mod vectorize {
+  pub mod load_store_vectorizer;
+  pub mod loop_vectorization_legality;
+  pub mod loop_vectorize;
+  pub mod slp_vecorizer;
+  pub mod vector_combine;
+}
+pub mod cf_guard;
+pub mod instrumentation;
+pub mod ipo;
 pub mod scalar_;
-pub mod vectorize;
+pub mod utils;
+pub mod vectorize_;

@@ -81,7 +81,7 @@ impl<T> SmallVector<T> {
     self.vec.clear()
   }
 
-  pub fn resize(&mut self, new_len: usize) where T: std::default::Default {
+  pub fn resize(&mut self, new_len: usize) where T: Default {
     self.vec.resize_with(new_len, Default::default);
   }
 
@@ -137,8 +137,7 @@ impl<T> Index<usize> for SmallVector<T> {
 impl<T> Iterator for SmallVector<T> where T: Clone {
   type Item = T;
   fn next(&mut self) -> Option<Self::Item> {
-    let mut iter = self.vec.iter();
-    iter.next().cloned()
+    self.vec.iter().next().cloned()
   }
 }
 
@@ -250,6 +249,18 @@ mod tests {
     let vec = vec![1];
     assert_values_in_order(&v, 1, &vec);
   }
+/*
+  #[test]
+  fn test_iteration() {
+    let mut v: SmallVector<u64> = SmallVector::new();
+    make_sequence(&mut v, 1, 2);
+
+    //let mut iter = v.vec.iter();
+    let mut iter = v.into_iter();
+    assert_eq!(iter.next(), Some(1));
+    assert_eq!(iter.next(), Some(2));
+  }
+*/
 
   #[test]
   fn test_append_small_vector() {

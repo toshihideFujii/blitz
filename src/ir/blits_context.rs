@@ -17,7 +17,7 @@ enum OperandBundle {
   Kcfi
 }
 
-struct BlitzContext {}
+pub struct BlitzContext {}
 
 impl BlitzContext {
   pub fn get_md_kind_id() {}

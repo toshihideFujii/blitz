@@ -1,3 +1,4 @@
+pub mod address_ranges;
 pub mod ap_float;
 pub mod ap_int;
 pub mod array_ref;
@@ -8,9 +9,11 @@ pub mod dense_map;
 pub mod dense_set;
 pub mod directed_graph;
 pub mod floating_point_mode;
+pub mod folding_set;
 pub mod hashing;
 pub mod immutable_list;
 pub mod immutable_set;
+pub mod indexed_map;
 pub mod none;
 pub mod set_vector;
 pub mod small_set;

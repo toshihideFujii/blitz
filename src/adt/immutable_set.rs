@@ -104,7 +104,7 @@ impl<V> ImutAVLTree<V> where V: Clone + PartialOrd {
     true
   }
 
-  pub fn validate_tree() {}
+  pub fn validate_tree(&self) {}
 
   // Returns true if the left and right subtree references (as well as
   // height) can be changed.
@@ -135,7 +135,22 @@ impl<V> ImutAVLTree<V> where V: Clone + PartialOrd {
     self.height = h;
   }
 
-  fn compute_digest() {}
+  fn compute_digest_from(&self, _l: Option<Box<ImutAVLTree<V>>>,
+    _r: Option<Box<ImutAVLTree<V>>>, _v: V) -> u32 {
+    0
+  }
+
+  fn compute_digest(&mut self) -> u32 {
+    if self.has_cached_digest() {
+      return self.digest;
+    }
+    let x = self.compute_digest_from(self.get_left(),
+      self.get_right(), self.get_value());
+    self.digest = x;
+    self.marked_cached_digest();
+    x
+  }
+
   pub fn retain() {}
   pub fn release() {}
   pub fn destroy() {}
@@ -201,14 +216,35 @@ impl<T> ImutContainerInfo<T> where T: Clone + PartialEq + PartialOrd {
   }
 }
 
-struct ImmutableSet {}
-impl ImmutableSet {
-  pub fn contains() {}
-  pub fn get_root() {}
+struct ImmutableSet<T> {
+  root: ImutAVLTree<T>
+}
+impl<T> ImmutableSet<T> where T: Clone + PartialOrd {
+  pub fn new() {}
+
+  // Return true if the set contains the specified value.
+  pub fn contains(&self, v: T) -> bool {
+    self.root.contains(v)
+  }
+
+  pub fn get_root(&self) -> ImutAVLTree<T> {
+    self.root.clone()
+  }
+
   pub fn get_root_without_retain() {}
-  pub fn is_empty() {}
-  pub fn is_singleton() {}
-  pub fn get_height() {}
+
+  // Return true if the set contains exactly one element.
+  pub fn is_singleton(&self) -> bool {
+    self.get_height() == 1
+  }
+
+  pub fn get_height(&self)-> u32 {
+    self.root.get_height()
+  }
+
   pub fn profile() {}
-  pub fn validate_tree() {}
+
+  pub fn validate_tree(&self) {
+    self.root.validate_tree()
+  }
 }

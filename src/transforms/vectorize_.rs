@@ -1,10 +1,8 @@
 #![allow(dead_code)]
 
-/*
-This file defines prototypes for accessor functions
-that expose passes in the Vectorize transformations
-library.
-*/
+// This file defines prototypes for accessor functions
+// that expose passes in the Vectorize transformations
+// library.
 
 struct VectorizeConfig {
   // The size of the native vector registers.
