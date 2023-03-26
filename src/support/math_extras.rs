@@ -54,6 +54,18 @@ pub fn is_power_of_2_64(value: u64) -> bool {
   false
 }
 
+// Returns the next power of two (in 64-bits) that is strictly greater
+// than a. Returns zero on overflow.
+pub fn next_power_of_2(mut a: u64) -> u64 {
+  a |= a >> 1;
+  a |= a >> 2;
+  a |= a >> 4;
+  a |= a >> 8;
+  a |= a >> 16;
+  a |= a >> 32;
+  a + 1
+}
+
 // Sign-extend the number in the bottom b bits of x to a 32-bit integer.
 // Requires 0 < b <= 32.
 pub fn sign_extend_32(x: u32, b: u32) -> i32 {

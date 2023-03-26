@@ -2,6 +2,13 @@
 
 // This file contains the declaration of the Type class.
 
+use crate::adt::ap_int::APInt;
+use crate::support::type_size::TypeSize;
+use super::blits_context::BlitzContext;
+
+// Definitions of all of the base types for the Type system.
+// Based on this value, you can cast to a class defined below.
+#[derive(Debug, PartialEq)]
 pub enum TypeID {
   // Primitive types
   Half,
@@ -24,7 +31,8 @@ pub enum TypeID {
   Array,
   FixedVector,
   ScalableVector,
-  TypedPointer
+  TypedPointer,
+  TargetExt
 }
 
 
@@ -32,6 +40,10 @@ pub trait Type {
   fn get_subclass_data(&self) -> u32;
 
   fn set_subclass_data(&self) {}
+
+  fn dump(&self) {}
+
+  fn get_context(&self) -> &BlitzContext;
 
   fn get_type_id(&self) -> TypeID;
 
@@ -140,68 +152,92 @@ pub trait Type {
   }
 
   fn is_empty_type(&self) {}
-
   fn is_first_calss_type(&self) {}
-
   fn is_single_value_type(&self) {}
-
   fn is_aggregate_type(&self) {}
-
   fn is_sized(&self) {}
 
-  fn get_primitive_size_in_bits(&self) {}
+  fn get_primitive_size_in_bits(&self) -> Option<TypeSize> {
+    None
+  }
 
-  fn get_scalar_size_in_bits(&self) {}
+  fn get_scalar_size_in_bits(&self) -> u32 {
+    0
+  }
 
   fn get_fp_mantissa_width(&self) {}
-
   fn is_ieee(&self) {}
 
   fn get_scalar_type(&self) {}
 
   fn get_contained_type(&self) {}
-
   fn get_num_contained_type(&self) {}
-
   fn get_integer_bit_width(&self) {}
-
   fn get_function_param_type(&self) {}
-
   fn get_function_num_params(&self) {}
-
   fn is_function_var_arg(&self) {}
-
   fn get_struct_name(&self) {}
-
   fn get_struct_num_elements(&self) {}
-
   fn get_struct_element_type(&self) {}
-
   fn get_array_num_elements(&self) {}
-
   fn get_array_element_type(&self) {}
-
   fn get_pointer_element_type(&self) {}
-
   fn get_non_opaque_pointer_element_type(&self) {}
-
   fn get_with_new_type(&self) {}
-
   fn get_with_new_bit_width(&self) {}
-
   fn get_extended_type(&self) {}
-
   fn get_pointer_address_space(&self) {}
+  fn get_primitive_type() {}
+  fn get_void_type() {}
+  fn get_label_type() {}
+  fn get_half_type() {}
+  fn get_b_float_type() {}
+  fn get_float_type() {}
+  fn get_double_type() {}
+  fn get_metadata_type() {}
+  fn get_x86_fp80_type() {}
+  fn get_fp128_type() {}
+  fn get_ppc_fp128_type() {}
+  fn get_x86_mmx_type() {}
+  fn get_x86_amx_type() {}
+  fn get_token_type() {}
+
+}
+
+pub fn get_int_n_type(c: BlitzContext, n: u32) -> IntegerType {
+  IntegerType::get(c, n)
+}
+
+fn get_int_1_type() {}
+fn get_int_8_type() {}
+fn get_int_16_type() {}
+fn get_int_32_type() {}
+fn get_int_64_type() {}
+fn get_int_128_type() {}
+
+
+// This enum is just used to hold constants we need for IntegerType.
+enum IntConstants {
+  MinIntBits = 1,
+  MaxIntBits = 1<<23
 }
 
 // Class to represent integer types.
-struct IntegerType {
+// Note that this class is also used to represent the built-in
+// integer types: Int1, Int8, Int16, Int32, Int64.
+pub struct IntegerType {
+  context: BlitzContext,
+  id: TypeID,
   sub_class_data: u32
 }
 
 impl Type for IntegerType {
   fn get_subclass_data(&self) -> u32 {
     self.sub_class_data
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    &self.context
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -211,19 +247,51 @@ impl Type for IntegerType {
   fn is_integer_type(&self) -> bool {
     true
   }
+
+  fn get_primitive_size_in_bits(&self) -> Option<TypeSize> {
+    Some(TypeSize::fixed(self.get_bit_width() as u64))
+  }
+
+  fn get_scalar_size_in_bits(&self) -> u32 {
+    self.get_primitive_size_in_bits().unwrap().get_fixed_value() as u32
+  }
 }
 
 impl IntegerType {
-  pub fn new() {}
+  pub fn new(c: BlitzContext, num_bits: u32) -> Self {
+    IntegerType { context: c, id: TypeID::Integer, sub_class_data: num_bits }
+  }
 
-  pub fn get_extended_type() {}
+  // This static method is the primary way of constructing an IntegerType.
+  // If an IntegerType with the same num_bits value was previously instantiated,
+  // that instance will be returned.
+  // Otherwise a new one will be created.
+  // Only one instance with a given num_bits value is ever created.
+  // Get or create an IntegerType instance.
+  fn get(c: BlitzContext, num_bits: u32) -> IntegerType {
+    debug_assert!(num_bits >= IntConstants::MinIntBits as u32, "bitwidth too small");
+    debug_assert!(num_bits <= IntConstants::MaxIntBits as u32, "bitwidth too large");
+
+    // TODO
+    let entry = IntegerType::new(c, num_bits);
+    entry
+  }
+
+  // Returns type twice as wide the input type.
+  pub fn get_extended_type(&self) -> IntegerType {
+    get_int_n_type(self.get_context().clone(), 2 * self.get_scalar_size_in_bits())
+  }
 
   // Get the number of bits in this IntegerType
   pub fn get_bit_width(&self) -> u32 {
     self.sub_class_data
   }
 
-  pub fn get_bit_mask() {}
+  // Return a bitmask with ones set for all of the bits that can be set
+  // by an unsigned version of this type.
+  pub fn get_bit_mask(&self) -> u64 {
+    !(0 as u64) >> (64 - self.get_bit_width())
+  }
 
   // Return a u64 with just the most significant bit set
   // (the sign bit, if the value is treated as a signed number).
@@ -231,21 +299,32 @@ impl IntegerType {
     (1 as u64) << (self.get_bit_width() - 1)
   }
 
-  pub fn get_mask() {}
+  // For wxample, this is 0xFF for an 8 bit integer, 0xFFFF for i16, etc.
+  // Returns a bit mask with ones set for all the bits of this type.
+  // Get a bit mask for this type.
+  pub fn get_mask(&self) -> APInt {
+    APInt::get_all_ones(self.get_bit_width())
+  }
 
-  fn get() {}
-
-  fn class_of() {}
+  // Methods for support type inquiry through isa, cast, and dyn_cast.
+  fn class_of(t: &impl Type) -> bool {
+    t.get_type_id() == TypeID::Integer
+  }
 }
 
 // Class to represent function types
 struct FunctionType {
-  sub_class_data_: u32
+  sub_class_data: u32,
+  context: BlitzContext
 }
 
 impl Type for FunctionType {
   fn get_subclass_data(&self) -> u32 {
-    self.sub_class_data_
+    self.sub_class_data
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    &self.context
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -260,7 +339,9 @@ impl Type for FunctionType {
 impl FunctionType {
   pub fn new() {}
 
-  pub fn is_var_arg() {}
+  pub fn is_var_arg(&self) -> bool {
+    self.get_subclass_data() != 0
+  }
 
   pub fn get_return_type() {}
 
@@ -290,12 +371,17 @@ enum SCDB {
 }
 
 struct StructType {
-  sub_class_data_: u32
+  sub_class_data_: u32,
+  context: BlitzContext
 }
 
 impl Type for StructType {
   fn get_subclass_data(&self) -> u32 {
     self.sub_class_data_
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    &self.context
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -349,12 +435,17 @@ impl StructType {
 
 // Class to represent array types.
 struct ArrayType {
-  sub_class_data_: u32
+  sub_class_data_: u32,
+  context: BlitzContext
 }
 
 impl Type for ArrayType {
   fn get_subclass_data(&self) -> u32 {
     self.sub_class_data_
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    &self.context
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -376,12 +467,17 @@ impl ArrayType {
 
 // Class to represent fixed width SIMD vectors
 struct FixedVectorType {
-  sub_class_data_: u32
+  sub_class_data_: u32,
+  context: BlitzContext
 }
 
 impl Type for FixedVectorType {
   fn get_subclass_data(&self) -> u32 {
     self.sub_class_data_
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    &self.context
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -416,12 +512,17 @@ impl FixedVectorType {
 }
 
 struct ScalableVectorType {
-  sub_class_data_: u32
+  sub_class_data_: u32,
+  context: BlitzContext
 }
 
 impl Type for ScalableVectorType {
   fn get_subclass_data(&self) -> u32 {
     self.sub_class_data_
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    &self.context
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -457,7 +558,8 @@ impl ScalableVectorType {
 }
 
 struct PointerType {
-  sub_class_data_: u32
+  sub_class_data_: u32,
+  context: BlitzContext
 }
 
 impl Type for PointerType {
@@ -467,6 +569,10 @@ impl Type for PointerType {
 
   fn get_type_id(&self) -> TypeID {
     TypeID::Pointer
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    &self.context
   }
 
   fn is_pointer_type(&self) -> bool {

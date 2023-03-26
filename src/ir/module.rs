@@ -41,4 +41,11 @@ impl Module {
   pub fn get_module_inline_asm() {}
   pub fn create_rng() {}
   pub fn should_emit_instr_count_changed_remark() {}
+
+  pub fn set_module_identifier() {}
+  pub fn set_source_file_name() {}
+  pub fn set_data_layout() {}
+  pub fn set_target_triple() {}
+  pub fn set_module_inline_asm() {}
+  pub fn append_module_inline_asm() {}
 }

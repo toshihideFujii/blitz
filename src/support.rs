@@ -14,3 +14,4 @@ pub mod sha1;
 pub mod sha256;
 pub mod signals;
 pub mod timer;
+pub mod type_size;

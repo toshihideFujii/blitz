@@ -17,6 +17,7 @@ enum OperandBundle {
   Kcfi
 }
 
+#[derive(Debug, Clone)]
 pub struct BlitzContext {}
 
 impl BlitzContext {
