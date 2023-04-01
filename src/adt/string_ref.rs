@@ -620,7 +620,23 @@ impl Iterator for StringRef {
   }
 }
 
-struct StringLiteral {}
+// A wrapper around a string literal that serves as a proxy for constructing
+// global tables of StringRefs with the length computed at compile time.
+pub struct StringLiteral {
+  str: StringRef
+}
+
+impl StringLiteral {
+  pub fn new(data: &str) -> Self {
+    StringLiteral { str: StringRef::new_from_string(data) }
+  }
+
+  pub fn with_inner_nul() {}
+
+  pub fn string_ref(&self) -> &StringRef {
+    &self.str
+  }
+}
 
 #[cfg(test)]
 mod tests {

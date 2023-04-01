@@ -4,12 +4,12 @@
 // Represent a constant reference to an array.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ArrayRef<T> {
-  data_: Vec<T>
+  data: Vec<T>
 }
 
 impl<T> ArrayRef<T> where T: Clone {
   pub fn new() -> Self {
-    ArrayRef { data_: Vec::new() }
+    ArrayRef { data: Vec::new() }
   }
 
   pub fn new_from_vec(vec: &Vec<T>) -> Self {
@@ -17,7 +17,7 @@ impl<T> ArrayRef<T> where T: Clone {
     //v.reserve_exact(vec.len());
     let v = vec.clone();
     //v.clone_from_slice(vec);
-    ArrayRef { data_: v }
+    ArrayRef { data: v }
   }
 
   pub fn begin() {}
@@ -27,24 +27,24 @@ impl<T> ArrayRef<T> where T: Clone {
 
   // Check if the array is empty.
   pub fn empty(&self) -> bool {
-    self.data_.is_empty()
+    self.data.is_empty()
   }
 
   //pub fn data(&self) -> Vec<T> {}
 
   // Get the array size.
   pub fn size(&self) -> usize {
-    self.data_.len()
+    self.data.len()
   }
 
   // Get the first element.
   pub fn front(&self) -> Option<&T> {
-    self.data_.get(0)
+    self.data.get(0)
   }
 
   // Get the last element.
   pub fn back(&self) -> Option<&T> {
-    self.data_.last()
+    self.data.last()
   }
 
   pub fn copy() {}
@@ -54,28 +54,28 @@ impl<T> ArrayRef<T> where T: Clone {
   // m elements in the array.
   pub fn slice(&mut self, n: usize, m: usize) -> ArrayRef<T> {
     debug_assert!(n+m <= self.size(), "Invalid specifier");
-    let v = self.data_.drain(n..n+m).collect();
-    ArrayRef { data_: v }
+    let v = self.data.drain(n..n+m).collect();
+    ArrayRef { data: v }
   }
 
   // Drop the first n elements of the array.
   pub fn drop_front(&self, n: usize) -> ArrayRef<T> {
     debug_assert!(self.size() >= n, "Fropping more elements than exist");
-    let (abandoned, remained) = self.data_.split_at(n);
+    let (abandoned, remained) = self.data.split_at(n);
     ArrayRef::new_from_vec(&remained.to_vec())
   }
 
   // Drop the last n elements of the array.
   pub fn drop_back(&self, n: usize) -> ArrayRef<T> {
     debug_assert!(self.size() >= n, "Fropping more elements than exist");
-    let (remained, abandoned) = self.data_.split_at(self.size() - n);
+    let (remained, abandoned) = self.data.split_at(self.size() - n);
     ArrayRef::new_from_vec(&remained.to_vec())
   }
 
   // Return a copy of this with the first n elements satisfying the
   // given predicate removed.
   pub fn drop_while<P: FnMut(&&T) -> bool>(&self, pred: P) -> ArrayRef<T> {
-    let iter = self.data_.iter().skip_while(pred);
+    let iter = self.data.iter().skip_while(pred);
     let mut v = Vec::new();
     for item in iter {
       v.push(item.clone());
@@ -104,7 +104,7 @@ impl<T> ArrayRef<T> where T: Clone {
 
   // Return the first n elements of this array that satisfy the given predicate.
   pub fn take_while<P: FnMut(&&T) -> bool>(&self, pred: P) -> ArrayRef<T> {
-    let iter = self.data_.iter().take_while(pred);
+    let iter = self.data.iter().take_while(pred);
     let mut v = Vec::new();
     for item in iter {
       v.push(item.clone());
@@ -241,15 +241,15 @@ mod tests {
     let init_list = vec![0, 1, 2, 3, 4];
     let mut a = ArrayRef::new_from_vec(&init_list);
     let mut i = 0;
-    for v in a.data_ {
+    for v in a.data {
       assert_eq!(v == i, true);
       i += 1;
     }
 
     let init_list_2 = vec![1, 2];
-    a.data_ = init_list_2;
-    assert_eq!(a.data_[0], 1);
-    assert_eq!(a.data_[1], 2);
+    a.data = init_list_2;
+    assert_eq!(a.data[0], 1);
+    assert_eq!(a.data[1], 2);
     assert_eq!(a.size(), 2);
   }
 

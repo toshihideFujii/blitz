@@ -1,10 +1,12 @@
 #![allow(dead_code)]
+#![allow(unused_variables)]
 
 // This file contains the declaration of the Type class.
 
 use crate::adt::ap_int::APInt;
 use crate::support::type_size::TypeSize;
 use super::blits_context::BlitzContext;
+use super::value::Value;
 
 // Definitions of all of the base types for the Type system.
 // Based on this value, you can cast to a class defined below.
@@ -35,11 +37,9 @@ pub enum TypeID {
   TargetExt
 }
 
-
 pub trait Type {
   fn get_subclass_data(&self) -> u32;
-
-  fn set_subclass_data(&self) {}
+  fn set_subclass_data(&mut self, val: u32) {}
 
   fn dump(&self) {}
 
@@ -53,65 +53,21 @@ pub trait Type {
   }
 
   // Return true if this is 'half', a 16-bit IEEE fp type.
-  fn is_half_type(&self) -> bool {
-    false
-  }
-
-  fn is_bfloat_type(&self) -> bool {
-    false
-  }
-
-  fn is_16bit_fp_type(&self) -> bool {
-    false
-  }
-
-  fn is_float_type(&self) -> bool {
-    false
-  }
-
-  fn is_double_type(&self) -> bool {
-    false
-  }
-
-  fn is_x86_fp80_type(&self) -> bool {
-    false
-  }
-
-  fn is_fp128_type(&self) -> bool {
-    false
-  }
-
-  fn is_ppc_fp128_type(&self) -> bool {
-    false
-  }
-
-  fn is_floating_point_type(&self) -> bool {
-    false
-  }
-
-  fn is_x86_mmx_type(&self) -> bool {
-    false
-  }
-
-  fn is_x86_amx_type(&self) -> bool {
-    false
-  }
-
-  fn is_fp_or_fpvector_type(&self) -> bool {
-    false
-  }
-
-  fn is_label_type(&self) -> bool {
-    false
-  }
-
-  fn is_metadata_type(&self) -> bool {
-    false
-  }
-
-  fn is_token_type(&self) -> bool {
-    false
-  }
+  fn is_half_type(&self) -> bool { false }
+  fn is_bfloat_type(&self) -> bool { false }
+  fn is_16bit_fp_type(&self) -> bool { false }
+  fn is_float_type(&self) -> bool { false }
+  fn is_double_type(&self) -> bool { false }
+  fn is_x86_fp80_type(&self) -> bool { false }
+  fn is_fp128_type(&self) -> bool { false }
+  fn is_ppc_fp128_type(&self) -> bool { false }
+  fn is_floating_point_type(&self) -> bool { false }
+  fn is_x86_mmx_type(&self) -> bool { false }
+  fn is_x86_amx_type(&self) -> bool { false }
+  fn is_fp_or_fpvector_type(&self) -> bool { false }
+  fn is_label_type(&self) -> bool { false }
+  fn is_metadata_type(&self) -> bool { false }
+  fn is_token_type(&self) -> bool { false }
 
   // True if this is an instance of IntegerType.
   fn is_integer_type(&self) -> bool {
@@ -123,39 +79,34 @@ pub trait Type {
   fn is_int_or_int_ptr_type(&self) {}
 
   // True if this is an instance of FunctionType.
-  fn is_function_type(&self) -> bool {
-    false
-  }
+  fn is_function_type(&self) -> bool { false }
 
   // True if this is an instance of StructType.
-  fn is_struct_type(&self) -> bool {
-    false
-  }
+  fn is_struct_type(&self) -> bool { false }
 
   // True if this is an instance of ArrayType.
-  fn is_array_type(&self) -> bool {
-    false
-  }
+  fn is_array_type(&self) -> bool { false }
 
   // True if this is an instance of PointerType.
-  fn is_pointer_type(&self) -> bool {
-    false
-  }
+  fn is_pointer_type(&self) -> bool { false }
 
   fn is_opaque_pointer_type(&self) {}
 
   fn is_ptr_or_ptr_vector_type(&self) {}
 
   // True if this is an instance of VectorType.
-  fn is_vector_type(&self) -> bool {
-    false
+  fn is_vector_type(&self) -> bool { false }
+  fn is_empty_type(&self) -> bool { false }
+
+  // Return true if the type is "first class", meaning it is a valid type
+  // for a value.
+  fn is_first_class_type(&self) -> bool {
+    self.get_type_id() != TypeID::Function && self.get_type_id() != TypeID::Void
   }
 
-  fn is_empty_type(&self) {}
-  fn is_first_calss_type(&self) {}
-  fn is_single_value_type(&self) {}
-  fn is_aggregate_type(&self) {}
-  fn is_sized(&self) {}
+  fn is_single_value_type(&self) -> bool { false }
+  fn is_aggregate_type(&self) -> bool { false }
+  fn is_sized(&self) -> bool { false }
 
   fn get_primitive_size_in_bits(&self) -> Option<TypeSize> {
     None
@@ -187,21 +138,23 @@ pub trait Type {
   fn get_with_new_bit_width(&self) {}
   fn get_extended_type(&self) {}
   fn get_pointer_address_space(&self) {}
-  fn get_primitive_type() {}
-  fn get_void_type() {}
-  fn get_label_type() {}
-  fn get_half_type() {}
-  fn get_b_float_type() {}
-  fn get_float_type() {}
-  fn get_double_type() {}
-  fn get_metadata_type() {}
-  fn get_x86_fp80_type() {}
-  fn get_fp128_type() {}
-  fn get_ppc_fp128_type() {}
-  fn get_x86_mmx_type() {}
-  fn get_x86_amx_type() {}
-  fn get_token_type() {}
+  fn get_primitive_type(&self) {}
+  fn get_void_type(&self) {}
+  fn get_label_type(&self) {}
+  fn get_half_type(&self) {}
+  fn get_b_float_type(&self) {}
+  fn get_float_type(&self) {}
+  fn get_double_type(&self) {}
+  fn get_metadata_type(&self) {}
+  fn get_x86_fp80_type(&self) {}
+  fn get_fp128_type(&self) {}
+  fn get_ppc_fp128_type(&self) {}
+  fn get_x86_mmx_type(&self) {}
+  fn get_x86_amx_type(&self) {}
+  fn get_token_type(&self) {}
 
+  // For StructType.
+  fn contains_scalable_vector_type(&self) -> bool { false }
 }
 
 pub fn get_int_n_type(c: BlitzContext, n: u32) -> IntegerType {
@@ -234,6 +187,11 @@ pub struct IntegerType {
 impl Type for IntegerType {
   fn get_subclass_data(&self) -> u32 {
     self.sub_class_data
+  }
+
+  fn set_subclass_data(&mut self, val: u32) {
+    self.sub_class_data = val;
+    debug_assert!(self.get_subclass_data() == val, "Subclass data too large for field.");
   }
 
   fn get_context(&self) -> &BlitzContext {
@@ -269,8 +227,8 @@ impl IntegerType {
   // Only one instance with a given num_bits value is ever created.
   // Get or create an IntegerType instance.
   fn get(c: BlitzContext, num_bits: u32) -> IntegerType {
-    debug_assert!(num_bits >= IntConstants::MinIntBits as u32, "bitwidth too small");
-    debug_assert!(num_bits <= IntConstants::MaxIntBits as u32, "bitwidth too large");
+    debug_assert!(num_bits >= IntConstants::MinIntBits as u32, "Bitwidth too small.");
+    debug_assert!(num_bits <= IntConstants::MaxIntBits as u32, "Bitwidth too large.");
 
     // TODO
     let entry = IntegerType::new(c, num_bits);
@@ -307,20 +265,27 @@ impl IntegerType {
   }
 
   // Methods for support type inquiry through isa, cast, and dyn_cast.
-  fn class_of(t: &impl Type) -> bool {
+  fn class_of(t: &dyn Type) -> bool {
     t.get_type_id() == TypeID::Integer
   }
 }
 
 // Class to represent function types
+//#[derive(Debug, Clone)]
 struct FunctionType {
   sub_class_data: u32,
-  context: BlitzContext
+  context: BlitzContext,
+  contained_types: Vec<Box<dyn Type>>
 }
 
 impl Type for FunctionType {
   fn get_subclass_data(&self) -> u32 {
     self.sub_class_data
+  }
+
+  fn set_subclass_data(&mut self, val: u32) {
+    self.sub_class_data = val;
+    debug_assert!(self.get_subclass_data() == val, "Subclass data too large for field.");
   }
 
   fn get_context(&self) -> &BlitzContext {
@@ -337,30 +302,87 @@ impl Type for FunctionType {
 }
 
 impl FunctionType {
-  pub fn new() {}
+  pub fn new(result: &dyn Type, params: Vec<Box<dyn Type>>, is_var_args: bool) -> Self {
+    let mut data: u32 = 0;
+    if is_var_args { data = 1; }
+    let fn_type = FunctionType { sub_class_data: data,
+      context: result.get_context().clone(), contained_types: params };
+
+    debug_assert!(fn_type.is_valid_return_type(result), "Invalid return type for functioin.");
+    let params_len = fn_type.contained_types.len();
+    for i in 0.. params_len {
+      debug_assert!(fn_type.is_valid_argument_type(&*fn_type.contained_types[i]),
+        "Not a valid type for function argument.");
+    }
+    fn_type
+  }
+
+  pub fn get() {}
+
+  // Return true if the specified type is valid as a return type.
+  pub fn is_valid_return_type(&self, ret_type: &dyn Type) -> bool {
+    !ret_type.is_function_type() && !ret_type.is_label_type() &&
+    !ret_type.is_metadata_type()
+  }
+
+  // Return true if the specified type is valid as an argument type.
+  pub fn is_valid_argument_type(&self, arg_type: &dyn Type) -> bool {
+    arg_type.is_first_class_type()
+  }
 
   pub fn is_var_arg(&self) -> bool {
     self.get_subclass_data() != 0
   }
 
-  pub fn get_return_type() {}
+  pub fn get_return_type(&self) -> &Box<dyn Type>{
+    &self.contained_types[0]
+  }
 
   pub fn param_begin() {}
-
   pub fn param_end() {}
+  pub fn params(&self) -> &Vec<Box<dyn Type>> {
+    &self.contained_types
+  }
 
-  pub fn params() {}
+  // Parameter type accessors.
+  pub fn get_param_type(&self, i: usize) -> &Box<dyn Type> {
+    &self.contained_types[i]
+  }
 
-  pub fn get_param_type() {}
+  // Return the number of fixed parameters this function type requires.
+  // This does not consider varargs.
+  pub fn get_num_params(&self) -> usize {
+    self.contained_types.len()
+  }
 
-  pub fn get_num_params() {}
-
-  //fn classof(t: Type) -> bool {
-  //  t.get_type_id() == TypeID::Function
-  //}
+  pub fn classof(t: &dyn Type) -> bool {
+    t.get_type_id() == TypeID::Function
+  }
 }
 
-struct FunctionCalee {}
+// A handy container for a FunctionType + Callee-pointer pair, which can
+// be passed araound as a single entity.
+// This assists in replacing the use of PointerType::getElementType() to
+// access the Function's type, since that's slated for removal as part of
+// the [opaque pointer types] project.
+struct FunctionCalee {
+  fn_type: FunctionType,
+  callee: Value
+}
+
+impl FunctionCalee {
+  pub fn new(fn_type: FunctionType, callee: Value) -> Self {
+    FunctionCalee { fn_type: fn_type, callee: callee }
+  }
+
+  pub fn get_function_type(&self) -> &FunctionType {
+    &self.fn_type
+  }
+
+  pub fn get_callee(&self) -> &Value {
+    &self.callee
+  }
+}
 
 // This is the contents of the SubClassData field.
 enum SCDB {
@@ -370,14 +392,21 @@ enum SCDB {
   IsSized
 }
 
+// Class to represent struct types.
+// There are two different kinds of struct types: Literal structs and
+// Identified structs.
+// Literal struct types (e.g. {i32, i32}) are uniqued structurally, and
+// must always have a body when created.
+// You can get one of these by using one of the StructType::get() forms.
 struct StructType {
-  sub_class_data_: u32,
-  context: BlitzContext
+  sub_class_data: u32,
+  context: BlitzContext,
+  contained_types: Vec<Box<dyn Type>>
 }
 
 impl Type for StructType {
   fn get_subclass_data(&self) -> u32 {
-    self.sub_class_data_
+    self.sub_class_data
   }
 
   fn get_context(&self) -> &BlitzContext {
@@ -391,57 +420,122 @@ impl Type for StructType {
   fn is_struct_type(&self) -> bool {
     true
   }
+
+  // Returns true if this struct contains a scalable vector.
+  fn contains_scalable_vector_type(&self) -> bool {
+    for element in &self.contained_types {
+      if element.get_type_id() == TypeID::ScalableVector {
+        return true;
+      }
+      if element.get_type_id() == TypeID::Struct {
+        if element.contains_scalable_vector_type() {
+          return true;
+        }
+      }
+    }
+    false
+  }
 }
 
 impl StructType {
   pub fn new() {}
+  pub fn create() {}
+  pub fn get() {}
+  pub fn get_type_by_name() {}
 
-  fn get_type_bby_name() {}
+  pub fn is_packed(&self) -> bool {
+    SCDB::Packed as u32 & self.get_subclass_data() != 0
+  }
 
-  pub fn is_packed() {}
+  // Return true if this type is uniqued by structural equivalence,
+  // false if it is a struct definition.
+  pub fn is_literal(&self) -> bool {
+    SCDB::IsLiteral as u32 & self.get_subclass_data() != 0
+  }
 
-  pub fn is_literal() {}
-
-  pub fn is_opaque() {}
+  // Return true if this is a type with an identity that has no body
+  // specified yet, These prints an 'opaque' in .ll files.
+  pub fn is_opaque(&self) -> bool {
+    SCDB::HasBody as u32 & self.get_subclass_data() == 0
+  }
 
   pub fn is_sized() {}
-
-  pub fn contains_scalable_vector_type() {}
-
   pub fn has_name() {}
-
   pub fn get_name() {}
-
   pub fn set_name() {}
-
   pub fn set_body() {}
 
-  pub fn element_begin() {}
+  pub fn is_valid_element_type(elem_type: &dyn Type) -> bool {
+    !elem_type.is_void_type() && !elem_type.is_label_type() && !elem_type.is_metadata_type() &&
+    !elem_type.is_function_type() && !elem_type.is_token_type()
+  }
 
+  pub fn element_begin() {}
   pub fn element_end() {}
 
-  pub fn elements() {}
+  pub fn elements(&self) -> &Vec<Box<dyn Type>> {
+    &self.contained_types
+  }
 
   pub fn is_layout_identical() {}
 
-  pub fn get_num_elements() {}
+  // Random access to the elements.
+  pub fn get_num_elements(&self) -> usize {
+    self.contained_types.len()
+  }
 
-  pub fn get_element_type() {}
+  pub fn get_element_type(&self, n: usize) -> &Box<dyn Type> {
+    debug_assert!(n < self.contained_types.len(), "Element number out of range.");
+    &self.contained_types[n]
+  }
 
-  pub fn get_type_at_index() {}
+  // Given an index value into the type, return the type of the element.
+  pub fn get_type_at_index(&self, n: usize) -> &Box<dyn Type> {
+    self.get_element_type(n)
+  }
 
-  pub fn index_valid() {}
+  pub fn index_valid(&self, index: usize) -> bool {
+    index < self.get_num_elements()
+  }
+
+  pub fn classof(t: &dyn Type) -> bool {
+    t.get_type_id() == TypeID::Struct
+  }
+}
+
+impl PartialEq for StructType {
+  fn eq(&self, other: &Self) -> bool {
+    if self.sub_class_data != other.sub_class_data {
+      return false;
+    }
+    if self.is_packed() != other.is_packed() {
+      return false;
+    }
+    if self.contained_types.len() != other.contained_types.len() {
+      return false;
+    }
+    //for t1 in self.contained_types {
+      //for t2 in other.contained_types {
+        //if *t1 != *t2 {
+          //return false;
+        //}
+      //}
+    //}
+    true
+  }
 }
 
 // Class to represent array types.
 struct ArrayType {
-  sub_class_data_: u32,
-  context: BlitzContext
+  sub_class_data: u32,
+  context: BlitzContext,
+  contained_type: Box<dyn Type>,
+  num_elements: usize
 }
 
 impl Type for ArrayType {
   fn get_subclass_data(&self) -> u32 {
-    self.sub_class_data_
+    self.sub_class_data
   }
 
   fn get_context(&self) -> &BlitzContext {
@@ -460,20 +554,40 @@ impl Type for ArrayType {
 impl ArrayType {
   pub fn new() {}
 
-  pub fn get_num_elements() {}
+  pub fn get_num_elements(&self) -> usize {
+    self.num_elements
+  }
 
-  pub fn get_element_type() {}
+  pub fn get_element_type(&self) -> &Box<dyn Type> {
+    &self.contained_type
+  }
+
+  pub fn get() {}
+
+  // Return true if the specified type is valid as a element type.
+  pub fn is_valid_element_type(elem_type: &dyn Type) -> bool {
+    !elem_type.is_void_type() && !elem_type.is_label_type() &&
+    !elem_type.is_metadata_type() && !elem_type.is_function_type() &&
+    !elem_type.is_token_type() && !elem_type.is_x86_amx_type() &&
+    elem_type.get_type_id() != TypeID::ScalableVector
+  }
+
+  pub fn classof(t: &dyn Type) -> bool {
+    t.get_type_id() == TypeID::Array
+  }
 }
 
 // Class to represent fixed width SIMD vectors
 struct FixedVectorType {
-  sub_class_data_: u32,
-  context: BlitzContext
+  sub_class_data: u32,
+  context: BlitzContext,
+  contained_type: Box<dyn Type>,
+  element_quantity: usize
 }
 
 impl Type for FixedVectorType {
   fn get_subclass_data(&self) -> u32 {
-    self.sub_class_data_
+    self.sub_class_data
   }
 
   fn get_context(&self) -> &BlitzContext {
@@ -492,6 +606,10 @@ impl Type for FixedVectorType {
 impl FixedVectorType {
   pub fn new() {}
 
+  pub fn get_element_type(&self) -> &Box<dyn Type> {
+    &self.contained_type
+  }
+
   pub fn get() {}
 
   pub fn get_integer() {}
@@ -506,19 +624,25 @@ impl FixedVectorType {
 
   pub fn get_double_elements_vector_type() {}
 
-  pub fn class_of() {}
+  pub fn classof(t: &dyn Type) -> bool {
+    t.get_type_id() == TypeID::FixedVector
+  }
 
-  pub fn get_num_elements() {}
+  pub fn get_num_elements(&self) -> usize {
+    self.element_quantity
+  }
 }
 
 struct ScalableVectorType {
-  sub_class_data_: u32,
-  context: BlitzContext
+  sub_class_data: u32,
+  context: BlitzContext,
+  contained_type: Box<dyn Type>,
+  element_quantity: usize
 }
 
 impl Type for ScalableVectorType {
   fn get_subclass_data(&self) -> u32 {
-    self.sub_class_data_
+    self.sub_class_data
   }
 
   fn get_context(&self) -> &BlitzContext {
@@ -538,6 +662,10 @@ impl Type for ScalableVectorType {
 impl ScalableVectorType {
   pub fn new() {}
 
+  pub fn get_element_type(&self) -> &Box<dyn Type> {
+    &self.contained_type
+  }
+
   pub fn get() {}
 
   pub fn get_integer() {}
@@ -552,19 +680,28 @@ impl ScalableVectorType {
 
   pub fn get_double_elements_vector_type() {}
 
-  pub fn class_of() {}
+  pub fn classof(t: &dyn Type) -> bool {
+    t.get_type_id() == TypeID::ScalableVector
+  }
 
-  pub fn get_num_elements() {}
+  // Get the minimum number of elements in this vector.
+  // The actual number of elements in the vector is an integer multiple of
+  // this value.
+  pub fn get_num_elements(&self) -> usize {
+    self.element_quantity
+  }
 }
 
+// Class to represent pointers.
 struct PointerType {
-  sub_class_data_: u32,
-  context: BlitzContext
+  sub_class_data: u32,
+  context: BlitzContext,
+  pointee_type: Option<Box<dyn Type>>
 }
 
 impl Type for PointerType {
   fn get_subclass_data(&self) -> u32 {
-    self.sub_class_data_
+    self.sub_class_data
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -589,19 +726,41 @@ impl PointerType {
 
   pub fn get_with_same_pointee_type() {}
 
-  pub fn is_opaque() {}
+  pub fn is_opaque(&self) -> bool {
+    if self.pointee_type.is_none() {
+      return true;
+    } else {
+      return false;
+    }
+  }
 
-  pub fn is_valid_element_type() {}
+  // Return true if the specified type is valid as a element type.
+  pub fn is_valid_element_type(elem_type: &dyn Type) -> bool {
+    !elem_type.is_void_type() && !elem_type.is_label_type() &&
+    !elem_type.is_metadata_type() && !elem_type.is_token_type() &&
+    !elem_type.is_x86_amx_type()
+  }
 
-  pub fn is_loadable_or_storable_type() {}
+  // Return true if we can load or store from a pointer to this type.
+  pub fn is_loadable_or_storable_type(elem_type: &dyn Type) -> bool {
+    PointerType::is_valid_element_type(elem_type) && !elem_type.is_function_type()
+  }
 
-  pub fn get_address_spave() {}
+  // Return the address space of the pointer type.
+  pub fn get_address_space(&self) -> u32 {
+    self.sub_class_data
+  }
 
   pub fn is_opaque_or_pointee_type_matches() {}
 
   pub fn has_same_element_type_as() {}
 
-  pub fn class_of() {}
+  pub fn classof(t: &dyn Type) -> bool {
+    t.get_type_id() == TypeID::Pointer
+  }
+}
 
-  pub fn get_extended_type() {}
+struct TargetExtType {}
+impl TargetExtType {
+  pub fn new() {}
 }

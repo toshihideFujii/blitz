@@ -19,7 +19,8 @@ pub fn is_valid_module_flag() {}
 
 struct ModuleFlagEntry {}
 
-struct Module {
+#[derive(Debug, Clone)]
+pub struct Module {
   context: BlitzContext
 }
 

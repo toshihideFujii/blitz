@@ -5,6 +5,7 @@ pub mod execution_engine;
 pub mod ir;
 pub mod passes;
 pub mod profile_data;
+pub mod remarks;
 pub mod support;
 pub mod transforms;
 pub mod xray;
