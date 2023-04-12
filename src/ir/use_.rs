@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use super::user::User;
-use crate::ir::value::Value;
+//use crate::ir::value::Value;
 
 /*
 This file defines the Use class.
@@ -13,7 +13,7 @@ or some other User instance which refers to a Value.
 // and its Users.
 #[derive(Debug, Clone)]
 struct Use {
-  val: Option<Value>,
+  //val: Option<Value>,
   next: Box<Option<Use>>,
   prev: Box<Option<Use>>,
   parent: User
@@ -21,13 +21,13 @@ struct Use {
 
 impl Use {
   pub fn new(parent: User) -> Self {
-    Use { val: None, next: Box::new(None), prev: Box::new(None), parent: parent }
+    Use { /*val: None,*/ next: Box::new(None), prev: Box::new(None), parent: parent }
   }
 
   pub fn swap() {}
 
-  pub fn get(&self) -> Option<Value> {
-    self.val.clone()
+  pub fn get(&self) /*-> Option<Value>*/ {
+    //self.val.clone()
   }
 
   // Returns the User that contains this Use.
@@ -36,8 +36,8 @@ impl Use {
     self.parent.clone()
   }
 
-  pub fn set(&mut self, val: Value) {
-    self.val = Some(val);
+  pub fn set(&mut self, /*val: Value*/) {
+    //self.val = Some(val);
   }
 
   pub fn get_next(&self) -> Box<Option<Use>> {

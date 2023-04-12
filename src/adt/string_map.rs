@@ -35,7 +35,7 @@ impl<T> StringMapEntry<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct StringMap<T> {
+pub struct StringMap<T> {
   //hash_map_: HashMap<StringRef, StringMapEntry<T>>,
   hash_map_: HashMap<StringRef, T>,
 }

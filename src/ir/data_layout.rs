@@ -18,7 +18,8 @@ struct PointerAlignElem {}
 
 // A parsed version of the target data layout string in and
 // methods for querying it.
-struct DataLayout {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct DataLayout {}
 
 impl DataLayout {
   pub fn new() {}
@@ -34,7 +35,11 @@ impl DataLayout {
   pub fn parse() {}
   pub fn is_little_endian() {}
   pub fn is_big_endian() {}
-  pub fn get_string_representation() {}
+
+  pub fn get_string_representation(&self) -> String {
+    String::new()
+  }
+  
   pub fn is_default() {}
   pub fn is_legal_integer() {}
   pub fn is_illegal_integer() {}

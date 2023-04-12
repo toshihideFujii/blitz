@@ -1,10 +1,8 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-/*
-This file implements a class to represent arbitrary precision
-integral constant values and operations on them.
-*/
+// This file implements a class to represent arbitrary precision
+// integral constant values and operations on them.
 
 use crate::support::{math_extras::*};
 use std::{ops::*};
@@ -22,7 +20,7 @@ enum Rounding {
   Up
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct APInt {
   val_: i64, // Used to store the <= 64 bits integer value.
   pval_: i64, // Used to store the > 64 bits integer value.
@@ -1439,6 +1437,12 @@ impl ShlAssign<APInt> for APInt {
 impl ShlAssign<u32> for APInt {
   fn shl_assign(&mut self, rhs: u32) {
     // TODO
+  }
+}
+
+impl PartialEq<u64> for APInt {
+  fn eq(&self, other: &u64) -> bool {
+    self.val_ == *other as i64
   }
 }
 

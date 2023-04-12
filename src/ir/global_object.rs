@@ -9,7 +9,8 @@ enum VCallVisibility {
   TranslationUnit
 }
 
-struct GlobalObject {}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GlobalObject {}
 
 impl GlobalObject {
   pub fn new() {}

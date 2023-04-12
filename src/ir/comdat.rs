@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
-struct Comdat {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct Comdat {}
 impl Comdat {
   pub fn get_selection_kind() {}
   pub fn set_selection_kind() {}

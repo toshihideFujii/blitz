@@ -74,9 +74,11 @@ impl FoldingSetNodeID {
 
 struct Node {}
 
-struct FoldingSet<T> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct FoldingSet<T> where T: PartialEq + Eq + Hash {
   set: HashSet<T>
 }
+
 impl<T> FoldingSet<T> where T: Hash + Eq {
   pub fn new() -> Self {
     FoldingSet { set: HashSet::new() }

@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
-struct DiagnositicHandler {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiagnositicHandler {}
 
 impl DiagnositicHandler {
   pub fn handle_diagnostics() {}

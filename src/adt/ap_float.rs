@@ -53,7 +53,8 @@ enum FltCategory {
   Zero
 }
 
-struct APFloat {}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct APFloat {}
 
 impl APFloat {
   pub fn enum_to_semantics() {}

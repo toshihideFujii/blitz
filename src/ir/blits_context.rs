@@ -3,8 +3,7 @@
 // This file declares BlitzContext, a container of global state in
 // Blitz, such as the global type and constant uniquing tables.
 
-use crate::adt::small_ptr_set::SmallPtrSet;
-use super::module::Module;
+use super::blitz_context_impl::BlitzContextImpl;
 
 enum SyncScope {
   SingleThread,
@@ -73,64 +72,9 @@ enum OperandBundle {
 // infrastructure, including the type and constant uniquing tables.
 // BlitzContext itself provides no locking guarantees, so you should be
 // careful to have one context per thread.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BlitzContext {
-  // The set of modules instantiated in this context, and which will be 
-  // automatically deleted if this context is deleted.
-  owned_modules: Box<SmallPtrSet<Module>>,
-  // The main remark streamer used by all the other streamers (e.g. IR,
-  // MIR, frontends, etc.).
-  // This should only be used by the specific streamers, and never directly.
-  main_remark_streamer: u32,
-  diag_handler: u32,
-  respect_diagnostic_filters: bool,
-  diagnostics_hotness_requested: bool,
-  // The minimum hotness value a diagnostic needs in order to be included in
-  // optimization diagnostics.
-  diagnostics_hotness_threshold: u64,
-  diagnostics_mis_expect_tolerance: u32,
-  mis_expect_warning_requested: bool,
-  blitz_rs: u32,
-  yield_callback: u32,
-  yield_opaque_handle: u32,
-  value_names: u32,
-  int_constants: u32,
-  fp_constants: u32,
-  attrs_set: u32,
-  attrs_lists: u32,
-  attrs_set_nodes: u32,
-  md_string_cache: u32,
-  values_as_metadata: u32,
-  metadata_as_values: u32,
-  di_type_map: u32,
-  distinct_md_nodes: u32,
-  caz_constants: u32,
-  array_constants: u32,
-  struct_constants: u32,
-  vector_constants: u32,
-  cpn_constants: u32,
-  ctn_constants: u32,
-  uv_constants: u32,
-  pv_constants: u32,
-  cds_constants: u32,
-  block_addresses: u32,
-  ds0_local_equivalents: u32,
-  no_cfi_values: u32,
-  expr_constants: u32,
-  inline_asms: u32,
-  value_handles: u32,
-  custom_md_kind_names: u32,
-  value_metadata: u32,
-  assignment_id_to_instrs: u32,
-  global_object_sections: u32,
-  global_value_partitions: u32,
-  global_value_sanitize_metadata: u32,
-  discriminator_table: u32,
-  bundle_tag_cache: u32,
-  ssc: u32,
-  gc_names: u32,
-  discars_value_names: u32,
-  opaque_pointers: u32
+  p_impl: Box<BlitzContextImpl>
 }
 
 impl BlitzContext {
@@ -175,6 +119,10 @@ impl BlitzContext {
 
   fn add_module() {}
   fn remove_module() {}
+
+  pub fn get_impl(&mut self) -> &mut BlitzContextImpl {
+    self.p_impl.as_mut()
+  }
 }
 
 struct KeyType {}

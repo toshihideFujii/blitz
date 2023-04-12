@@ -2,6 +2,7 @@
 
 // This file declares the main interface for streaming remarks.
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct RemarkStreamer {}
 impl RemarkStreamer {
   pub fn new() {}

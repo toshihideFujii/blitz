@@ -3,9 +3,10 @@
 // This file contains the declaration of the GlobalFunc class,
 // which represents a single indirect function in the IR.
 
-struct GlobalFunc {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct GlobalIFunc {}
 
-impl GlobalFunc {
+impl GlobalIFunc {
   pub fn new() {}
   
   pub fn copy_attributes_from() {}

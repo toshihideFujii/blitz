@@ -33,144 +33,83 @@ impl ProfileCount {
   }
 }
 
-struct Function {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct Function {}
 
 impl Function {
   pub fn get_function() {}
 
-  pub fn get_instruction_count() {}
-
+  pub fn get_instruction_count(&self) -> u32 {
+    0
+  }
+  
   pub fn get_function_type() {}
-
   pub fn get_return_type() {}
-
   pub fn get_context() {}
-
   pub fn is_var_arg() {}
-
   pub fn is_materializable() {}
-
   pub fn set_is_materializable() {}
-
   pub fn get_intrinsic_id() {}
-
   pub fn is_intrinsic() {}
-
   pub fn is_target_intrinsic() {}
-
   pub fn is_constrained_fp_intrinsic() {}
-
   pub fn lookup_intrinsic_id() {}
-
   pub fn recalculate_intrinsic_id() {}
-
   pub fn get_calling_conv() {}
-
   pub fn set_calling_conv() {}
-
   pub fn set_entry_count() {}
-
   pub fn get_entry_count() {}
-
   pub fn has_profile_data() {}
-
   pub fn get_import_guids() {}
-
   pub fn set_section_prefix() {}
-
   pub fn has_gc() {}
   pub fn get_gc() {}
   pub fn set_gc() {}
   pub fn clear_gc() {}
-
   pub fn get_attributes() {}
-
   pub fn set_attributes() {}
-
   pub fn add_attribute_at_index() {}
-
   pub fn add_fn_attr() {}
-
   pub fn add_fn_attrs() {}
-
   pub fn add_ret_attr() {}
-
   pub fn add_ret_attrs() {}
-
   pub fn add_param_attr() {}
-
   pub fn add_param_attrs() {}
-
   pub fn remove_attribute_at_index() {}
-
   pub fn remove_fn_attr() {}
-
   pub fn remove_fn_attrs() {}
-
   pub fn remove_ret_attr() {}
-
   pub fn remove_ret_attrs() {}
-
   pub fn remove_param_attr() {}
-
   pub fn remove_param_attrs() {}
-
   pub fn has_fn_atribute() {}
-
   pub fn has_ret_attribute() {}
-
   pub fn has_param_attribute() {}
-
   pub fn get_attribute_at_index() {}
-
   pub fn get_fn_attribute() {}
-
   pub fn get_param_attribute() {}
-
   pub fn remove_param_undef_implying_attrs() {}
-
   pub fn get_fn_stack_align() {}
-
   pub fn has_stack_protector_fn_attr() {}
-
   pub fn add_dereferenceable_param_attr() {}
-
   pub fn add_dereferenceable_or_null_param_attr() {}
-
   pub fn get_param_alignment() {}
-
   pub fn get_param_align() {}
-
   pub fn get_param_stack_align() {}
-
   pub fn get_param_by_val_type() {}
-
   pub fn get_param_struct_ret_type() {}
-
   pub fn get_param_in_alloca_type() {}
-
   pub fn get_param_by_ref_type() {}
-
   pub fn get_param_preallocated_type() {}
-
   pub fn get_param_dereferenceable_bytes() {}
-
   pub fn get_param_dereferenceable_or_null_bytes() {}
-
   pub fn is_presplit_coroutine() {}
-
   pub fn set_presplit_coroutine() {}
-
   pub fn set_splitted_coroutine() {}
-
   pub fn does_not_access_memory() {}
-
   pub fn set_does_not_access_memory() {}
-
   pub fn only_reads_memory() {}
-
   pub fn set_only_reads_memory() {}
-
   pub fn only_writes_memory() {}
 
   pub fn set_only_writes_memory() {}

@@ -3,11 +3,11 @@ use std::{hash::Hash, fmt::Debug};
 
 use crate::adt::dense_map::DenseMap;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 struct DenseSetEmpty {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DenseSet<Key> where Key: Debug + Clone +  Eq + Hash {
+#[derive(Debug, Clone, PartialEq)]
+pub struct DenseSet<Key> where Key: Debug + Clone + Eq + Hash {
   map: DenseMap<Key, DenseSetEmpty>
 }
 
@@ -66,7 +66,7 @@ impl<Key> DenseSet<Key> where Key: Debug + Clone +  Eq + Hash {
 
   pub fn find(&self, k: Key) -> Option<Key> {
     let result = k.clone();
-    if let Some(_) = self.map.find(k) {
+    if let Some(_) = self.map.find(&k) {
       return Some(result);
     } else {
       return None;
@@ -75,7 +75,7 @@ impl<Key> DenseSet<Key> where Key: Debug + Clone +  Eq + Hash {
 
   // Check if the set contains the given element.
   pub fn contains(&self, k: Key) -> bool {
-    if let Some(_) = self.map.find(k) {
+    if let Some(_) = self.map.find(&k) {
       return true;
     } else {
       return false;

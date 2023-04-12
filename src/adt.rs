@@ -14,6 +14,7 @@ pub mod hashing;
 pub mod immutable_list;
 pub mod immutable_set;
 pub mod indexed_map;
+pub mod ilist;
 pub mod none;
 pub mod set_vector;
 pub mod small_ptr_set;

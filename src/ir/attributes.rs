@@ -16,7 +16,7 @@ enum AllocFnKind {
   Aligned
 }
 
-enum AttrKind {
+pub enum AttrKind {
   None,
   EndAttrKinds,
   EmptyKey,

@@ -3,14 +3,15 @@
 
 // This file contains the declaration of the Type class.
 
+use std::any::Any;
 use crate::adt::ap_int::APInt;
 use crate::support::type_size::TypeSize;
 use super::blits_context::BlitzContext;
-use super::value::Value;
+//use super::value::Value;
 
 // Definitions of all of the base types for the Type system.
 // Based on this value, you can cast to a class defined below.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TypeID {
   // Primitive types
   Half,
@@ -40,11 +41,8 @@ pub enum TypeID {
 pub trait Type {
   fn get_subclass_data(&self) -> u32;
   fn set_subclass_data(&mut self, val: u32) {}
-
   fn dump(&self) {}
-
   fn get_context(&self) -> &BlitzContext;
-
   fn get_type_id(&self) -> TypeID;
 
   // Return true if this is 'void'.
@@ -75,7 +73,6 @@ pub trait Type {
   }
 
   fn is_int_or_int_vector_type(&self) {}
-
   fn is_int_or_int_ptr_type(&self) {}
 
   // True if this is an instance of FunctionType.
@@ -91,7 +88,6 @@ pub trait Type {
   fn is_pointer_type(&self) -> bool { false }
 
   fn is_opaque_pointer_type(&self) {}
-
   fn is_ptr_or_ptr_vector_type(&self) {}
 
   // True if this is an instance of VectorType.
@@ -108,19 +104,12 @@ pub trait Type {
   fn is_aggregate_type(&self) -> bool { false }
   fn is_sized(&self) -> bool { false }
 
-  fn get_primitive_size_in_bits(&self) -> Option<TypeSize> {
-    None
-  }
-
-  fn get_scalar_size_in_bits(&self) -> u32 {
-    0
-  }
+  fn get_primitive_size_in_bits(&self) -> Option<TypeSize> { None }
+  fn get_scalar_size_in_bits(&self) -> u32 { 0 }
 
   fn get_fp_mantissa_width(&self) {}
   fn is_ieee(&self) {}
-
   fn get_scalar_type(&self) {}
-
   fn get_contained_type(&self) {}
   fn get_num_contained_type(&self) {}
   fn get_integer_bit_width(&self) {}
@@ -155,13 +144,18 @@ pub trait Type {
 
   // For StructType.
   fn contains_scalable_vector_type(&self) -> bool { false }
+
+  fn as_any(&self) -> &dyn Any;
 }
 
 pub fn get_int_n_type(c: BlitzContext, n: u32) -> IntegerType {
   IntegerType::get(c, n)
 }
 
-fn get_int_1_type() {}
+pub fn get_int_1_type(c: &mut BlitzContext) -> IntegerType {
+  c.get_impl().get_int_1_type().clone()
+}
+
 fn get_int_8_type() {}
 fn get_int_16_type() {}
 fn get_int_32_type() {}
@@ -178,41 +172,11 @@ enum IntConstants {
 // Class to represent integer types.
 // Note that this class is also used to represent the built-in
 // integer types: Int1, Int8, Int16, Int32, Int64.
+#[derive(Debug, Clone, PartialEq)]
 pub struct IntegerType {
   context: BlitzContext,
   id: TypeID,
   sub_class_data: u32
-}
-
-impl Type for IntegerType {
-  fn get_subclass_data(&self) -> u32 {
-    self.sub_class_data
-  }
-
-  fn set_subclass_data(&mut self, val: u32) {
-    self.sub_class_data = val;
-    debug_assert!(self.get_subclass_data() == val, "Subclass data too large for field.");
-  }
-
-  fn get_context(&self) -> &BlitzContext {
-    &self.context
-  }
-
-  fn get_type_id(&self) -> TypeID {
-    TypeID::Integer
-  }
-
-  fn is_integer_type(&self) -> bool {
-    true
-  }
-
-  fn get_primitive_size_in_bits(&self) -> Option<TypeSize> {
-    Some(TypeSize::fixed(self.get_bit_width() as u64))
-  }
-
-  fn get_scalar_size_in_bits(&self) -> u32 {
-    self.get_primitive_size_in_bits().unwrap().get_fixed_value() as u32
-  }
 }
 
 impl IntegerType {
@@ -226,7 +190,7 @@ impl IntegerType {
   // Otherwise a new one will be created.
   // Only one instance with a given num_bits value is ever created.
   // Get or create an IntegerType instance.
-  fn get(c: BlitzContext, num_bits: u32) -> IntegerType {
+  pub fn get(c: BlitzContext, num_bits: u32) -> IntegerType {
     debug_assert!(num_bits >= IntConstants::MinIntBits as u32, "Bitwidth too small.");
     debug_assert!(num_bits <= IntConstants::MaxIntBits as u32, "Bitwidth too large.");
 
@@ -236,9 +200,9 @@ impl IntegerType {
   }
 
   // Returns type twice as wide the input type.
-  pub fn get_extended_type(&self) -> IntegerType {
-    get_int_n_type(self.get_context().clone(), 2 * self.get_scalar_size_in_bits())
-  }
+  //pub fn get_extended_type(&self) -> IntegerType {
+    //get_int_n_type(self.get_context().clone(), 2 * self.get_scalar_size_in_bits())
+  //}
 
   // Get the number of bits in this IntegerType
   pub fn get_bit_width(&self) -> u32 {
@@ -270,9 +234,44 @@ impl IntegerType {
   }
 }
 
+impl Type for IntegerType {
+  fn get_subclass_data(&self) -> u32 {
+    self.sub_class_data
+  }
+
+  fn set_subclass_data(&mut self, val: u32) {
+    self.sub_class_data = val;
+    debug_assert!(self.get_subclass_data() == val, "Subclass data too large for field.");
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    &self.context
+  }
+
+  fn get_type_id(&self) -> TypeID {
+    TypeID::Integer
+  }
+
+  fn is_integer_type(&self) -> bool {
+    true
+  }
+
+  fn get_primitive_size_in_bits(&self) -> Option<TypeSize> {
+    Some(TypeSize::fixed(self.get_bit_width() as u64))
+  }
+
+  fn get_scalar_size_in_bits(&self) -> u32 {
+    self.get_primitive_size_in_bits().unwrap().get_fixed_value() as u32
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
+}
+
 // Class to represent function types
-//#[derive(Debug, Clone)]
-struct FunctionType {
+//#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionType {
   sub_class_data: u32,
   context: BlitzContext,
   contained_types: Vec<Box<dyn Type>>
@@ -299,9 +298,14 @@ impl Type for FunctionType {
   fn is_function_type(&self) -> bool {
     true
   }
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
 }
 
 impl FunctionType {
+  /*
   pub fn new(result: &dyn Type, params: Vec<Box<dyn Type>>, is_var_args: bool) -> Self {
     let mut data: u32 = 0;
     if is_var_args { data = 1; }
@@ -316,6 +320,7 @@ impl FunctionType {
     }
     fn_type
   }
+  */
 
   pub fn get() {}
 
@@ -367,20 +372,20 @@ impl FunctionType {
 // the [opaque pointer types] project.
 struct FunctionCalee {
   fn_type: FunctionType,
-  callee: Value
+  //callee: Value
 }
 
 impl FunctionCalee {
-  pub fn new(fn_type: FunctionType, callee: Value) -> Self {
-    FunctionCalee { fn_type: fn_type, callee: callee }
+  pub fn new(fn_type: FunctionType /*callee: Value*/) -> Self {
+    FunctionCalee { fn_type: fn_type /*callee: callee*/ }
   }
 
   pub fn get_function_type(&self) -> &FunctionType {
     &self.fn_type
   }
 
-  pub fn get_callee(&self) -> &Value {
-    &self.callee
+  pub fn get_callee(&self) /*-> &Value*/ {
+    //&self.callee
   }
 }
 
@@ -434,6 +439,10 @@ impl Type for StructType {
       }
     }
     false
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -549,6 +558,10 @@ impl Type for ArrayType {
   fn is_array_type(&self) -> bool {
     true
   }
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
 }
 
 impl ArrayType {
@@ -600,6 +613,10 @@ impl Type for FixedVectorType {
 
   fn is_vector_type(&self) -> bool {
     true
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -655,6 +672,10 @@ impl Type for ScalableVectorType {
 
   fn is_vector_type(&self) -> bool {
     true
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -714,6 +735,10 @@ impl Type for PointerType {
 
   fn is_pointer_type(&self) -> bool {
     true
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 

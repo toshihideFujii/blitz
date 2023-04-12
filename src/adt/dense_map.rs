@@ -2,13 +2,15 @@
 
 use std::{collections::HashMap, hash::Hash, fmt::Debug};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DenseMap<Key, Value> where Key: Eq + Hash{
+#[derive(Debug, Clone, PartialEq)]
+pub struct DenseMap<Key, Value> where Key: Eq + Hash {
   map: HashMap<Key, Value>
 }
 
 impl<Key, Value> DenseMap<Key, Value>
-  where Key: Debug + Clone + PartialEq + Eq + Hash + Sized, Value: Debug + Clone {
+  where Key: Debug + Clone + Eq + Hash + Sized,
+        Value: Debug + Clone
+{
   pub fn new() -> Self {
     DenseMap { map: HashMap::new() }
   }
@@ -40,8 +42,8 @@ impl<Key, Value> DenseMap<Key, Value>
     self.map.contains_key(&k)
   }
 
-  pub fn find(&self, k: Key) -> Option<&Value>{
-    self.map.get(&k)
+  pub fn find(&self, k: &Key) -> Option<&Value>{
+    self.map.get(k)
   }
 
   pub fn find_as() {}
@@ -135,7 +137,7 @@ mod tests {
     assert_eq!(map.size(), 0);
     assert_eq!(map.empty(), true);
     assert_eq!(map.count(0), false);
-    assert_eq!(map.find(0), None);
+    assert_eq!(map.find(&0), None);
   }
 
   #[test]
@@ -147,7 +149,7 @@ mod tests {
     assert_eq!(map.empty(), false);
 
     assert_eq!(map.count(0), true);
-    assert_eq!(map.find(0), Some(&1));
+    assert_eq!(map.find(&0), Some(&1));
   }
 
   #[test]
@@ -173,7 +175,7 @@ mod tests {
     let mut map: DenseMap<u64, u64> = DenseMap::new();
     map.insert(0, 1);
     assert_eq!(map.size(), 1);
-    assert_eq!(map.find(0), Some(&1));
+    assert_eq!(map.find(&0), Some(&1));
   }
 
   #[test]
@@ -182,7 +184,7 @@ mod tests {
     map.insert(0, 1);
     let copy_map = DenseMap::copy(&map);
     assert_eq!(copy_map.size(), 1);
-    assert_eq!(copy_map.find(0), Some(&1));
+    assert_eq!(copy_map.find(&0), Some(&1));
   }
 
   #[test]
@@ -241,13 +243,13 @@ mod tests {
     map.insert(StringRef::new_from_string("c"), 3);
 
     assert_eq!(map.size(), 3);
-    assert_eq!(map.find(StringRef::new_from_string("a")), Some(&1));
-    assert_eq!(map.find(StringRef::new_from_string("b")), Some(&2));
-    assert_eq!(map.find(StringRef::new_from_string("c")), Some(&3));
-    assert_eq!(map.find(StringRef::new_from_string("q")), None);
+    assert_eq!(map.find(&StringRef::new_from_string("a")), Some(&1));
+    assert_eq!(map.find(&StringRef::new_from_string("b")), Some(&2));
+    assert_eq!(map.find(&StringRef::new_from_string("c")), Some(&3));
+    assert_eq!(map.find(&StringRef::new_from_string("q")), None);
 
-    assert_eq!(map.find(StringRef::new_from_string("")), None);
+    assert_eq!(map.find(&StringRef::new_from_string("")), None);
     map.insert(StringRef::new_from_string(""), 42);
-    assert_eq!(map.find(StringRef::new_from_string("")), Some(&42));
+    assert_eq!(map.find(&StringRef::new_from_string("")), Some(&42));
   }
 }

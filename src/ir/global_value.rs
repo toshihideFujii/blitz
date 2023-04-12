@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
-struct GlobalValue {}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GlobalValue {}
 impl GlobalValue {
   pub fn new() {}
   pub fn may_be_derefined() {}

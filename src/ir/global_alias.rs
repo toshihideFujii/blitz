@@ -3,7 +3,8 @@
 // This file contains the declaration of the GlobalAlias class,
 // which represents a single function or variable alias in the IR.
 
-struct GlobalAlias {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct GlobalAlias {}
 impl GlobalAlias {
   pub fn new() {}
   pub fn create() {}

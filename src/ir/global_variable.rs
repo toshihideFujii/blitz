@@ -4,7 +4,8 @@
 // class, which represents a single variable (or constant) in
 // the VM.
 
-struct GlobalVariable {}
+#[derive(Debug, Clone, PartialEq)]
+pub struct GlobalVariable {}
 impl GlobalVariable {
   pub fn new() {}
   pub fn has_initializer() {}
