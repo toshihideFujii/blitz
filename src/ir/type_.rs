@@ -4,6 +4,7 @@
 // This file contains the declaration of the Type class.
 
 use std::any::Any;
+use std::fmt::Debug;
 use crate::adt::ap_int::APInt;
 use crate::support::type_size::TypeSize;
 use super::blits_context::BlitzContext;
@@ -38,7 +39,7 @@ pub enum TypeID {
   TargetExt
 }
 
-pub trait Type {
+pub trait Type: Debug /*+ std::clone::Clone*/ /*+ std::cmp::PartialEq*/ {
   fn get_subclass_data(&self) -> u32;
   fn set_subclass_data(&mut self, val: u32) {}
   fn dump(&self) {}
@@ -62,6 +63,8 @@ pub trait Type {
   fn is_floating_point_type(&self) -> bool { false }
   fn is_x86_mmx_type(&self) -> bool { false }
   fn is_x86_amx_type(&self) -> bool { false }
+
+  // Return true if this is a fp type or a vector of fp.
   fn is_fp_or_fpvector_type(&self) -> bool { false }
   fn is_label_type(&self) -> bool { false }
   fn is_metadata_type(&self) -> bool { false }
@@ -128,19 +131,6 @@ pub trait Type {
   fn get_extended_type(&self) {}
   fn get_pointer_address_space(&self) {}
   fn get_primitive_type(&self) {}
-  fn get_void_type(&self) {}
-  fn get_label_type(&self) {}
-  fn get_half_type(&self) {}
-  fn get_b_float_type(&self) {}
-  fn get_float_type(&self) {}
-  fn get_double_type(&self) {}
-  fn get_metadata_type(&self) {}
-  fn get_x86_fp80_type(&self) {}
-  fn get_fp128_type(&self) {}
-  fn get_ppc_fp128_type(&self) {}
-  fn get_x86_mmx_type(&self) {}
-  fn get_x86_amx_type(&self) {}
-  fn get_token_type(&self) {}
 
   // For StructType.
   fn contains_scalable_vector_type(&self) -> bool { false }
@@ -148,20 +138,63 @@ pub trait Type {
   fn as_any(&self) -> &dyn Any;
 }
 
-pub fn get_int_n_type(c: BlitzContext, n: u32) -> IntegerType {
-  IntegerType::get(c, n)
+/*
+impl std::clone::Clone for dyn Type {
+  fn clone(&self) -> Self {
+    *self
+  }
 }
+*/
 
-pub fn get_int_1_type(c: &mut BlitzContext) -> IntegerType {
+/*
+impl std::cmp::PartialEq for Type {
+  fn eq(&self, other: &Self) -> bool {
+    self.get_type_id() == other.get_type_id()
+  }
+}
+*/
+
+pub fn get_void_type() {}
+pub fn get_label_type() {}
+pub fn get_half_type() {}
+pub fn get_b_float_type() {}
+pub fn get_float_type() {}
+pub fn get_double_type() {}
+pub fn get_metadata_type() {}
+pub fn get_x86_fp80_type() {}
+pub fn get_fp128_type() {}
+pub fn get_ppc_fp128_type() {}
+pub fn get_x86_mmx_type() {}
+pub fn get_x86_amx_type() {}
+pub fn get_token_type() {}
+
+pub fn get_int_1_type(c: &BlitzContext) -> IntegerType {
   c.get_impl().get_int_1_type().clone()
 }
 
-fn get_int_8_type() {}
-fn get_int_16_type() {}
-fn get_int_32_type() {}
-fn get_int_64_type() {}
-fn get_int_128_type() {}
+pub fn get_int_8_type(c: &BlitzContext) -> IntegerType {
+  c.get_impl().get_int_8_type().clone()
+}
 
+pub fn get_int_16_type(c: &BlitzContext) -> IntegerType {
+  c.get_impl().get_int_16_type().clone()
+}
+
+pub fn get_int_32_type(c: &BlitzContext) -> IntegerType {
+  c.get_impl().get_int_32_type().clone()
+}
+
+pub fn get_int_64_type(c: &BlitzContext) -> IntegerType {
+  c.get_impl().get_int_64_type().clone()
+}
+
+pub fn get_int_128_type(c: &BlitzContext) -> IntegerType {
+  c.get_impl().get_int_128_type().clone()
+}
+
+pub fn get_int_n_type(c: BlitzContext, n: u32) -> IntegerType {
+  IntegerType::get(c, n)
+}
 
 // This enum is just used to hold constants we need for IntegerType.
 enum IntConstants {
@@ -194,9 +227,26 @@ impl IntegerType {
     debug_assert!(num_bits >= IntConstants::MinIntBits as u32, "Bitwidth too small.");
     debug_assert!(num_bits <= IntConstants::MaxIntBits as u32, "Bitwidth too large.");
 
-    // TODO
-    let entry = IntegerType::new(c, num_bits);
-    entry
+    match num_bits {
+      1 => return get_int_1_type(&c),
+      8 => return get_int_8_type(&c),
+      16 => return get_int_16_type(&c),
+      32 => return get_int_32_type(&c),
+      64 => return get_int_64_type(&c),
+      128 => return get_int_128_type(&c),
+      _ => println!("num_bits: {}", num_bits),
+    }
+
+    let mut c_impl = c.get_impl();
+    let entry = c_impl.integer_types.find(&num_bits);
+    if entry == None {
+      let new_entry = IntegerType::new(c, num_bits);
+      let new_entry_c = new_entry.clone();
+      c_impl.integer_types.insert(num_bits, new_entry);
+      return new_entry_c;
+    } else {
+      return entry.unwrap().clone();
+    }
   }
 
   // Returns type twice as wide the input type.
@@ -270,7 +320,7 @@ impl Type for IntegerType {
 }
 
 // Class to represent function types
-//#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct FunctionType {
   sub_class_data: u32,
   context: BlitzContext,
@@ -403,6 +453,7 @@ enum SCDB {
 // Literal struct types (e.g. {i32, i32}) are uniqued structurally, and
 // must always have a body when created.
 // You can get one of these by using one of the StructType::get() forms.
+#[derive(Debug)]
 struct StructType {
   sub_class_data: u32,
   context: BlitzContext,
@@ -535,6 +586,7 @@ impl PartialEq for StructType {
 }
 
 // Class to represent array types.
+#[derive(Debug)]
 struct ArrayType {
   sub_class_data: u32,
   context: BlitzContext,
@@ -591,7 +643,8 @@ impl ArrayType {
 }
 
 // Class to represent fixed width SIMD vectors
-struct FixedVectorType {
+#[derive(Debug)]
+pub struct FixedVectorType {
   sub_class_data: u32,
   context: BlitzContext,
   contained_type: Box<dyn Type>,
@@ -621,7 +674,14 @@ impl Type for FixedVectorType {
 }
 
 impl FixedVectorType {
-  pub fn new() {}
+  pub fn new(v_type: Box<dyn Type>) -> Self {
+    FixedVectorType {
+      sub_class_data: 0,
+      context: v_type.get_context().clone(),
+      contained_type: v_type,
+      element_quantity: 0
+    }
+  }
 
   pub fn get_element_type(&self) -> &Box<dyn Type> {
     &self.contained_type
@@ -650,6 +710,7 @@ impl FixedVectorType {
   }
 }
 
+#[derive(Debug)]
 struct ScalableVectorType {
   sub_class_data: u32,
   context: BlitzContext,
@@ -714,6 +775,7 @@ impl ScalableVectorType {
 }
 
 // Class to represent pointers.
+#[derive(Debug)]
 struct PointerType {
   sub_class_data: u32,
   context: BlitzContext,

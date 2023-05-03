@@ -1,37 +1,25 @@
 #![allow(dead_code)]
 
-/*
-This class defines the interface that one who uses
-a Value must implement.
-*/
+// This class defines the interface that one who uses a Value
+// must implement.
+// Each instance of the Value class keeps track of what User's
+// have handles to it.
 
-#[derive(Debug, Clone)]
-pub struct User {}
+//#[derive(Debug, Clone)]
+//pub struct User {}
 
-impl User {
-  pub fn alloc_hungoff_uses() {}
-
-  pub fn grow_hungoff_uses() {}
-
-  pub fn get_operand_list() {}
-
-  pub fn get_operand() {}
-
-  pub fn set_operand() {}
-
-  pub fn get_operand_use() {}
-
-  pub fn get_num_operands() {}
-
-  pub fn get_descriptor() {}
-
-  pub fn set_global_variable_num_operands() {}
-
-  pub fn set_num_hungoff_use_operands() {}
-
-  pub fn is_droppable() {}
-
-  pub fn drop_all_references() {}
-
-  pub fn replace_uses_of_with() {}
+pub trait User {
+  fn alloc_hungoff_uses(&self) {}
+  fn grow_hungoff_uses(&self) {}
+  fn get_operand_list(&self) {}
+  fn get_operand(&self) {}
+  fn set_operand(&self) {}
+  fn get_operand_use(&self) {}
+  fn get_num_operands(&self) {}
+  fn get_descriptor(&self) {}
+  fn set_global_variable_num_operands(&self) {}
+  fn set_num_hungoff_use_operands(&self) {}
+  fn is_droppable(&self) {}
+  fn drop_all_references(&self) {}
+  fn replace_uses_of_with(&self) {}
 }

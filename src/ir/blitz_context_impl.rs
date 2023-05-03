@@ -19,7 +19,7 @@ use super::{
   metadata::{MDString, /*ValueAsMetadata,*/ Metadata, MetadataAsValue, MDNode},
   /*value::Value,*/
   debug_info_metadata::DICompositeType,
-  type_::{IntegerType}, global_object::GlobalObject, global_value::GlobalValue
+  type_::{/*Type,*/ IntegerType}, global_object::GlobalObject, global_value::GlobalValue, blits_context::BlitzContext
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -65,8 +65,8 @@ pub struct BlitzContextImpl {
   the_false_val: Option<ConstantInt>,
 
   // Basic type instances.
+  //void_type: Box<dyn Type>,
   /*
-  void_type: Box<dyn Type>,
   label_type: Box<dyn Type>,
   half_type: Box<dyn Type>,
   b_float_type: Box<dyn Type>,
@@ -91,23 +91,55 @@ pub struct BlitzContextImpl {
 
   the_none_token: ConstantTokenNone,
 
-  integer_types: DenseMap<u32, IntegerType>,
+  pub integer_types: DenseMap<u32, IntegerType>,
   //function_types: DenseSet<FunctionType>,
   //anon_struct_types: DenseSet<>
-
 
   custom_md_kind_names: StringMap<u32>,
   //value_metadata: DenseMap<Value, >
 
   global_object_sections: DenseMap<GlobalObject, StringRef>,
   global_value_partitions: DenseMap<GlobalValue, StringRef>,
-
-
   bundle_tag_cache: StringMap<u32>
 }
 
 impl BlitzContextImpl {
-  pub fn new() {}
+  pub fn new(c: &BlitzContext) -> Self {
+    BlitzContextImpl { 
+      owned_modules: SmallPtrSet::new(),
+      main_remark_streamer: None,
+      diag_handler: None,
+      respect_diagnostic_filters: false,
+      diagnostics_hotness_requested: false,
+      diagnostics_hotness_threshold: None,
+      diagnostics_mis_expect_tolerance: None,
+      mis_expect_warning_requested: false,
+      blitz_rs: None,
+      int_constants: DenseMap::new(),
+      fp_constants: DenseMap::new(),
+      attrs_set: FoldingSet::new(),
+      attrs_lists: FoldingSet::new(),
+      attrs_set_nodes: FoldingSet::new(),
+      md_string_cache: StringMap::new(),
+      metadata_as_values: DenseMap::new(),
+      di_type_map: DenseMap::new(),
+      distinct_md_nodes: Vec::new(),
+      the_true_val: None,
+      the_false_val: None,
+      int_1_type: IntegerType::new(c.clone(), 1),
+      int_8_type: IntegerType::new(c.clone(), 8),
+      int_16_type: IntegerType::new(c.clone(), 16),
+      int_32_type: IntegerType::new(c.clone(), 32),
+      int_64_type: IntegerType::new(c.clone(), 64),
+      int_128_type: IntegerType::new(c.clone(), 128),
+      the_none_token: ConstantTokenNone::new(),
+      integer_types: DenseMap::new(),
+      custom_md_kind_names: StringMap::new(),
+      global_object_sections: DenseMap::new(),
+      global_value_partitions: DenseMap::new(),
+      bundle_tag_cache: StringMap::new()
+    }
+  }
   pub fn get_or_insert_bundle_tag() {}
   pub fn get_operand_bundle_tags() {}
   pub fn get_operand_bundle_tag_id() {}
@@ -138,4 +170,25 @@ impl BlitzContextImpl {
   pub fn get_int_1_type(&self) -> IntegerType {
     self.int_1_type.clone()
   }
+
+  pub fn get_int_8_type(&self) -> IntegerType {
+    self.int_8_type.clone()
+  }
+
+  pub fn get_int_16_type(&self) -> IntegerType {
+    self.int_16_type.clone()
+  }
+
+  pub fn get_int_32_type(&self) -> IntegerType {
+    self.int_32_type.clone()
+  }
+
+  pub fn get_int_64_type(&self) -> IntegerType {
+    self.int_64_type.clone()
+  }
+
+  pub fn get_int_128_type(&self) -> IntegerType {
+    self.int_128_type.clone()
+  }
+
 }

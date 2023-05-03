@@ -74,11 +74,15 @@ enum OperandBundle {
 // careful to have one context per thread.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlitzContext {
-  p_impl: Box<BlitzContextImpl>
+  p_impl: Option<Box::<BlitzContextImpl>>
 }
 
 impl BlitzContext {
-  pub fn new() {}
+  pub fn new() -> Self {
+    let mut instance = BlitzContext { p_impl: None };
+    instance.p_impl = Some(Box::new(BlitzContextImpl::new(&instance)));
+    instance
+  }
   pub fn get_md_kind_id() {}
   pub fn get_md_kind_names() {}
   pub fn get_operand_bundle_tags() {}
@@ -120,8 +124,9 @@ impl BlitzContext {
   fn add_module() {}
   fn remove_module() {}
 
-  pub fn get_impl(&mut self) -> &mut BlitzContextImpl {
-    self.p_impl.as_mut()
+  pub fn get_impl(&self) -> BlitzContextImpl {
+    let pimpl = self.p_impl.clone();
+    pimpl.unwrap().as_ref().clone()
   }
 }
 

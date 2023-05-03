@@ -1,9 +1,7 @@
 #![allow(dead_code)]
 
-/*
-This file contains the declaration of the Function
-class, which represents a single function/procedure.
-*/
+// This file contains the declaration of the Function class,
+// which represents a single function/procedure.
 
 #[derive(PartialEq, Clone)]
 enum ProfileCountType {

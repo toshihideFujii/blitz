@@ -4,10 +4,12 @@
 // SmallSize or less elements.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SmallPtrSet<PtrType> {
-  dummy: PtrType
+  dummy: Option<PtrType>
 }
 impl<PtrType> SmallPtrSet<PtrType> {
-  pub fn new() {}
+  pub fn new() -> Self {
+    SmallPtrSet { dummy: None }
+  }
   pub fn empty() {}
   pub fn size() {}
   pub fn clear() {}

@@ -6,14 +6,33 @@
 // in much the same way as a single scalar value.
 
 use std::ops::{MulAssign, Mul};
-
 use crate::support::math_extras;
 
 pub fn report_invalid_size_request() {}
 
 struct StackOffset {}
 
-struct ElementCount {}
+// Stores the number of elements for a type and whether this type
+// is fixed (n-elements) or scalable (e.g., SVE).
+pub struct ElementCount {
+  quantity: u32,
+  scalable: bool
+}
+
+impl ElementCount {
+  pub fn new(min_val: u32, scalable: bool) -> Self {
+    ElementCount { quantity: min_val, scalable: scalable }
+  }
+
+  pub fn get_fixed(min_val: u32) -> Self {
+    ElementCount::new(min_val, false)
+  }
+
+  pub fn get_scalable() {}
+  pub fn get() {}
+  pub fn is_scalar() {}
+  pub fn is_vector() {}
+}
 
 // Stores the size of a type.
 // If the type is of fixed size, it will representthe exact size.
