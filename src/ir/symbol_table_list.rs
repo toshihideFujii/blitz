@@ -7,12 +7,12 @@
 use std::ops::Range;
 use crate::adt::ilist::IPList;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct SymbolTableList<T> where T: PartialEq{
+#[derive(Debug)]
+pub struct SymbolTableList<T> /* where T: PartialEq*/{
   list: IPList<T>
 }
 
-impl<T> SymbolTableList<T> where T: PartialEq {
+impl<T> SymbolTableList<T> /*where T: PartialEq */{
   pub fn new() -> Self {
     SymbolTableList { list: IPList::new() }
   }

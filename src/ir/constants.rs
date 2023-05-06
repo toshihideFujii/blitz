@@ -210,8 +210,8 @@ impl Value for ConstantInt {
     &self.v_type
   }
 
-  fn get_context(&self) -> BlitzContext {
-    self.v_type.get_context().clone()
+  fn get_context(&self) -> &BlitzContext {
+    self.v_type.get_context()
   }
 
   fn get_value_id(&self) -> ValueType {
@@ -333,8 +333,8 @@ impl Value for ConstantFP {
     &self.v_type
   }
 
-  fn get_context(&self) -> BlitzContext {
-    self.v_type.get_context().clone()
+  fn get_context(&self) -> &BlitzContext {
+    self.v_type.get_context()
   }
 
   fn get_value_id(&self) -> ValueType {
@@ -409,8 +409,8 @@ impl Value for ConstantAggregateZero {
     self.v_type.as_ref()
   }
 
-  fn get_context(&self) -> BlitzContext {
-    self.v_type.get_context().clone()
+  fn get_context(&self) -> &BlitzContext {
+    self.v_type.get_context()
   }
 
   fn get_value_id(&self) -> ValueType {
@@ -453,8 +453,8 @@ impl Value for ConstantVector {
     self.v_type.as_ref()
   }
 
-  fn get_context(&self) -> BlitzContext {
-    self.v_type.get_context().clone()
+  fn get_context(&self) -> &BlitzContext {
+    self.v_type.get_context()
   }
 
   fn get_value_id(&self) -> ValueType {
@@ -491,11 +491,15 @@ struct NoCFIValue {}
 // constant expressions. The opcode field for the ConstantExpr class id
 // maintainedin the Value::sub_class_data field.
 pub struct ConstantExpr {
-  sub_class_data: u32
+  v_type: Box<dyn Type>,
+  v_id: ValueType
 }
 
 impl ConstantExpr {
-  pub fn new() {}
+  pub fn new(v_type: Box<dyn Type>) -> Self {
+    ConstantExpr { v_type: v_type, v_id: ValueType::ConstantExprVal }
+  }
+
   pub fn get_align_of() {}
   pub fn get_size_of() {}
   pub fn get_neg() {}
@@ -551,12 +555,19 @@ impl ConstantExpr {
     Instruction::is_cast_static(self.get_opcode())
   }
 
+  // Return true if this is a compare constant expression.
   pub fn is_compare(&self) -> bool {
     self.get_opcode() == OtherOps::ICmp as u32 ||
     self.get_opcode() == OtherOps::FCmp as u32
   }
   
-  pub fn get() {}
+  // Return a binary or shift operator constant expression,
+  // folding if possible.
+  pub fn get(_opcode: u32,
+    _c1: Option<Box<dyn Constant>>,
+    _c2: Option<Box<dyn Constant>>,
+    _flags: u32) {}
+
   pub fn get_compare() {}
   pub fn get_icmp() {}
   pub fn get_fcmp() {}
@@ -568,7 +579,7 @@ impl ConstantExpr {
 
   // Return the opcode at the root of this constant expression.
   pub fn get_opcode(&self) -> u32 {
-    self.sub_class_data
+    0 //self.sub_class_data
   }
 
   pub fn get_predicate() {}

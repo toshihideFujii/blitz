@@ -2,7 +2,7 @@
 
 // This class implements a set which is optimized for holding
 // SmallSize or less elements.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug)]
 pub struct SmallPtrSet<PtrType> {
   dummy: Option<PtrType>
 }

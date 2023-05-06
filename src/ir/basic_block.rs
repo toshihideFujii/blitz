@@ -14,7 +14,7 @@ use super::{
 // sequentially.
 pub struct BasicBlock {
   inst_list: SymbolTableList<Instruction>,
-  parent: Option<Function>
+  parent: Function
 }
 
 impl BasicBlock {
@@ -23,8 +23,8 @@ impl BasicBlock {
   pub fn get_context() {}
 
   // Return the enclosing method, or null if none.
-  pub fn get_parent(&self) -> Option<Function> {
-    self.parent.clone()
+  pub fn get_parent(&self) -> &Function {
+    &self.parent
   }
   
   pub fn get_module() {}

@@ -2,6 +2,8 @@
 
 // This file declares the value class.
 
+use crate::adt::string_ref::StringRef;
+
 use super::{type_::Type, use_::Use, blits_context::BlitzContext};
 
 // Concrete subclass of Value.
@@ -52,12 +54,15 @@ pub trait Value {
   fn get_type(&self) -> &dyn Type;
   
   // All values hold a context through their type.
-  fn get_context(&self) -> BlitzContext;
+  fn get_context(&self) -> &BlitzContext;
 
   fn has_name(&self) -> bool { false }
   fn get_value_name(&self) {}
   fn set_value_name(&self) {}
-  fn get_name(&self) {}
+
+  // Return a constant reference to the value's name.
+  fn get_name(&self) -> StringRef { StringRef::new() }
+
   fn set_name(&self) {}
   fn take_name(&self) {}
   fn replace_all_uses_with(&self) {}
@@ -114,5 +119,18 @@ pub trait Value {
   fn has_same_subclass_optional_data(&self) {}
   fn has_value_handle(&self) {}
   fn is_used_by_metadata(&self) {}
+  fn get_metadata(&self) {}
+  fn get_all_metadata(&self) {}
+  fn has_metadata(&self) {}
+  fn set_metadata(&self) {}
+  fn add_metadata(&self) {}
+  fn erase_metadata(&self) {}
+  fn clear_metadata(&self) {}
+  fn strip_pointer_casts(&self) {}
+  fn can_be_freed(&self) {}
+  fn do_phi_translation(&self) {}
   fn is_transitive_used_by_metadata_only(&self) {}
+
+  fn get_subclass_data_from_value(&self) -> u32 { 0 }
+  fn set_value_subclass_data(&mut self, _val: u32) {}
 }

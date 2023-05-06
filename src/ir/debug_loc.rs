@@ -3,7 +3,7 @@
 // This file defines a number of light weight data structures
 // used to describe and track debug location information.
 
-struct DebugLoc {}
+pub struct DebugLoc {}
 impl DebugLoc {
   pub fn get() {}
   pub fn append_inlined_at() {}

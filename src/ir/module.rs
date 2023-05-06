@@ -43,7 +43,7 @@ struct ModuleFlagEntry {}
 // Each module directly contains a list of globals variables, a list of
 // functions, alist of libraries (or other modules) this module depends
 // on, a symbol table, and various data about the target's characteristics.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug)]
 pub struct Module {
   context: BlitzContext,
   module_id: String,
@@ -211,12 +211,12 @@ impl Module {
   }
 
   // Get the Module's list of functions.
-  pub fn get_function_list(&self) -> SymbolTableList<Function> {
-    self.function_list.clone()
+  pub fn get_function_list(&self) -> &SymbolTableList<Function> {
+    &self.function_list
   }
 
-  pub fn get_sublist_access(&self) -> SymbolTableList<Function> {
-    self.function_list.clone()
+  pub fn get_sublist_access(&self) -> &SymbolTableList<Function> {
+    &self.function_list
   }
 
   // Detach alias from the list but don't delete it.
@@ -271,8 +271,8 @@ impl Module {
   }
 
   // Get the Module's list of ifuncs.
-  pub fn get_i_func_list(&self) -> SymbolTableList<GlobalIFunc> {
-    self.ifunc_list.clone()
+  pub fn get_i_func_list(&self) -> &SymbolTableList<GlobalIFunc> {
+    &self.ifunc_list
   }
 
   // Get the Module's list of named metadata.

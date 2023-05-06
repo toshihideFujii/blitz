@@ -3,6 +3,8 @@
 // This file contains the declaration of the Instruction class,
 // which is the base class for all of the instructions.
 
+use super::{basic_block::BasicBlock, debug_loc::DebugLoc, function::Function};
+
 enum CastOps {
   Trunc = 38,
   ZExt = 39,
@@ -37,13 +39,26 @@ pub enum OtherOps {
   Freeze = 67
 }
 
-#[derive(Debug, PartialEq)]
-pub struct Instruction {}
+//#[derive(Debug, PartialEq)]
+pub struct Instruction {
+  parent: BasicBlock,
+  dbg_loc: DebugLoc
+}
+
 impl Instruction {
   pub fn user_back() {}
-  pub fn get_parent() {}
+
+  pub fn get_parent(&self) -> &BasicBlock {
+    &self.parent
+  }
+
   pub fn get_module() {}
-  pub fn get_function() {}
+
+  // Return the function this instruction belongs to.
+  pub fn get_function(&self) -> &Function {
+    self.parent.get_parent()
+  }
+  
   pub fn remove_from_parent() {}
   pub fn erase_from_parent() {}
   pub fn insert_before() {}

@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
 use crate::{
-  adt::{small_ptr_set::SmallPtrSet,
+  adt::{
+    //small_ptr_set::SmallPtrSet,
     dense_map::DenseMap,
     ap_int::APInt,
     ap_float::APFloat,
@@ -11,7 +12,7 @@ use crate::{
   remarks::remark_streamer::RemarkStreamer
 };
 use super::{
-  module::Module,
+  //module::Module,
   diagnostic_handler::DiagnositicHandler,
   blitz_remark_streamer::BlitzRemarkStreamer,
   constants::{ConstantInt, ConstantFP, ConstantTokenNone},
@@ -26,7 +27,8 @@ use super::{
 pub struct BlitzContextImpl {
   // The set of modules instantiated in this context, and which
   // will be automatically deleted if this context is deleted.
-  owned_modules: SmallPtrSet<Module>,
+  //owned_modules: SmallPtrSet<Module>,
+
   // The main remark streamer used by all the other streamers (e.g.
   // Ir, MIR, frontends, etc.).
   // This should only be used by the specific srreamers, and never
@@ -106,7 +108,7 @@ pub struct BlitzContextImpl {
 impl BlitzContextImpl {
   pub fn new(c: &BlitzContext) -> Self {
     BlitzContextImpl { 
-      owned_modules: SmallPtrSet::new(),
+      //owned_modules: SmallPtrSet::new(),
       main_remark_streamer: None,
       diag_handler: None,
       respect_diagnostic_filters: false,
