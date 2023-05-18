@@ -3,29 +3,82 @@
 // This file defines various helper methods and classes
 // used by BlitzContextImpl for creating and managing attributes.
 
-use super::attributes::AttrKind;
+use crate::adt::string_ref::StringRef;
+use super::{attributes::AttrKind, type_::Type};
 
-enum AttrEntryKind {
+#[derive(Debug, PartialEq)]
+pub enum AttrEntryKind {
   EnumAttrEntry,
   IntAttrEntry,
   StringAttrEntry,
   TypeAttrEntry
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AttributeImpl {}
+// This class represents a single, uniqued attribute.
+// That attribute could be a single enum, a tuple, or a string.
+#[derive(Debug)]
+pub struct AttributeImpl {
+  kind_id: AttrEntryKind,
+  kind: AttrKind,
+  val: u64,
+  v_type: Option<Box<dyn Type>>
+}
+
 impl AttributeImpl {
-  pub fn new() {}
-  pub fn is_enum_attribute() {}
-  pub fn is_int_attribute() {}
-  pub fn is_string_attribute() {}
-  pub fn is_type_attribute() {}
-  pub fn has_attribute() {}
-  pub fn get_kind_as_enum() {}
-  pub fn get_value_as_int() {}
-  pub fn get_value_as_bool() {}
-  pub fn get_kind_as_string() {}
-  pub fn get_value_as_type() {}
+  pub fn new(kind_id: AttrEntryKind, kind: AttrKind, val: u64, v_type: Box<dyn Type>) -> Self {
+    AttributeImpl { kind_id: kind_id, kind: kind, val: val, v_type: Some(v_type) }
+  }
+
+  pub fn is_enum_attribute(&self) -> bool {
+    self.kind_id == AttrEntryKind::EnumAttrEntry
+  }
+
+  pub fn is_int_attribute(&self) -> bool {
+    self.kind_id == AttrEntryKind::IntAttrEntry
+  }
+
+  pub fn is_string_attribute(&self) -> bool {
+    self.kind_id == AttrEntryKind::StringAttrEntry
+  }
+
+  pub fn is_type_attribute(&self) -> bool {
+    self.kind_id == AttrEntryKind::TypeAttrEntry
+  }
+
+  pub fn has_attribute(&self, kind: AttrKind) -> bool {
+    if self.is_string_attribute() { return false; }
+    *self.get_kind_as_enum() == kind
+  }
+
+  pub fn has_attribute_string(&self, kind: StringRef) -> bool {
+    if !self.is_string_attribute() { return false; }
+    self.get_kind_as_string() == kind
+  }
+
+  pub fn get_kind_as_enum(&self) -> &AttrKind {
+    &self.kind
+  }
+
+  pub fn get_kind_as_string(&self) -> StringRef {
+    StringRef::new()
+  }
+
+  pub fn get_value_as_int(&self) -> u64 {
+    self.val
+  }
+
+  pub fn get_value_as_bool(&self) -> bool {
+    self.get_kind_as_string() == StringRef::new_from_string("true")
+  }
+
+  pub fn get_value_as_string(&self) -> StringRef {
+    StringRef::new()
+  }
+
+  pub fn get_value_as_type(&self) -> &Option<Box<dyn Type>> {
+    &self.v_type
+  }
+
   pub fn profile() {}
 }
 

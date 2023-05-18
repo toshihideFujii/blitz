@@ -1,3 +1,4 @@
+pub mod alignment;
 pub mod code_gen_coverage;
 pub mod code_gen;
 pub mod compression;
@@ -11,6 +12,7 @@ pub mod math_extras;
 pub mod mem_alloc;
 pub mod memory;
 pub mod memory_buffer;
+pub mod mod_ref;
 pub mod process;
 pub mod sha1;
 pub mod sha256;

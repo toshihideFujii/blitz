@@ -16,11 +16,15 @@ use super::{
   diagnostic_handler::DiagnositicHandler,
   blitz_remark_streamer::BlitzRemarkStreamer,
   constants::{ConstantInt, ConstantFP, ConstantTokenNone},
-  attribute_impl::{AttributeImpl, AttributeListImpl, AttributeSetNode},
+  attribute_impl::{/*AttributeImpl,*/ AttributeListImpl, AttributeSetNode},
   metadata::{MDString, /*ValueAsMetadata,*/ Metadata, MetadataAsValue, MDNode},
   /*value::Value,*/
   debug_info_metadata::DICompositeType,
-  type_::{/*Type,*/ IntegerType}, global_object::GlobalObject, global_value::GlobalValue, blits_context::BlitzContext
+  type_::{/*Type,*/ IntegerType},
+  global_object::GlobalObject,
+  global_value::GlobalValue,
+  blits_context::BlitzContext,
+  //function::Function
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -50,7 +54,7 @@ pub struct BlitzContextImpl {
   pub int_constants: DenseMap<APInt, ConstantInt>,
   fp_constants: DenseMap<APFloat, ConstantFP>,
 
-  attrs_set: FoldingSet<AttributeImpl>,
+  //attrs_set: FoldingSet<AttributeImpl>,
   attrs_lists: FoldingSet<AttributeListImpl>,
   attrs_set_nodes: FoldingSet<AttributeSetNode>,
 
@@ -102,7 +106,9 @@ pub struct BlitzContextImpl {
 
   global_object_sections: DenseMap<GlobalObject, StringRef>,
   global_value_partitions: DenseMap<GlobalValue, StringRef>,
-  bundle_tag_cache: StringMap<u32>
+  bundle_tag_cache: StringMap<u32>,
+
+  //gc_names: DenseMap<Function, String>
 }
 
 impl BlitzContextImpl {
@@ -119,7 +125,7 @@ impl BlitzContextImpl {
       blitz_rs: None,
       int_constants: DenseMap::new(),
       fp_constants: DenseMap::new(),
-      attrs_set: FoldingSet::new(),
+      //attrs_set: FoldingSet::new(),
       attrs_lists: FoldingSet::new(),
       attrs_set_nodes: FoldingSet::new(),
       md_string_cache: StringMap::new(),

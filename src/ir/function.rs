@@ -7,7 +7,7 @@ use crate::adt::string_ref::StringRef;
 use super::{
   type_::{FunctionType, Type},
   blits_context::BlitzContext,
-  value::{ValueType, Value}, calling_conv::*
+  value::{ValueType, Value}, calling_conv::*, attributes::AttributeList
 };
 
 #[derive(PartialEq, Clone)]
@@ -47,7 +47,8 @@ pub struct Function {
   v_id: ValueType,
   sub_class_data: u32,
   int_id: u32,
-  has_blitz_reserved_name: bool
+  has_blitz_reserved_name: bool,
+  attribute_sets: AttributeList
 }
 
 impl Function {
@@ -153,12 +154,26 @@ impl Function {
 
   pub fn get_import_guids() {}
   pub fn set_section_prefix() {}
-  pub fn has_gc() {}
+
+  // The name of the garbage collection algorithm to use during code generation.
+  pub fn has_gc(&self) -> bool {
+    self.get_subclass_data_from_value() & (1 << 14) != 0
+  }
+
   pub fn get_gc() {}
-  pub fn set_gc() {}
+  pub fn set_gc(&self) {}
   pub fn clear_gc() {}
-  pub fn get_attributes() {}
-  pub fn set_attributes() {}
+
+  // Return the attribute list for this function.
+  pub fn get_attributes(&self) -> &AttributeList {
+    &self.attribute_sets
+  }
+
+  // Set the attribute list for this function.
+  pub fn set_attributes(&mut self, attrs: AttributeList) {
+    self.attribute_sets = attrs;
+  }
+  
   pub fn add_attribute_at_index() {}
   pub fn add_fn_attr() {}
   pub fn add_fn_attrs() {}

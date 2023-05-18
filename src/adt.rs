@@ -2,6 +2,7 @@ pub mod address_ranges;
 pub mod ap_float;
 pub mod ap_int;
 pub mod array_ref;
+pub mod bit;
 pub mod bitfields;
 pub mod delta_algorithm;
 pub mod dense_map_info;
