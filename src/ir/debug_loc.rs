@@ -3,8 +3,17 @@
 // This file defines a number of light weight data structures
 // used to describe and track debug location information.
 
-pub struct DebugLoc {}
+use super::{tracking_md_ref::TypedTrackingMDRef, metadata::MDNode};
+
+// A debug info location.
+// This class is a wrapper around a tracking reference to an
+// DILocation pointer.
+pub struct DebugLoc {
+  loc: TypedTrackingMDRef<MDNode>
+}
+
 impl DebugLoc {
+  pub fn new() {}
   pub fn get() {}
   pub fn append_inlined_at() {}
   pub fn get_line() {}

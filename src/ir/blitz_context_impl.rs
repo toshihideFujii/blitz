@@ -17,7 +17,7 @@ use super::{
   blitz_remark_streamer::BlitzRemarkStreamer,
   constants::{ConstantInt, ConstantFP, ConstantTokenNone},
   attribute_impl::{/*AttributeImpl,*/ AttributeListImpl, AttributeSetNode},
-  metadata::{MDString, /*ValueAsMetadata,*/ Metadata, MetadataAsValue, MDNode},
+  metadata::{MDString, /*ValueAsMetadata, Metadata, MetadataAsValue, MDNode*/},
   /*value::Value,*/
   debug_info_metadata::DICompositeType,
   type_::{/*Type,*/ IntegerType},
@@ -60,10 +60,10 @@ pub struct BlitzContextImpl {
 
   md_string_cache: StringMap<MDString>,
   //values_as_metadata: DenseMap<Value, ValueAsMetadata>,
-  metadata_as_values: DenseMap<Metadata, MetadataAsValue>,
+  //metadata_as_values: DenseMap<Box<dyn Metadata>, MetadataAsValue>,
 
   di_type_map: DenseMap<MDString, DICompositeType>,
-  distinct_md_nodes: Vec<MDNode>,
+  //distinct_md_nodes: Vec<MDNode>,
 
   //caz_constants: DenseMap<&dyn Type, ConstantAggregateZero>,
 
@@ -129,9 +129,9 @@ impl BlitzContextImpl {
       attrs_lists: FoldingSet::new(),
       attrs_set_nodes: FoldingSet::new(),
       md_string_cache: StringMap::new(),
-      metadata_as_values: DenseMap::new(),
+      //metadata_as_values: DenseMap::new(),
       di_type_map: DenseMap::new(),
-      distinct_md_nodes: Vec::new(),
+      //distinct_md_nodes: Vec::new(),
       the_true_val: None,
       the_false_val: None,
       int_1_type: IntegerType::new(c.clone(), 1),

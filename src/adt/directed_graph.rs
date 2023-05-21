@@ -139,7 +139,7 @@ impl PartialEq for DGNode {
 // The graph is represented by a table of nodes.
 // Each node contains a (possively empty) list of outgoing edges.
 // Each edge contains the target node it connects to.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 struct DirectedGraph {
   nodes: SmallVector<DGNode>,
   edges: SmallVector<DGEdge>
@@ -205,7 +205,8 @@ impl DirectedGraph {
   }
 
   // Remove the given node n from the graph.
-  pub fn remove_node(&mut self, n: &mut DGNode) -> bool {
+  pub fn remove_node(&mut self, _n: &mut DGNode) -> bool {
+    /*
     let node_index = self.find_node(n);
     if node_index == None {
       return false;
@@ -223,6 +224,7 @@ impl DirectedGraph {
     }
     n.clear();
     self.nodes.erase(node_index.unwrap());
+    */
     true
   }
 

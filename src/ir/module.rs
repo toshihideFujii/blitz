@@ -266,8 +266,8 @@ impl Module {
   pub fn erase_named_md_node() {}
 
   // Insert md_node at the end of the md_node list and take ownership.
-  pub fn insert_named_md_node(&mut self, md_node: &NamedMDNode) {
-    self.named_md_list.push_back(md_node.clone());
+  pub fn insert_named_md_node(&mut self, _md_node: &NamedMDNode) {
+    //self.named_md_list.push_back(md_node.clone());
   }
 
   // Get the Module's list of ifuncs.
@@ -276,8 +276,8 @@ impl Module {
   }
 
   // Get the Module's list of named metadata.
-  pub fn get_named_md_list(&self) -> IPList<NamedMDNode> {
-    self.named_md_list.clone()
+  pub fn get_named_md_list(&self) /*-> IPList<NamedMDNode>*/ {
+    //self.named_md_list.clone()
   }
 
   // Get the Mudule7s symbol table of global variable and function identifiers.

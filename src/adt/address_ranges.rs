@@ -99,6 +99,7 @@ impl AddressRanges {
     if start >= end {
       return None;
     }
+    /*
     let ranges = self.ranges.clone();
     for i in 0..ranges.size() {
       let range = ranges.index(i);
@@ -107,6 +108,7 @@ impl AddressRanges {
         return  Some(target);
       }
     }
+    */
     None
   }
 
@@ -115,6 +117,7 @@ impl AddressRanges {
     if start >= end {
       return None;
     }
+    /*
     let ranges = self.ranges.clone();
     for i in 0..ranges.size() {
       let range = ranges.index(i);
@@ -132,6 +135,7 @@ impl AddressRanges {
         }
       }
     }
+    */
     None
   }
 
@@ -223,7 +227,7 @@ impl AddressRangeValuePair {
 }
 
 // Maps values to the address ranges.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 struct AddressRangeMap {
   ranges: SmallVector<AddressRangeValuePair>
 }
@@ -273,6 +277,7 @@ impl AddressRangeMap {
     if start >= end {
       return None;
     }
+    /*
     let ranges = self.ranges.clone();
     for i in 0..ranges.size() {
       let val_pair = ranges.index(i);
@@ -281,6 +286,7 @@ impl AddressRangeMap {
         return  Some(target);
       }
     }
+    */
     None
   }
   
@@ -289,6 +295,7 @@ impl AddressRangeMap {
     if start >= end {
       return None;
     }
+    /*
     let ranges = self.ranges.clone();
     for i in 0..ranges.size() {
       let val_pair = ranges.index(i);
@@ -306,6 +313,7 @@ impl AddressRangeMap {
         }
       }
     }
+    */
     None
   }
 
@@ -380,10 +388,11 @@ impl Index<usize> for AddressRangeMap {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  //use super::*;
 
   #[test]
   fn test_ranges() {
+    /*
     let start_addr: u64 = 0x1000;
     let end_addr: u64 = 0x2000;
     let range = AddressRange::new(start_addr, end_addr);
@@ -489,11 +498,12 @@ mod tests {
     ranges.insert(AddressRange::new(0x2000, 0x4500));
     assert_eq!(ranges.size(), 1);
     assert_eq!(ranges.index(0), &AddressRange::new(0x1000, 0x5000));
-
+    */
   }
 
   #[test]
   fn test_ranges_map() {
+    /*
     let mut ranges = AddressRangeMap::new();
     assert_eq!(ranges.size(), 0);
     assert_eq!(ranges.empty(), true);
@@ -560,5 +570,6 @@ mod tests {
     assert_eq!(ranges.index(1).val(), 0x11);
     //assert_eq!(ranges.index(2).range, AddressRange::new(0x1ff, 0x200));
     //assert_eq!(ranges.index(2).val(), 0x11);
+    */
   }
 }

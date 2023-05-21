@@ -167,10 +167,62 @@ impl DIStringType {
   pub fn get_raw_string_location_exp() {}
 }
 
+// Derived types.
+// This includes qualified types, pointers, references, friends, typedefs,
+// and class members.
 struct DIDerivedType {}
+impl DIDerivedType {
+  pub fn new() {}
+  pub fn get_base_type() {}
+  pub fn get_raw_base_type() {}
+  pub fn get_dwarf_address_space() {}
+  pub fn get_extra_data() {}
+  pub fn get_raw_extra_data() {}
+  pub fn get_annotations() {}
+  pub fn get_raw_annotations() {}
+  pub fn get_class_type() {}
+  pub fn get_storage_offset_in_bits() {}
+  pub fn get_constant() {}
+  pub fn get_discriminat_value() {}
+  pub fn class_of() {}
+}
 
+// Composite types.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DICompositeType {}
+impl DICompositeType {
+  pub fn new() {}
+  pub fn get_odr_type() {}
+  pub fn build_odr_type() {}
+  pub fn get_base_type() {}
+  pub fn get_elements() {}
+  pub fn get_vtable_holder() {}
+  pub fn get_template_params() {}
+  pub fn get_identifier() {}
+  pub fn get_runtime_lang() {}
+  pub fn get_raw_base_type() {}
+  pub fn get_raw_elements() {}
+  pub fn get_raw_vtable_holder() {}
+  pub fn get_raw_template_params() {}
+  pub fn get_raw_identifier() {}
+  pub fn get_raw_discriminator() {}
+  pub fn get_discriminator() {}
+  pub fn get_raw_data_location() {}
+  pub fn get_data_location() {}
+  pub fn get_data_location_exp() {}
+  pub fn get_raw_associated() {}
+  pub fn get_associated_exp() {}
+  pub fn get_raw_allocated() {}
+  pub fn get_allocated_exp() {}
+  pub fn get_raw_rank() {}
+  pub fn get_rank_exp() {}
+  pub fn get_raw_annotations() {}
+  pub fn get_annotations() {}
+  pub fn replace_elements() {}
+  pub fn replace_vtable_holder() {}
+  pub fn replace_template_params() {}
+  pub fn class_of() {}
+}
 
 struct DISubroutineType {}
 
