@@ -4,7 +4,7 @@
 
 use crate::adt::string_ref::StringRef;
 
-use super::{type_::Type, use_::Use, blits_context::BlitzContext};
+use super::{type_::Type, use_::Use, blits_context::BlitzContext, metadata::MDNode};
 
 // Concrete subclass of Value.
 // An enumeration for keeping track of the concrete subclass of Value
@@ -32,7 +32,8 @@ pub enum ValueType {
   ConstantFPVal,
   ConstantTargetNoneVal,
   ConstantPointerNullVal,
-  ConstantTokenNoneVal
+  ConstantTokenNoneVal,
+  InstructionVal
 }
 
 // Blitz value representation
@@ -119,10 +120,14 @@ pub trait Value {
   fn has_same_subclass_optional_data(&self) {}
   fn has_value_handle(&self) {}
   fn is_used_by_metadata(&self) {}
-  fn get_metadata(&self) {}
+  fn get_metadata_by_id(&self, _kind_id: u32) -> Option<MDNode> { None }
   fn get_all_metadata(&self) {}
-  fn has_metadata(&self) {}
-  fn set_metadata(&self) {}
+
+  // Return true if this value has any metadata attached to it.
+  fn has_metadata(&self) -> bool { false }
+
+  // Set a particular kind of metadata attachment.
+  fn set_metadata(&mut self, _kind_id: u32, _node: Option<MDNode>) {}
   fn add_metadata(&self) {}
   fn erase_metadata(&self) {}
   fn clear_metadata(&self) {}

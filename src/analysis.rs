@@ -1,3 +1,23 @@
-
+pub mod call_graph;
+pub mod call_printer;
 pub mod cfg;
+pub mod cfg_printer;
 pub mod code_metrics;
+pub mod cost_model;
+pub mod cycle_analysis;
+pub mod ddg;
+pub mod ddg_printer;
+pub mod delinearization;
+pub mod dependence_analysis;
+pub mod dependence_graph_builder;
+pub mod dominance_frontier;
+pub mod dom_printer;
+pub mod dom_tree_updater;
+pub mod function_properties_analysis;
+pub mod globals_mod_ref;
+pub mod guard_utils;
+pub mod indirect_call_promotion_analysis;
+pub mod indirect_call_visitor;
+pub mod inline_advisor;
+pub mod trace;
+pub mod type_based_alias_analysis;

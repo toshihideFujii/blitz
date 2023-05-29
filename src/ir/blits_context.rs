@@ -3,6 +3,8 @@
 // This file declares BlitzContext, a container of global state in
 // Blitz, such as the global type and constant uniquing tables.
 
+use crate::adt::string_ref::StringRef;
+
 use super::blitz_context_impl::BlitzContextImpl;
 
 enum SyncScope {
@@ -13,46 +15,46 @@ enum SyncScope {
 // Pinned metadata names, which always have the same value.
 // This is a compile-time performance optimization, not a crrectness
 // optimization.
-enum MDKind {
-  Dbg,
-  Tbaa,
-  Prof,
-  FpMath,
-  Range,
-  TbaaStruct,
-  InvariantLoad,
-  AliasScope,
-  NoAlias,
-  NonTemporal,
-  MemParallelLoopAccess,
-  NonNull,
-  Dererenceable,
-  DererenceableOrNull,
-  MakeInmplicit,
-  Unpredictable,
-  InvariantGroup,
-  Align,
-  Loop,
-  Type,
-  SectionPrefix,
-  AbsoluteSymbol,
-  Associated,
-  Callees,
-  IrrLoop,
-  AccessGroup,
-  Callback,
-  PreserveAccessIndex,
-  VcallVisibility,
-  Noundef,
-  Annotation,
-  Nosanitize,
-  FuncSanitize,
-  Exclude,
-  Memprof,
-  Callsite,
-  KcfiType,
-  Pcsections,
-  DIAssingId
+pub enum MDKind {
+  MdDbg = 0,
+  MdTbaa = 1,
+  MdProf = 2,
+  MdFpMath = 3,
+  MdRange = 4,
+  MdTbaaStruct = 5,
+  MdInvariantLoad = 6,
+  MdAliasScope = 7,
+  MdNoAlias = 8,
+  MdNonTemporal = 9,
+  MdMemParallelLoopAccess = 10,
+  MdNonNull = 11,
+  MdDererenceable = 12,
+  MdDererenceableOrNull = 13,
+  MdMakeInmplicit = 14,
+  MdUnpredictable = 15,
+  MdInvariantGroup = 16,
+  MdAlign = 17,
+  MdLoop = 18,
+  MdType = 19,
+  MdSectionPrefix = 20,
+  MdAbsoluteSymbol = 21,
+  MdAssociated = 22,
+  MdCallees = 23,
+  MdIrrLoop = 24,
+  MdAccessGroup = 25,
+  MdCallback = 26,
+  MdPreserveAccessIndex = 27,
+  MdVcallVisibility = 28,
+  MdNoundef = 29,
+  MdAnnotation = 30,
+  Nosanitize = 31,
+  MdFuncSanitize = 32,
+  MdExclude = 33,
+  MdMemprof = 34,
+  MdCallsite = 35,
+  MdKcfiType = 36,
+  MdPcsections = 37,
+  MdDIAssingId = 38
 }
 
 enum OperandBundle {
@@ -83,7 +85,12 @@ impl BlitzContext {
     instance.p_impl = Some(Box::new(BlitzContextImpl::new(&instance)));
     instance
   }
-  pub fn get_md_kind_id() {}
+
+  // Return a unique non-zero id for the specified metadata kind.
+  pub fn get_md_kind_id(&self, _name: StringRef) -> u32 {
+    0
+  }
+
   pub fn get_md_kind_names() {}
   pub fn get_operand_bundle_tags() {}
   pub fn get_or_insert_bundle_tag() {}

@@ -73,7 +73,30 @@ struct LocalAsMetadata {}
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MDString {}
 
-struct AAMDNodes {}
+// A collection of metadata nodes that might be associated with a 
+// memory access used by the alias-analysis infrastructure.
+pub struct AAMDNodes {
+  // The tag for type-based alias analysis.
+  tbaa: Option<MDNode>,
+  // The tag for type-based alias analysis (tbaa struct).
+  tbaa_struct: Option<MDNode>,
+  // The tag for alias scope specification (used with noalias).
+  scope: Option<MDNode>,
+  // The tag specifying the noalias scope.
+  no_alias: Option<MDNode>
+}
+
+impl AAMDNodes {
+  pub fn new() {}
+  pub fn shift_tbaa() {}
+  pub fn shift_tbaa_struct() {}
+  pub fn extend_to_tbaa() {}
+  pub fn intersect() {}
+  pub fn shift() {}
+  pub fn extend_to() {}
+  pub fn merge() {}
+  pub fn concat() {}
+}
 
 // Tracking metadata reference owned by Metadata.
 pub struct MDOperand {

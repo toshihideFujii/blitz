@@ -56,13 +56,15 @@ impl TrackingMDRef {
 }
 
 // Typed tracking ref.
-pub struct TypedTrackingMDRef<T> {
-  dummy: Option<T>,
+pub struct TypedTrackingMDRef {
   md_ref: TrackingMDRef
 }
 
-impl<T> TypedTrackingMDRef<T> {
-  pub fn new() {}
+impl TypedTrackingMDRef {
+  pub fn new(md: Box<dyn Metadata>) -> Self {
+    TypedTrackingMDRef { md_ref: TrackingMDRef::new(Some(md)) }
+  }
+  
   pub fn get() {}
   pub fn reset() {}
   pub fn has_trivial_destructor() {}
