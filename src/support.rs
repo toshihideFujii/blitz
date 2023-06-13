@@ -1,4 +1,5 @@
 pub mod alignment;
+pub mod data_extractor;
 pub mod code_gen_coverage;
 pub mod code_gen;
 pub mod compression;
@@ -17,5 +18,6 @@ pub mod process;
 pub mod sha1;
 pub mod sha256;
 pub mod signals;
+pub mod swap_byte_order;
 pub mod timer;
 pub mod type_size;

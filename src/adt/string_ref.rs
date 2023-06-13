@@ -3,8 +3,6 @@
 
 use std::cmp;
 
-const NPOS: usize = 99999999999; // TODO
-
 // Represent a constant reference to a string.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StringRef {
@@ -13,6 +11,8 @@ pub struct StringRef {
 }
 
 impl StringRef {
+  pub const NPOS: usize = usize::MAX;
+
   // Construct an empty string ref.
   pub fn new() -> Self {
     StringRef { data: String::new(), length: 0 }
@@ -158,10 +158,10 @@ impl StringRef {
       if pos != None {
         return pos.unwrap() + abandoned.len();
       } else {
-        return NPOS;
+        return StringRef::NPOS;
       }
     }
-    NPOS
+    StringRef::NPOS
   }
 
   // Search for the first string str in the string.
@@ -175,10 +175,10 @@ impl StringRef {
       if result != None {
         return result.unwrap().0 + abandoned.len();
       } else {
-        return NPOS;
+        return StringRef::NPOS;
       }
     }
-    NPOS
+    StringRef::NPOS
   }
 
   // Search for the first character c in the string, ignoring case.
@@ -207,7 +207,7 @@ impl StringRef {
       }
       s = s.drop_front(1);
     }
-    NPOS
+    StringRef::NPOS
   }
 
   // Search for the first character not satisfying the predicate f.
@@ -227,7 +227,7 @@ impl StringRef {
     if pos != None {
       return pos.unwrap() + abandoned.len();
     } else {
-      return NPOS;
+      return StringRef::NPOS;
     }
   }
 
@@ -238,7 +238,7 @@ impl StringRef {
     if result != None {
       return result.unwrap().0;
     } else {
-      return NPOS;
+      return StringRef::NPOS;
     }
   }
 
@@ -286,7 +286,7 @@ impl StringRef {
         }
       }
     }
-    NPOS
+    StringRef::NPOS
   }
 
   // Find the first character in the string that is not in the string str.
@@ -309,7 +309,7 @@ impl StringRef {
         }
       }
     }
-    NPOS
+    StringRef::NPOS
   }
 
   // Find the last character in the string that is c.
@@ -332,7 +332,7 @@ impl StringRef {
         return val.unwrap().0 + abandoned.len();
       }
     }
-    NPOS
+    StringRef::NPOS
   }
 
   // Find the last character in the string that is not in str.
@@ -353,7 +353,7 @@ impl StringRef {
         return val.unwrap().0 + abandoned.len();
       }
     }
-    NPOS
+    StringRef::NPOS
   }
 
   // Return true if the given string is a substring of this,
@@ -461,7 +461,7 @@ impl StringRef {
     if self.size() < n {
       panic!("Dropping more elements than exist.");
     }
-    self.substr(n, NPOS)
+    self.substr(n, StringRef::NPOS)
   }
 
   // Return a StringRef equal to this but with the last n elements
@@ -476,13 +476,13 @@ impl StringRef {
   // Return a StringRef equal to this, but with all characters satisfying
   // the given predicate dropped from the beginning of the string.
   pub fn drop_while<F: Fn(char)->bool>(&self, f: F) -> Self {
-    self.substr(self.find_if_not(f, 0), NPOS)
+    self.substr(self.find_if_not(f, 0), StringRef::NPOS)
   }
 
   // Return a StringRef equal to this, but with all characters not
   // satisfying the given predicate dropped from the beginning of the string.
   pub fn drop_until<F: Fn(char)->bool>(&self, f: F) -> Self {
-    self.substr(self.find_if(f, 0), NPOS)
+    self.substr(self.find_if(f, 0), StringRef::NPOS)
   }
 
   // Returns true if this StringRef has the given prefix and removes
@@ -600,7 +600,7 @@ impl StringRef {
   // Detect the line ending style of the string.
   pub fn detect_eol(&self) -> Self {
     let pos = self.find('\r', 0);
-    if pos == NPOS {
+    if pos == StringRef::NPOS {
       return StringRef::new_from_string("\n");
     }
     if pos+1 < self.length && self.data().chars().nth(pos+1).unwrap() == '\n' {
@@ -692,8 +692,8 @@ use super::*;
   #[test]
   fn test_substr() {
     let s = StringRef::new_from_string("hello");
-    assert_eq!(s.substr(3, NPOS).data(), "lo");
-    assert_eq!(s.substr(100, NPOS).data(), "");
+    assert_eq!(s.substr(3, StringRef::NPOS).data(), "lo");
+    assert_eq!(s.substr(100, StringRef::NPOS).data(), "");
     assert_eq!(s.substr(0, 100).data(), "hello");
     assert_eq!(s.substr(4, 10).data(), "o");
   }
@@ -913,7 +913,7 @@ use super::*;
       CharExpectation::new(s.clone(), 'l', 3, 3, 3),
       CharExpectation::new(s.clone(), 'o', 0, 4, 4),
       CharExpectation::new(s.clone(), 'L', 0, 7, 2),
-      CharExpectation::new(s.clone(), 'z', 0, NPOS, NPOS)
+      CharExpectation::new(s.clone(), 'z', 0, StringRef::NPOS, StringRef::NPOS)
     ];
     let mut iter = char_expectations.iter_mut();
     loop {
@@ -941,12 +941,12 @@ use super::*;
       }
     }
     let mut str_expectations: Vec<StrExpectation> = vec![
-      StrExpectation::new(s.clone(), StringRef::new_from_string("helloworld"), 0, NPOS, NPOS),
+      StrExpectation::new(s.clone(), StringRef::new_from_string("helloworld"), 0, StringRef::NPOS, StringRef::NPOS),
       StrExpectation::new(s.clone(), StringRef::new_from_string("hello"), 0, 0, 0),
       StrExpectation::new(s.clone(), StringRef::new_from_string("ello"), 0, 1, 1),
-      StrExpectation::new(s.clone(), StringRef::new_from_string("zz"), 0, NPOS, NPOS),
+      StrExpectation::new(s.clone(), StringRef::new_from_string("zz"), 0, StringRef::NPOS, StringRef::NPOS),
       StrExpectation::new(s.clone(), StringRef::new_from_string("ll"), 2, 2, 2),
-      StrExpectation::new(s.clone(), StringRef::new_from_string("ll"), 3, NPOS, 7),
+      StrExpectation::new(s.clone(), StringRef::new_from_string("ll"), 3, StringRef::NPOS, 7),
       StrExpectation::new(s.clone(), StringRef::new_from_string("LL"), 2, 7, 2),
       StrExpectation::new(s.clone(), StringRef::new_from_string("LL"), 3, 7, 7),
       StrExpectation::new(s.clone(), StringRef::new_from_string(""), 0, 0, 0),
@@ -970,33 +970,33 @@ use super::*;
       assert_eq!(val.insensitive_pos_, val.s_.find_str_insensitive(str_upper_ref, val.from_));
     }
 
-    assert_eq!(s.rfind('l', NPOS), 3);
-    assert_eq!(s.rfind('z', NPOS), NPOS);
-    assert_eq!(s.rfind_str(StringRef::new_from_string("helloworld")), NPOS);
+    assert_eq!(s.rfind('l', StringRef::NPOS), 3);
+    assert_eq!(s.rfind('z', StringRef::NPOS), StringRef::NPOS);
+    assert_eq!(s.rfind_str(StringRef::new_from_string("helloworld")), StringRef::NPOS);
     assert_eq!(s.rfind_str(StringRef::new_from_string("hello")), 0);
     assert_eq!(s.rfind_str(StringRef::new_from_string("ello")), 1);
-    assert_eq!(s.rfind_str(StringRef::new_from_string("zz")), NPOS);
+    assert_eq!(s.rfind_str(StringRef::new_from_string("zz")), StringRef::NPOS);
 
-    assert_eq!(s.rfind_insensitive('l', NPOS), 8);
-    assert_eq!(s.rfind_insensitive('L', NPOS), 8);
-    assert_eq!(s.rfind_insensitive('z', NPOS), NPOS);
-    assert_eq!(s.rfind_str_insensitive(StringRef::new_from_string("HELLOWORLD")), NPOS);
+    assert_eq!(s.rfind_insensitive('l', StringRef::NPOS), 8);
+    assert_eq!(s.rfind_insensitive('L', StringRef::NPOS), 8);
+    assert_eq!(s.rfind_insensitive('z', StringRef::NPOS), StringRef::NPOS);
+    assert_eq!(s.rfind_str_insensitive(StringRef::new_from_string("HELLOWORLD")), StringRef::NPOS);
     assert_eq!(s.rfind_str(StringRef::new_from_string("HELLO")), 5);
     assert_eq!(s.rfind_str(StringRef::new_from_string("ELLO")), 6);
-    assert_eq!(s.rfind_str(StringRef::new_from_string("ZZ")), NPOS);
+    assert_eq!(s.rfind_str(StringRef::new_from_string("ZZ")), StringRef::NPOS);
 
     assert_eq!(s.find_first_of('l', 0), 2);
     assert_eq!(s.find_first_of_str(StringRef::new_from_string("el"), 0), 1);
-    assert_eq!(s.find_first_of_str(StringRef::new_from_string("xyz"), 0), NPOS);
+    assert_eq!(s.find_first_of_str(StringRef::new_from_string("xyz"), 0), StringRef::NPOS);
 
     let s1 = StringRef::new_from_string("hello");
     assert_eq!(s1.find_first_not_of('h', 0), 1);
     assert_eq!(s1.find_first_not_of_str(StringRef::new_from_string("hel"), 0), 4);
-    assert_eq!(s1.find_first_not_of_str(StringRef::new_from_string("hello"), 0), NPOS);
+    assert_eq!(s1.find_first_not_of_str(StringRef::new_from_string("hello"), 0), StringRef::NPOS);
 
-    assert_eq!(s1.find_last_not_of('o', NPOS), 3);
-    assert_eq!(s1.find_last_not_of_str(StringRef::new_from_string("lo"), NPOS), 1);
-    assert_eq!(s1.find_last_not_of_str(StringRef::new_from_string("helo"), NPOS), NPOS);
+    assert_eq!(s1.find_last_not_of('o', StringRef::NPOS), 3);
+    assert_eq!(s1.find_last_not_of_str(StringRef::new_from_string("lo"), StringRef::NPOS), 1);
+    assert_eq!(s1.find_last_not_of_str(StringRef::new_from_string("helo"), StringRef::NPOS), StringRef::NPOS);
   }
 
   #[test]
