@@ -1,5 +1,6 @@
 pub mod adt;
 pub mod analysis;
+pub mod code_gen;
 pub mod execution_engine;
 pub mod ir;
 pub mod ir_printer;
