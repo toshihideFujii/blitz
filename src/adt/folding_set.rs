@@ -6,7 +6,7 @@ use super::small_vector::SmallVector;
 // This class is used to gather all the unique data bits of a node.
 // When all the bits are gathered this class is used to produce a 
 // hash value for the node.
-struct FoldingSetNodeID {
+pub struct FoldingSetNodeID {
   bits: SmallVector<u32>
 }
 
@@ -24,30 +24,30 @@ impl FoldingSetNodeID {
   }
   */
 
-  pub fn add_integer_signed_32(&mut self, i: i32) {
+  pub fn add_integer_i32(&mut self, i: i32) {
     self.bits.push_back(i as u32);
   }
 
-  pub fn add_integer_unsigned_32(&mut self, i: u32) {
+  pub fn add_integer_u32(&mut self, i: u32) {
     self.bits.push_back(i);
   }
 
   //pub fn add_integer_long() {}
   //pub fn add_integer_unsigned_long() {}
 
-  pub fn add_integer_signed_64(&mut self, i: i64) {
+  pub fn add_integer_i64(&mut self, i: i64) {
     self.bits.push_back(i as u32);
   }
 
-  pub fn add_integer_unsigned_64(&mut self, i: u64) {
+  pub fn add_integer_u64(&mut self, i: u64) {
     self.bits.push_back(i as u32);
   }
 
   pub fn add_boolean(&mut self, b: bool) {
     if b {
-      self.add_integer_unsigned_32(1);
+      self.add_integer_u32(1);
     } else {
-      self.add_integer_unsigned_32(0);
+      self.add_integer_u32(0);
     }
   }
 
@@ -145,7 +145,7 @@ impl FoldingSetVector {
 }
 
 fn profile(x: u32, mut id: FoldingSetNodeID) {
-  id.add_integer_unsigned_32(x)
+  id.add_integer_u32(x)
 }
 
 #[cfg(test)]
@@ -162,8 +162,8 @@ mod tests {
       TrivialPair { key: k, value: v }
     }
     pub fn profile(&self, id: &mut FoldingSetNodeID) {
-      id.add_integer_unsigned_32(self.key);
-      id.add_integer_unsigned_32(self.value);
+      id.add_integer_u32(self.key);
+      id.add_integer_u32(self.value);
     }
   }
 

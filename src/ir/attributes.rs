@@ -4,7 +4,7 @@
 // attributes associated with functions and their calls.
 
 use crate::{
-  adt::string_ref::StringRef,
+  adt::{string_ref::StringRef, folding_set::FoldingSetNodeID},
   support::alignment::MaybeAlign
 };
 
@@ -24,7 +24,7 @@ enum AllocFnKind {
   Aligned
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum AttrKind {
   None,
   Alignment,
@@ -36,6 +36,12 @@ pub enum AttrKind {
   TombstoneKey
 }
 
+pub enum AttributeProperty {
+  FnAttr = (1 << 0),
+  ParamAttr = (1 << 1),
+  RetAttr = (1 << 2)
+}
+
 // Functions, function parameters, and return types can have attributes
 // to indicate how they should be treated by optimizations and code generation.
 // This class represents one of those attributes.
@@ -44,17 +50,49 @@ pub struct Attribute {
 }
 
 impl Attribute {
-  pub fn new() {}
+  pub fn new() -> Self {
+    Attribute { pimpl: None }
+  }
 
-  pub fn is_enum_attr_kind(&self) -> bool { false }
-  pub fn is_int_attr_kind() {}
-  pub fn is_type_attr_kind() {}
-  pub fn can_use_as_fn_attr() {}
-  pub fn can_use_as_param_attr() {}
-  pub fn can_use_as_ret_attr() {}
+  pub fn is_enum_attr_kind(_kind: &AttrKind) -> bool { false }
+  pub fn is_int_attr_kind(_kind: &AttrKind) -> bool { false }
+  pub fn is_type_attr_kind(_kind: &AttrKind) -> bool { false }
+
+  pub fn can_use_as_fn_attr(kind: AttrKind) -> bool {
+    Attribute::has_attribute_property(kind, AttributeProperty::FnAttr)
+  }
+
+  pub fn can_use_as_param_attr(kind: AttrKind) -> bool {
+    Attribute::has_attribute_property(kind, AttributeProperty::ParamAttr)
+  }
+
+  pub fn can_use_as_ret_attr(kind: AttrKind) -> bool {
+    Attribute::has_attribute_property(kind, AttributeProperty::RetAttr)
+  }
+
+  fn has_attribute_property(_kind: AttrKind, _prop: AttributeProperty) -> bool {
+    false
+  }
 
   // Return a uniquified Attribute object.
-  pub fn get(_context: BlitzContext, _kind: AttrKind, _val: u64) {}
+  pub fn get(_context: BlitzContext, kind: AttrKind, val: u64) -> Self {
+    let is_int_attr = Attribute::is_int_attr_kind(&kind);
+    debug_assert!(is_int_attr || Attribute::is_enum_attr_kind(&kind),
+      "Not an enum or int attribute.");
+    
+    let mut id = FoldingSetNodeID::new();
+    id.add_integer_u32(kind as u32);
+    if is_int_attr {
+      id.add_integer_u64(val);
+    } else {
+      debug_assert!(val == 0, "Value must be zero for enum attributes.");
+    }
+
+    // TODO
+
+    Attribute { pimpl: None }
+  }
+
   pub fn get_with_alignment() {}
   pub fn get_with_stack_alignment() {}
   pub fn get_with_dereferenceable_bytes() {}

@@ -41,6 +41,7 @@ pub mod gv_materializer;
 pub mod inline_asm;
 pub mod instruction;
 pub mod instructions;
+pub mod instr_types;
 pub mod inst_visitor;
 pub mod intrinsic_inst;
 pub mod intrinsics;

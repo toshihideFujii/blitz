@@ -76,7 +76,7 @@ enum OperandBundle {
 // careful to have one context per thread.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlitzContext {
-  p_impl: Option<Box::<BlitzContextImpl>>
+  pub p_impl: Option<Box::<BlitzContextImpl>>
 }
 
 impl BlitzContext {

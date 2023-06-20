@@ -1,8 +1,12 @@
 #![allow(dead_code)]
 
-// The encoding of a callback with regards to the underlying
-// instruction.
-struct CallbackInfo {}
+// This file defines the AbstractCallSite class, which is a wrapper
+// that allows treating direct, indirect and callback calls the same.
+
+// The encoding of a callback with regards to the underlying instruction.
+struct CallbackInfo {
+  parameter_encoding: Vec<i32>
+}
 
 struct AbstractCallSite {}
 impl AbstractCallSite {

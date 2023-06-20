@@ -4,9 +4,13 @@
 // which is the base class for all of the instructions.
 
 use crate::adt::string_ref::StringRef;
-
-use super::{basic_block::BasicBlock, blits_context::{BlitzContext, MDKind},
-  debug_loc::DebugLoc, function::Function, value::{Value, ValueType}, type_::Type, metadata::MDNode};
+use super::{
+  basic_block::BasicBlock,
+  blits_context::{BlitzContext, MDKind},
+  debug_loc::DebugLoc, function::Function,
+  value::{Value, ValueType}, 
+  type_::Type, metadata::MDNode
+};
 
 // These instructions are used to terminate a basic block of the program.
 //#[derive(Debug, PartialEq, PartialOrd)]
