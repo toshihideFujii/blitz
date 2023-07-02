@@ -128,17 +128,20 @@ pub fn parse_denormal_fp_attribute(str: StringRef) -> DenormalMode {
   mode
 }
 
-enum FPClassTest {
-  SNan,
-  QNan,
-  NegInf,
-  NegNormal,
-  NegSubnormal,
-  NegZero,
-  PosZero,
-  PosSubnormal,
-  PosNormal,
-  PosInf
+// Floating-point class tests, supported by 'is-fpclass' intrinsic.
+// Actual test may be an OR combination of basic tests.
+pub enum FPClassTest {
+  None = 0,
+  SNan = 0x0001,
+  QNan = 0x0002,
+  NegInf = 0x0004,
+  NegNormal = 0x0008,
+  NegSubnormal = 0x0010,
+  NegZero = 0x0020,
+  PosZero = 0x0040,
+  PosSubnormal = 0x0080,
+  PosNormal = 0x0100,
+  PosInf = 0x0200
 }
 
 #[cfg(test)]

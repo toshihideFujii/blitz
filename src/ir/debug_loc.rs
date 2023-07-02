@@ -8,6 +8,7 @@ use super::{tracking_md_ref::TypedTrackingMDRef, metadata::MDNode};
 // A debug info location.
 // This class is a wrapper around a tracking reference to an
 // DILocation pointer.
+#[derive(Debug)]
 pub struct DebugLoc {
   loc: TypedTrackingMDRef
 }

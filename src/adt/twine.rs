@@ -5,7 +5,7 @@ use std::io::{self, Write};
 use crate::adt::string_ref::StringRef;
 
 #[derive(Debug, Clone, PartialEq)]
-enum NodeKind {
+pub enum NodeKind {
   // An empty string;
   // the result of concatenating anything with it is also rmpty.
   NullKind,
@@ -39,7 +39,7 @@ enum NodeKind {
 }
 
 #[derive(Debug, Clone)]
-struct Twine {
+pub struct Twine {
   // The prefix in the concatenation.
   lhs_: Option<Box<Child>>,
   // The suffix in the concatenation.
@@ -253,7 +253,7 @@ impl Twine {
 }
 
 #[derive(Debug, Clone)]
-struct Child {
+pub struct Child {
   twine_: Option<Twine>,
   string_: Option<String>,
   character_: Option<char>,

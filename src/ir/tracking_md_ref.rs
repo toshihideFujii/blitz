@@ -3,6 +3,7 @@
 // References to metadata that track RAUW.
 use super::metadata::{Metadata, MetadataTracking};
 
+#[derive(Debug)]
 struct TrackingMDRef {
   md: Option<Box<dyn Metadata>>
 }
@@ -56,6 +57,7 @@ impl TrackingMDRef {
 }
 
 // Typed tracking ref.
+#[derive(Debug)]
 pub struct TypedTrackingMDRef {
   md_ref: TrackingMDRef
 }

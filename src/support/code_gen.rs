@@ -69,11 +69,10 @@ enum ZeroCallUsedRegs {
   All
 }
 
-enum UWTableKind {
-  None = 0,
-  Sync = 1,
-  Async = 2
-  //Default = 3
+pub enum UWTableKind {
+  None = 0, // No unwind table requested
+  Sync = 1, // 'Synchronous' unwind tables
+  Async = 2 // 'Asynchronous' unwind tables (instr precise)
 }
 
 enum FunctionReturnThunksKind {

@@ -118,7 +118,9 @@ impl<T> FoldingSet<T> where T: Hash + Eq {
   }
 
   pub fn get_or_insert_node() {}
-  //pub fn find_node_or_insert_pos(&self, id: &FoldingSetNodeID) -> T {}
+  //pub fn find_node_or_insert_pos(&self, id: &FoldingSetNodeID) -> T {
+    //self.set.get(value)
+  //}
 
   // Insert the specified node into the folding set, knowing that
   // it is not already in the folding set.

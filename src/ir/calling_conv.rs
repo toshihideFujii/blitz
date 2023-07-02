@@ -1,48 +1,60 @@
 #![allow(dead_code)]
 
-pub const C: u32 = 0;
-/*
-pub const Fast: u32 = 0;
-pub const Cold: u32 = 0;
-pub const GHC: u32 = 0;
-pub const Hipe: u32 = 0;
-pub const WebkitJS: u32 = 0;
-pub const Anyreg: u32 = 0;
-pub const PreserveMost: u32 = 0;
-pub const PreserveAll: u32 = 0;
-pub const Swift: u32 = 0;
-pub const CxxFastTls: u32 = 0;
-pub const Tail: u32 = 0;
-pub const CFGuardCheck: u32 = 0;
-pub const SwiftTail: u32 = 0;
-pub const FirstTargetCC: u32 = 0;
-pub const X86StdCall: u32 = 0;
-pub const X86FastCall: u32 = 0;
-pub const ArmApcs: u32 = 0;
-pub const ArmAapcs: u32 = 0;
-pub const AarmAapcsVfp: u32 = 0;
-pub const Msp430Intr: u32 = 0;
-pub const X86ThisCall: u32 = 0;
-pub const PtxKernel: u32 = 0;
-pub const PtxDevice: u32 = 0;
-pub const SpirFunc: u32 = 0;
-pub const SpirKernel: u32 = 0;
-pub const IntelOclBi: u32 = 0;
-pub const X8664Sysv: u32 = 0;
-pub const Win64: u32 = 0;
-pub const X86VectorCall: u32 = 0;
-pub const DummyHhvm: u32 = 0;
-pub const DummyHhvmC: u32 = 0;
-pub const X86Intr: u32 = 0;
-pub const AvrIntr: u32 = 0;
-pub const AvrSignal: u32 = 0;
-pub const AvrBuiltin: u32 = 0;
-pub const AmdGpuVs: u32 = 0;
-pub const AmdGpuGs: u32 = 0;
-pub const AmdGpuPs: u32 = 0;
-pub const AmdGpuCs: u32 = 0;
-pub const AmdGpuKernel: u32 = 0;
-pub const X86RegCall: u32 = 0;
-pub const AmdGpuHs: u32 = 0;
-*/
-pub const CALLING_CONV_MAX_ID: u32 = 1023;
+// This file defines Blitz's set of calling conventions.
+
+pub enum CallingConv {
+  C = 0,
+  Fast = 8,
+  Cold = 9,
+  GHC = 10,
+  Hipe = 11,
+  WebkitJS = 12,
+  Anyreg = 13,
+  PreserveMost = 14,
+  PreserveAll = 15,
+  Swift = 16,
+  CxxFastTls = 17,
+  Tail = 18,
+  CFGuardCheck = 19,
+  SwiftTail = 20,
+  FirstTargetCC = 64,
+  X86StdCall = 10000, //= 64,
+  X86FastCall = 65,
+  ArmApcs = 66,
+  ArmAapcs = 67,
+  ArmAapcsVfp = 68,
+  Msp430Intr = 69,
+  X86ThisCall = 70,
+  PtxKernel = 71,
+  PtxDevice = 72,
+  SpirFunc = 75,
+  SpirKernel = 76,
+  IntelOclBi = 77,
+  X8664Sysv = 78,
+  Win64 = 79,
+  X86VectorCall = 80,
+  DummyHhvm = 81,
+  DummyHhvmC = 82,
+  X86Intr = 83,
+  AvrIntr = 84,
+  AvrSignal = 85,
+  AvrBuiltin = 86,
+  AmdGpuVs = 87,
+  AmdGpuGs = 88,
+  AmdGpuPs = 89,
+  AmdGpuCs = 90,
+  AmdGpuKernel = 91,
+  X86RegCall = 92,
+  AmdGpuHs = 93,
+  Msp430Builtin = 94,
+  AmdGpuLs = 95,
+  AmdGpuEs = 96,
+  AArch64VectorCall = 97,
+  AArch64SveVectorCall = 98,
+  WasmEmsxriptenInvoke = 99,
+  AmdGpuGfx = 100,
+  M68kIntr = 101,
+  AArch64SmeAbiSupportRoutinesPreserveMostFromX0 = 102,
+  AArch64SmeAbiSupportRoutinesPreserveMostFromX2 = 103,
+  MaxId = 1023
+}

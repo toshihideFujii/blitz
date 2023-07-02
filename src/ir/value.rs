@@ -3,8 +3,16 @@
 // This file declares the value class.
 
 use crate::adt::string_ref::StringRef;
+use super::{type_::Type, use_::Use,
+  blits_context::BlitzContext,
+  metadata::MDNode
+};
 
-use super::{type_::Type, use_::Use, blits_context::BlitzContext, metadata::MDNode};
+// The maximum alignment for instructions.
+// This is the greatest alignment value supported by load, store, and
+// alloca instructions, and global values.
+pub const MAX_ALIGNMENT_EXPONENT: u64 = 32;
+pub const MAXIMUM_ALIGNMENT: u64 = 1 << MAX_ALIGNMENT_EXPONENT;
 
 // Concrete subclass of Value.
 // An enumeration for keeping track of the concrete subclass of Value
@@ -33,6 +41,8 @@ pub enum ValueType {
   ConstantTargetNoneVal,
   ConstantPointerNullVal,
   ConstantTokenNoneVal,
+  ArgumentVal,
+  BasicBlockVal,
   InstructionVal
 }
 

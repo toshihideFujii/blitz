@@ -5,6 +5,7 @@
 // Blitz.
 
 use std::cmp::max;
+use std::fmt::Debug;
 use std::mem::size_of;
 //use std::ops::Index;
 
@@ -43,7 +44,7 @@ pub enum StorageType {
   Temporary
 }
 
-pub trait Metadata {
+pub trait Metadata : Debug {
   fn get_metadata_id(&self) -> MetadataKind { MetadataKind::MDStringKind }
 }
 

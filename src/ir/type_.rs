@@ -129,7 +129,7 @@ pub trait Type: Debug /*+ std::clone::Clone*/ /*+ std::cmp::PartialEq*/ {
   fn get_with_new_type(&self) {}
   fn get_with_new_bit_width(&self) {}
   fn get_extended_type(&self) {}
-  fn get_pointer_address_space(&self) {}
+  fn get_pointer_address_space(&self) -> u32 { 0 }
   fn get_primitive_type(&self) {}
 
   // For StructType.
@@ -155,7 +155,11 @@ impl std::cmp::PartialEq for Type {
 */
 
 pub fn get_void_type() {}
-pub fn get_label_type() {}
+
+pub fn get_label_type(c: &BlitzContext) -> LabelType {
+  c.get_impl().label_type.clone()
+}
+
 pub fn get_half_type() {}
 pub fn get_b_float_type() {}
 pub fn get_float_type() {}
@@ -201,6 +205,37 @@ enum IntConstants {
   MinIntBits = 1,
   MaxIntBits = 1<<23
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LabelType {
+  context: BlitzContext,
+  id: TypeID,
+}
+
+impl LabelType {
+  pub fn new(c: BlitzContext) -> Self {
+    LabelType { context: c, id: TypeID::Label }
+  }
+}
+
+impl Type for LabelType {
+  fn get_type_id(&self) -> TypeID {
+    TypeID::Label
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    &self.context
+  }
+
+  fn get_subclass_data(&self) -> u32 {
+    0
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
+}
+
 
 // Class to represent integer types.
 // Note that this class is also used to represent the built-in

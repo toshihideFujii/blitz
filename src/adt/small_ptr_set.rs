@@ -2,7 +2,7 @@
 
 // This class implements a set which is optimized for holding
 // SmallSize or less elements.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SmallPtrSet<PtrType> {
   dummy: Option<PtrType>
 }
@@ -13,8 +13,10 @@ impl<PtrType> SmallPtrSet<PtrType> {
   pub fn empty() {}
   pub fn size() {}
   pub fn clear() {}
-  pub fn insert() {}
-  pub fn erase() {}
+
+  pub fn insert(&self, _ptr: PtrType) {}
+  pub fn erase(&self, _ptr: PtrType) {}
+  
   pub fn count() {}
   pub fn find() {}
   pub fn contains() {}

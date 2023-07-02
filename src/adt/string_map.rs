@@ -5,7 +5,7 @@ use std::collections::hash_map::Iter;
 use super::string_ref::StringRef;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct StringMapEntry<T> {
+pub struct StringMapEntry<T> {
   key_length_: usize,
   second_: T
 }

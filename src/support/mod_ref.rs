@@ -36,7 +36,7 @@ pub fn is_ref_set(mri: ModRefInfo) -> bool {
 
 // The location at which a function might access memory.
 #[derive(Debug, Clone)]
-enum Location {
+pub enum Location {
   ArgMem,
   InaccessibleMem,
   Other
@@ -48,7 +48,7 @@ const LOC_MASK: u32 = (1 << 2) - 1;
 // Summary of how a function affects memory in the program.
 // Loads from constant globals are not considered memoey accesses
 // for this interface.
-struct MemoryEffects {
+pub struct MemoryEffects {
   data: u32
 }
 

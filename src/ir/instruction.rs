@@ -94,7 +94,7 @@ pub enum OtherOps {
   Freeze = 67
 }
 
-//#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Instruction {
   v_type: Box<dyn Type>,
   has_metadata: bool,
@@ -120,7 +120,7 @@ impl Instruction {
   }
 
   // Return the function this instruction belongs to.
-  pub fn get_function(&self) -> &Function {
+  pub fn get_function(&self) -> &Option<Function> {
     self.parent.get_parent()
   }
   
@@ -395,4 +395,245 @@ impl Value for Instruction {
 
     // Value::set_metadata()
   }
+}
+
+struct ICmpInst {}
+impl ICmpInst {
+  pub fn new() {}
+  pub fn get_signed_predicate() {}
+  pub fn get_unsigned_predicate() {}
+  pub fn is_equality() {}
+  pub fn is_commutative() {}
+  pub fn is_relational() {}
+  pub fn is_gt() {}
+  pub fn is_lt() {}
+  pub fn is_ge() {}
+  pub fn is_le() {}
+  pub fn predicates() {}
+  pub fn swap_operands() {}
+  pub fn compare() {}
+  pub fn class_of() {}
+}
+
+struct FCmpInst {}
+impl FCmpInst {
+  pub fn new() {}
+}
+
+enum TailCallKind {
+  None,
+  Tail,
+  MustTail,
+  NoTail
+}
+
+struct CallInst {}
+impl CallInst {
+  pub fn new() {}
+  pub fn get_tail_call_kind() {}
+  pub fn is_tail_call() {}
+  pub fn is_must_tail_call() {}
+  pub fn is_no_tail_call() {}
+  pub fn set_tail_call_kind() {}
+  pub fn set_tail_call() {}
+  pub fn can_return_twice() {}
+  pub fn set_can_return_twice() {}
+  pub fn class_of() {}
+  pub fn update_prof_weight() {}
+}
+
+struct SelectInst {}
+impl SelectInst {
+  pub fn new() {}
+  pub fn get_condition() {}
+  pub fn get_true_value() {}
+  pub fn get_false_value() {}
+  pub fn set_condition() {}
+  pub fn set_true_value() {}
+  pub fn set_false_value() {}
+  pub fn swap_values() {}
+  pub fn are_invalid_operands() {}
+  pub fn get_opcode() {}
+  pub fn class_of() {}
+}
+
+struct VAArgInst {}
+impl VAArgInst {
+  pub fn new() {}
+  pub fn get_pointer_operand() {}
+  pub fn get_pointer_operand_index() {}
+  pub fn class_of() {}
+}
+
+struct ExtractElementInst {}
+impl ExtractElementInst {
+  pub fn new() {}
+  pub fn is_valid_operands() {}
+  pub fn get_vector_operand() {}
+  pub fn get_index_operand() {}
+  pub fn get_vector_operand_type() {}
+  pub fn class_of() {}
+}
+
+struct InsertElementInst {}
+impl InsertElementInst {
+  pub fn new() {}
+  pub fn is_valid_operands() {}
+  pub fn get_type() {}
+  pub fn class_of() {}
+}
+
+struct ShuffleVectorInst {}
+impl ShuffleVectorInst {
+  pub fn new() {}
+}
+
+struct ExtractValueInst {}
+impl ExtractValueInst {
+  pub fn new() {}
+}
+
+struct InsertValueInst {}
+impl InsertValueInst {
+  pub fn new() {}
+}
+
+struct PhiNode {}
+impl PhiNode {
+  pub fn new() {}
+}
+
+struct LandingPadInst {}
+impl LandingPadInst {
+  pub fn new() {}
+}
+
+struct ReturnInst {}
+impl ReturnInst {
+  pub fn new() {}
+}
+
+struct BranchInst {}
+impl BranchInst {
+  pub fn new() {}
+}
+
+struct SwitchInst {}
+impl SwitchInst {
+  pub fn new() {}
+} 
+
+struct IndirectBrInst {}
+impl IndirectBrInst {
+  pub fn new() {}
+}
+
+struct InvokeInst {}
+impl InvokeInst {
+  pub fn new() {}
+}
+
+struct CallBrInst {}
+impl CallBrInst {
+  pub fn new() {}
+}
+
+struct ResumeInst {}
+impl ResumeInst {
+  pub fn new() {}
+}
+
+struct CatchSwitchInst {}
+impl CatchSwitchInst {
+  pub fn new() {}
+}
+
+struct CleanupPadInst {}
+impl CleanupPadInst {
+  pub fn new() {}
+}
+
+struct CatchPadInst {}
+impl CatchPadInst {
+  pub fn new() {}
+}
+
+struct CatchReturnInst {}
+impl CatchReturnInst {
+  pub fn new() {}
+}
+
+struct CleanupReturnInst {}
+impl CleanupReturnInst {
+  pub fn new() {}
+}
+
+struct UnreachableInst {}
+impl UnreachableInst {
+  pub fn new() {}
+}
+
+struct TruncInst {}
+impl TruncInst {
+  pub fn new() {}
+}
+
+struct ZExtInst {}
+impl ZExtInst {
+  pub fn new() {}
+}
+
+struct SExtInst {}
+impl SExtInst {
+  pub fn new() {}
+}
+
+struct FPTruncInst {}
+impl FPTruncInst {
+  pub fn new() {}
+} 
+
+struct FPExtInst {}
+impl FPExtInst {
+  pub fn new() {}
+}
+
+struct UIToFPInst {}
+impl UIToFPInst {
+  pub fn new() {}
+}
+
+struct SIToFpInst {}
+impl SIToFpInst {
+  pub fn new() {}
+}
+
+struct FPToUIInst {}
+impl FPToUIInst {
+  pub fn new() {}
+}
+
+struct FPToSIInst {}
+impl FPToSIInst {
+  pub fn new() {}
+}
+
+struct IntToPtrInst {}
+impl IntToPtrInst {
+  pub fn new() {}
+}
+
+struct PtrToIntInst {}
+impl PtrToIntInst {
+  pub fn new() {}
+}
+
+struct BitCastInst {}
+impl BitCastInst {
+  pub fn new() {}
+}
+
+struct AddrSpaceCastInst {}
+impl AddrSpaceCastInst {
+  pub fn new() {}
 }

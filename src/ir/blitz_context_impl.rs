@@ -16,11 +16,11 @@ use super::{
   diagnostic_handler::DiagnositicHandler,
   blitz_remark_streamer::BlitzRemarkStreamer,
   constants::{ConstantInt, ConstantFP, ConstantTokenNone},
-  attribute_impl::{/*AttributeImpl,*/ AttributeListImpl, AttributeSetNode},
+  attribute_impl::{AttributeImpl, AttributeListImpl, AttributeSetNode},
   metadata::{MDString, /*ValueAsMetadata, Metadata, MetadataAsValue, MDNode*/},
   /*value::Value,*/
   debug_info_metadata::DICompositeType,
-  type_::{/*Type,*/ IntegerType},
+  type_::{/*Type,*/ IntegerType, LabelType},
   global_object::GlobalObject,
   global_value::GlobalValue,
   blits_context::BlitzContext,
@@ -54,7 +54,7 @@ pub struct BlitzContextImpl {
   pub int_constants: DenseMap<APInt, ConstantInt>,
   fp_constants: DenseMap<APFloat, ConstantFP>,
 
-  //attrs_set: FoldingSet<AttributeImpl>,
+  attrs_set: FoldingSet<AttributeImpl>,
   attrs_lists: FoldingSet<AttributeListImpl>,
   attrs_set_nodes: FoldingSet<AttributeSetNode>,
 
@@ -72,8 +72,9 @@ pub struct BlitzContextImpl {
 
   // Basic type instances.
   //void_type: Box<dyn Type>,
+  
+  pub label_type: LabelType,
   /*
-  label_type: Box<dyn Type>,
   half_type: Box<dyn Type>,
   b_float_type: Box<dyn Type>,
   float_type: Box<dyn Type>,
@@ -125,7 +126,7 @@ impl BlitzContextImpl {
       blitz_rs: None,
       int_constants: DenseMap::new(),
       fp_constants: DenseMap::new(),
-      //attrs_set: FoldingSet::new(),
+      attrs_set: FoldingSet::new(),
       attrs_lists: FoldingSet::new(),
       attrs_set_nodes: FoldingSet::new(),
       md_string_cache: StringMap::new(),
@@ -134,6 +135,7 @@ impl BlitzContextImpl {
       //distinct_md_nodes: Vec::new(),
       the_true_val: None,
       the_false_val: None,
+      label_type: LabelType::new(c.clone()),
       int_1_type: IntegerType::new(c.clone(), 1),
       int_8_type: IntegerType::new(c.clone(), 8),
       int_16_type: IntegerType::new(c.clone(), 16),

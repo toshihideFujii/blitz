@@ -3,11 +3,11 @@
 // This file contains the declaration of the Function class,
 // which represents a single function/procedure.
 
-use crate::adt::string_ref::StringRef;
+use crate::{adt::{string_ref::StringRef, floating_point_mode::FPClassTest}, support::alignment::MaybeAlign};
 use super::{
   type_::{FunctionType, Type},
   blits_context::BlitzContext,
-  value::{ValueType, Value}, calling_conv::*, attributes::AttributeList
+  value::{ValueType, Value}, calling_conv::*, attributes::{AttributeList, AttrKind, Attribute}, symbol_table_list::SymbolTableList, basic_block::BasicBlock, module::Module
 };
 
 #[derive(PartialEq, Clone)]
@@ -46,14 +46,20 @@ pub struct Function {
   v_type: FunctionType,
   v_id: ValueType,
   sub_class_data: u32,
+  parent: Module,
   int_id: u32,
   has_blitz_reserved_name: bool,
+  basic_blocks: SymbolTableList<BasicBlock>,
   attribute_sets: AttributeList
 }
 
 impl Function {
   pub fn get_function(&self) -> &Function {
     self
+  }
+
+  pub fn get_parent(&self) -> &Module {
+    &self.parent
   }
 
   pub fn get_instruction_count(&self) -> u32 {
@@ -68,11 +74,6 @@ impl Function {
   // Returns the type of the ret val.
   pub fn get_return_type(&self) -> &Box<dyn Type> {
     self.v_type.get_return_type()
-  }
-  
-  // Return a reference to the BlitzContext associated with this function.
-  pub fn get_context(&self) -> &BlitzContext {
-    self.v_type.get_context()
   }
 
   // Return true if this function takes a variable number of arguments.
@@ -129,7 +130,7 @@ impl Function {
 
   // Get the calling convention of this function.
   pub fn get_calling_conv(&self) -> u32 {
-    (self.get_subclass_data_from_value() >> 4) & CALLING_CONV_MAX_ID
+    (self.get_subclass_data_from_value() >> 4) & CallingConv::MaxId as u32
   }
 
   // Set the calling convention of this function.
@@ -180,35 +181,96 @@ impl Function {
   pub fn add_ret_attr() {}
   pub fn add_ret_attrs() {}
   pub fn add_param_attr() {}
+
+  // Adds the attribute to the list of attributes for the given arg.
+  pub fn add_param_attr_by_kind(&self, arg_no:u32, kind: AttrKind) {
+    self.attribute_sets.add_param_attribute(self.get_context(), arg_no, kind)
+  }
+
   pub fn add_param_attrs() {}
   pub fn remove_attribute_at_index() {}
   pub fn remove_fn_attr() {}
   pub fn remove_fn_attrs() {}
   pub fn remove_ret_attr() {}
   pub fn remove_ret_attrs() {}
-  pub fn remove_param_attr() {}
+
+  // Removes the attribute from the list of attributes.
+  pub fn remove_param_attr(&self, arg_no:u32, kind: AttrKind) {
+    self.attribute_sets.remove_param_attribute(self.get_context(), arg_no, kind)
+  }
+
   pub fn remove_param_attrs() {}
   pub fn has_fn_atribute() {}
   pub fn has_ret_attribute() {}
-  pub fn has_param_attribute() {}
-  pub fn get_attribute_at_index() {}
+
+  // Check if an attributes is in the list of attributes.
+  pub fn has_param_attribute(&self, arg_no:u32, kind: AttrKind) -> bool {
+    self.attribute_sets.has_param_attr(arg_no, kind)
+  }
+
+  // Gets the attribute from the list of attributes.
+  pub fn get_attribute_at_index(&self, i: u32, kind: AttrKind) -> Attribute {
+    self.attribute_sets.get_attribute_at_index(i, kind)
+  }
+
   pub fn get_fn_attribute() {}
-  pub fn get_param_attribute() {}
+
+  // Gets the specified attribute from the list of attributes.
+  pub fn get_param_attribute(&self, arg_no:u32, kind: AttrKind) -> Attribute {
+    self.attribute_sets.get_param_attr(arg_no, kind)
+  }
+
   pub fn remove_param_undef_implying_attrs() {}
   pub fn get_fn_stack_align() {}
   pub fn has_stack_protector_fn_attr() {}
   pub fn add_dereferenceable_param_attr() {}
   pub fn add_dereferenceable_or_null_param_attr() {}
   pub fn get_param_alignment() {}
-  pub fn get_param_align() {}
-  pub fn get_param_stack_align() {}
-  pub fn get_param_by_val_type() {}
-  pub fn get_param_struct_ret_type() {}
-  pub fn get_param_in_alloca_type() {}
-  pub fn get_param_by_ref_type() {}
+
+  pub fn get_param_align(&self, arg_no:u32) -> MaybeAlign {
+    self.attribute_sets.get_param_alignment(arg_no)
+  }
+
+  pub fn get_param_stack_align(&self, arg_no:u32) -> MaybeAlign {
+    self.attribute_sets.get_param_stack_alignment(arg_no)
+  }
+
+  pub fn get_param_by_val_type(&self, arg_no:u32) -> Option<Box<dyn Type>> {
+    self.attribute_sets.get_param_by_val_type(arg_no)
+  }
+
+  // Extract the sret type for a parameter.
+  pub fn get_param_struct_ret_type(&self, arg_no:u32) -> Option<Box<dyn Type>> {
+    self.attribute_sets.get_param_struct_ret_type(arg_no)
+  }
+
+  // Extract the inalloca type for a parameter.
+  pub fn get_param_in_alloca_type(&self, arg_no:u32) -> Option<Box<dyn Type>> {
+    self.attribute_sets.get_param_in_alloca_type(arg_no)
+  }
+
+  // Extract the byref type for a parameter.
+  pub fn get_param_by_ref_type(&self, arg_no:u32) -> Option<Box<dyn Type>> {
+    self.attribute_sets.get_param_by_ref_type(arg_no)
+  }
+
   pub fn get_param_preallocated_type() {}
-  pub fn get_param_dereferenceable_bytes() {}
-  pub fn get_param_dereferenceable_or_null_bytes() {}
+
+  // Extract the number of dereferenceable bytes for a parameter.
+  pub fn get_param_dereferenceable_bytes(&self, arg_no:u32) -> u64 {
+    self.attribute_sets.get_param_dereferenceable_bytes(arg_no)
+  }
+
+  // Extract the number of dereferenceable_or_null bytes for a parameter.
+  pub fn get_param_dereferenceable_or_null_bytes(&self, arg_no:u32) -> u64 {
+    self.attribute_sets.get_param_dereferenceable_or_null_bytes(arg_no)
+  }
+
+  // Extract the nofpclass attribute for a parameter.
+  pub fn get_param_no_fp_class(&self, arg_no:u32) -> FPClassTest {
+    self.attribute_sets.get_param_no_fp_class(arg_no)
+  }
+
   pub fn is_presplit_coroutine() {}
   pub fn set_presplit_coroutine() {}
   pub fn set_splitted_coroutine() {}
@@ -262,17 +324,31 @@ impl Function {
   pub fn remove_from_parent() {}
   pub fn earse_from_parent() {}
   pub fn steal_argument_list_from() {}
-  pub fn get_basic_block_list() {}
+
+  // Get the underlying elements of the Function.
+  pub fn get_basic_block_list(&self) -> &SymbolTableList<BasicBlock> {
+    &self.basic_blocks
+  }
+
   pub fn get_sublist_access() {}
   pub fn get_entry_block() {}
   pub fn get_value_symbol_table() {}
 
-  pub fn begin() {}
-  pub fn end() {}
-  pub fn size() {}
-  pub fn empty() {}
-  pub fn front() {}
-  pub fn back() {}
+  pub fn size(&self) -> usize {
+    self.basic_blocks.size()
+  }
+
+  pub fn empty(&self) -> bool {
+    self.basic_blocks.empty()
+  }
+
+  pub fn front(&self) -> Option<&BasicBlock> {
+    self.basic_blocks.front()
+  }
+
+  pub fn back(&self) -> Option<&BasicBlock> {
+    self.basic_blocks.back()
+  }
 
   pub fn arg_begin() {}
   pub fn arg_end() {}

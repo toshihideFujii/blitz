@@ -2,33 +2,68 @@
 
 // This file contains the declaration of the BasicBlock class.
 
+use crate::adt::twine::Twine;
+
 use super::{
   function::Function,
   symbol_table_list::SymbolTableList,
   instruction::Instruction,
-  //value::Value
+  value::{Value, ValueType}, type_::{Type}, blits_context::BlitzContext, module::Module
 };
 
 // This represents a single basic block in Blitz.
 // A basic blocks is simply a container of instructions that execute
 // sequentially.
+#[derive(Debug)]
 pub struct BasicBlock {
+  v_type: Box<dyn Type>,
   inst_list: SymbolTableList<Instruction>,
-  parent: Function
+  parent: Option<Function>
 }
 
 impl BasicBlock {
-  pub fn new() {}
+  // If the function parameter is specified, the basic block is automatically
+  // inserted at either the end of the function (if insert_before is null),
+  // or before the specified basic block.
+  pub fn new(c: &BlitzContext, _name: &Twine, new_parent: Option<Function>,
+    insert_before: Option<BasicBlock>) -> Self
+  {
+    let bb = BasicBlock {
+      v_type: Box::new(super::type_::get_label_type(c)),
+      inst_list: SymbolTableList::new(),
+      parent: None
+    };
+    if new_parent.is_some() {
+      // TODO
+    } else {
+      debug_assert!(insert_before.is_none(),
+        "Cannot insert block before another block with no function.");
+    }
+    bb
+  }
+
   pub fn set_parent() {}
-  pub fn get_context() {}
 
   // Return the enclosing method, or null if none.
-  pub fn get_parent(&self) -> &Function {
+  pub fn get_parent(&self) -> &Option<Function> {
     &self.parent
   }
   
-  pub fn get_module() {}
-  pub fn get_terminator() {}
+  // Return the module owning the function this basic block belongs to.
+  pub fn get_module(&self) -> &Module {
+    self.get_parent().as_ref().unwrap().get_parent()
+  }
+
+  // Returns the terminator instruction if the block is well formed or
+  // null if the block is not well formed.
+  pub fn get_terminator(&self) -> Option<&Instruction> {
+    if self.inst_list.empty() ||
+       self.inst_list.back().as_ref().unwrap().is_terminator(){
+      return None;
+    }
+    self.inst_list.back()
+  }
+
   pub fn get_terminating_deoptimize_call() {}
   pub fn get_post_dominating_deoptimize_call() {}
   pub fn get_terminating_must_tail_call() {}
@@ -39,7 +74,13 @@ impl BasicBlock {
   pub fn get_first_non_phi_or_dbg_or_alloca() {}
   pub fn instructions_without_debug() {}
   pub fn size_without_debug() {}
-  pub fn remove_from_parent() {}
+
+  // Unlink 'this' from the containing function, but not delete it.
+  pub fn remove_from_parent(&mut self) {
+    // TODO: How to get index ?
+    //self.get_parent().as_mut().unwrap().get_basic_block_list().remove(0);
+  }
+
   pub fn earse_from_parent() {}
   pub fn move_before() {}
   pub fn move_after() {}
@@ -89,10 +130,17 @@ impl BasicBlock {
   fn skip_debug_intrinsics() {}
 }
 
-/*
+
 impl Value for BasicBlock {
-  fn get_type(&self) -> &dyn super::type_::Type {
-    
+  fn get_type(&self) -> &dyn Type {
+    self.v_type.as_ref()
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    self.v_type.get_context()
+  }
+
+  fn get_value_id(&self) -> ValueType {
+    ValueType::BasicBlockVal
   }
 }
-*/

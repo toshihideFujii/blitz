@@ -42,6 +42,10 @@ impl<T> SymbolTableList<T> /*where T: PartialEq */{
   pub fn size(&self) -> usize {
     self.list.size()
   }
+
+  pub fn empty(&self) -> bool {
+    self.list.size() == 0
+  }
     
   pub fn clear(&mut self) {
     self.list.clear()
@@ -94,6 +98,8 @@ impl<T> SymbolTableList<T> /*where T: PartialEq */{
   pub fn back(&self) -> Option<&T> {
     self.list.back()
   }
+
+  pub fn set_sym_tab_object(&self) {}
 }
 /*
 impl<T> Iterator for SymbolTableList<T> {
