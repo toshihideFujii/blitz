@@ -6,7 +6,7 @@
 use super::string_ref::StringRef;
 
 #[derive(Debug, Clone)]
-struct StringSwitch<T> {
+pub struct StringSwitch<T> {
   // The string we are matching.
   str: StringRef,
   // The pointer to the result of this switch statement, once known,

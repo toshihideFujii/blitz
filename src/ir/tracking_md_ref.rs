@@ -68,6 +68,13 @@ impl TypedTrackingMDRef {
   }
   
   pub fn get() {}
-  pub fn reset() {}
-  pub fn has_trivial_destructor() {}
+  
+  pub fn reset(&mut self) {
+    self.md_ref.reset()
+  }
+
+  // Check whether this has a trivial destructor.
+  pub fn has_trivial_destructor(&self) -> bool {
+    self.md_ref.has_trivial_destructor()
+  }
 }

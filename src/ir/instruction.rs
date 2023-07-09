@@ -239,19 +239,19 @@ impl Instruction {
   pub fn has_metadata_by_kind(&self) -> bool { false }
 
   // Get the metadata of given kind attached to this instruction.
-  pub fn get_metadata(&self, kind_id: u32) -> Option<MDNode> {
-    if !self.has_metadata() {
+  pub fn get_metadata(&self, _kind_id: u32) -> Option<Box<dyn MDNode>> {
+    //if !self.has_metadata() {
       return None;
-    }
-    self.get_metadata_by_id_impl(kind_id)
+    //}
+    //self.get_metadata_by_id_impl(kind_id)
   }
 
   // Get the metadata of given kind attached to this instruction.
-  pub fn get_metadata_by_kind(&self, kind: StringRef) -> Option<MDNode> {
-    if !self.has_metadata() {
+  pub fn get_metadata_by_kind(&self, _kind: StringRef) -> Option<Box<dyn MDNode>> {
+    //if !self.has_metadata() {
       return None;
-    }
-    self.get_metadata_by_kind_impl(kind)
+    //}
+    //self.get_metadata_by_kind_impl(kind)
   }
 
   // Get all metadata attached to this instruction.
@@ -338,20 +338,22 @@ impl Instruction {
   pub fn is_same_operation_as() {}
   pub fn has_same_special_state() {}
   pub fn is_used_outside_of_block() {}
-  pub fn get_num_successors() {}
-  pub fn get_successor() {}
+  pub fn get_num_successors(&self) -> usize { 0 }
+  pub fn get_successor(&self, _index: u32) -> Option<&BasicBlock> { None }
   pub fn replace_successor_with() {}
   pub fn class_of() {}
 
-  fn get_metadata_by_id_impl(&self, kind_id: u32) -> Option<MDNode> {
-    if kind_id == MDKind::MdDbg as u32 {
-      return self.dbg_loc.as_ref().unwrap().get_as_md_node();
-    }
-    self.get_metadata_by_id(kind_id)
+  fn get_metadata_by_id_impl(&self, _kind_id: u32) -> Option<Box<dyn MDNode>> {
+    //if kind_id == MDKind::MdDbg as u32 {
+      //return self.dbg_loc.as_ref().unwrap().get_as_md_node();
+    //}
+    //self.get_metadata_by_id(kind_id)
+    None
   }
 
-  fn get_metadata_by_kind_impl(&self, kind: StringRef) -> Option<MDNode> {
-    self.get_metadata_by_id_impl(self.get_context().get_md_kind_id(kind))
+  fn get_metadata_by_kind_impl(&self, _kind: StringRef) -> Option<Box<dyn MDNode>> {
+    //self.get_metadata_by_id_impl(self.get_context().get_md_kind_id(kind))
+    None
   }
 
   fn get_all_metadata_impl(&self) {}
@@ -377,19 +379,19 @@ impl Value for Instruction {
   }
 
   // Set the metadata of the specified kind to the specified node.
-  fn set_metadata(&mut self, kind_id: u32, node: Option<MDNode>) {
+  fn set_metadata(&mut self, kind_id: u32, node: Option<Box<dyn MDNode>>) {
     if node.is_none() && !self.has_metadata() {
       return;
     }
     // Handle 'dbg' as a special case since it is not stored in the hash table.
     if kind_id == MDKind::MdDbg as u32 {
-      self.dbg_loc = Some(DebugLoc::new(node.unwrap()));
+      //self.dbg_loc = Some(DebugLoc::new(node.unwrap()));
       return;
     }
     // Update DIAssignID to instruction(s) mapping.
     if kind_id == MDKind::MdDIAssingId as u32 {
-      debug_assert!(node.is_none() || !node.unwrap().is_temporary(),
-      "Temporary DIAssignIDs are invalid.");
+      //debug_assert!(node.is_none() || !node.unwrap().is_temporary(),
+      //"Temporary DIAssignIDs are invalid.");
       // TODO
     }
 

@@ -14,11 +14,17 @@ pub struct DebugLoc {
 }
 
 impl DebugLoc {
-  pub fn new(l: MDNode) -> Self {
-    DebugLoc { loc: TypedTrackingMDRef::new(Box::new(l)) }
-  }
+  //pub fn new(l: Box<dyn MDNode>) -> Self {
+    //DebugLoc { loc: TypedTrackingMDRef::new(l) }
+  //}
   
   pub fn get() {}
+
+  // Check whether this has a trivial destructor.
+  pub fn has_trivial_destructor(&self) -> bool {
+    self.loc.has_trivial_destructor()
+  }
+
   pub fn append_inlined_at() {}
   pub fn get_line() {}
   pub fn get_col() {}
@@ -27,7 +33,7 @@ impl DebugLoc {
   pub fn get_inlined_at_scope() {}
   pub fn replace_inlined_at_subprogram() {}
   pub fn get_fn_debug_loc() {}
-  pub fn get_as_md_node(&self) -> Option<MDNode> { None }
+  pub fn get_as_md_node(&self) -> Option<Box<dyn MDNode>> { None }
   pub fn is_implicit_code() {}
   pub fn set_implicit_code() {}
   pub fn dump() {}

@@ -17,7 +17,7 @@ enum FMFBits {
 }
 
 // Convenience struct for specifying and reasoning about fast-math flags.
-struct FastMathFlags {
+pub struct FastMathFlags {
   flags: u32
 }
 

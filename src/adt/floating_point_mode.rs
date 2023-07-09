@@ -6,14 +6,15 @@
 use crate::adt::string_ref::StringRef;
 
 // Rounding mode defined in IEEE-754.
+#[derive(Debug, Clone, PartialEq)]
 pub enum RoundingMode {
-  TowardZero,
-  NearestTiesToEven,
-  TowardPositive,
-  TowardNegative,
-  NearestTiesToAway,
-  Dynamic,
-  Invalid
+  TowardZero = 0,
+  NearestTiesToEven = 1,
+  TowardPositive = 2,
+  TowardNegative = 3,
+  NearestTiesToAway = 4,
+  Dynamic = 7,
+  Invalid= -1
 }
 
 // Returns text representation of the given rounding mode.
