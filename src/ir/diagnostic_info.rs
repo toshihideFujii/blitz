@@ -3,6 +3,7 @@
 // This file declares the different classes involved in low
 // level diagnostics.
 
+// Defines the different supported severity of a diagnostic.
 enum DiagnosticSeverity {
   Error,
   Warning,
@@ -10,6 +11,7 @@ enum DiagnosticSeverity {
   Note
 }
 
+// Defines the different supported kind of a siagnostic.
 enum DiagnosticKind {
   InlineAsm,
   ResourceLimit,
@@ -39,6 +41,8 @@ enum DiagnosticKind {
 }
 
 pub fn get_next_available_plugin_diagnostic_kind() {}
+
+struct DiagnosticInfo {}
 
 struct DiagnosticInfoInlineAsm {}
 

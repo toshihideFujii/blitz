@@ -3,11 +3,16 @@
 // This file contains the declaration of the Function class,
 // which represents a single function/procedure.
 
-use crate::{adt::{string_ref::StringRef, floating_point_mode::FPClassTest}, support::alignment::MaybeAlign};
+use crate::{adt::{string_ref::StringRef, floating_point_mode::FPClassTest},
+support::{alignment::MaybeAlign, mod_ref::{MemoryEffects, ModRefInfo}, code_gen::UWTableKind}};
 use super::{
   type_::{FunctionType, Type},
   blits_context::BlitzContext,
-  value::{ValueType, Value}, calling_conv::*, attributes::{AttributeList, AttrKind, Attribute}, symbol_table_list::SymbolTableList, basic_block::BasicBlock, module::Module
+  value::{ValueType, Value}, calling_conv::*,
+  attributes::{AttributeList, AttrKind, Attribute},
+  symbol_table_list::SymbolTableList, basic_block::BasicBlock,
+  module::Module, argument::Argument, metadata::MDNode,
+  debug_info_metadata::DISubprogram
 };
 
 #[derive(PartialEq, Clone)]
@@ -46,14 +51,17 @@ pub struct Function {
   v_type: FunctionType,
   v_id: ValueType,
   sub_class_data: u32,
+  has_metadata: bool,
   parent: Module,
   int_id: u32,
   has_blitz_reserved_name: bool,
   basic_blocks: SymbolTableList<BasicBlock>,
+  arguments: Vec<Argument>,
   attribute_sets: AttributeList
 }
 
 impl Function {
+  pub fn new() {}
   pub fn get_function(&self) -> &Function {
     self
   }
@@ -175,24 +183,30 @@ impl Function {
     self.attribute_sets = attrs;
   }
   
-  pub fn add_attribute_at_index() {}
-  pub fn add_fn_attr() {}
-  pub fn add_fn_attrs() {}
-  pub fn add_ret_attr() {}
-  pub fn add_ret_attrs() {}
-  pub fn add_param_attr() {}
+  pub fn add_attribute_at_index(&self) {}
+
+  // Add function attributes to this function.
+  pub fn add_fn_attr(&self, _kind: AttrKind) {}
+
+  pub fn add_fn_attrs(&self) {}
+  pub fn add_ret_attr(&self, _kind: AttrKind) {}
+  pub fn add_ret_attrs(&self) {}
+  pub fn add_param_attr(&self) {}
 
   // Adds the attribute to the list of attributes for the given arg.
   pub fn add_param_attr_by_kind(&self, arg_no:u32, kind: AttrKind) {
     self.attribute_sets.add_param_attribute(self.get_context(), arg_no, kind)
   }
 
-  pub fn add_param_attrs() {}
-  pub fn remove_attribute_at_index() {}
-  pub fn remove_fn_attr() {}
-  pub fn remove_fn_attrs() {}
-  pub fn remove_ret_attr() {}
-  pub fn remove_ret_attrs() {}
+  pub fn add_param_attrs(&self) {}
+  pub fn remove_attribute_at_index(&self) {}
+
+  // Remove function attributes from this function.
+  pub fn remove_fn_attr(&self, _kind: AttrKind) {}
+
+  pub fn remove_fn_attrs(&self) {}
+  pub fn remove_ret_attr(&self) {}
+  pub fn remove_ret_attrs(&self) {}
 
   // Removes the attribute from the list of attributes.
   pub fn remove_param_attr(&self, arg_no:u32, kind: AttrKind) {
@@ -200,8 +214,16 @@ impl Function {
   }
 
   pub fn remove_param_attrs() {}
-  pub fn has_fn_atribute() {}
-  pub fn has_ret_attribute() {}
+
+  // Return true if the function has the attribute.
+  pub fn has_fn_atribute(&self, kind: AttrKind) -> bool {
+    self.attribute_sets.has_fn_attr(kind)
+  }
+
+  // Check if an attribute is in the list of attributes for the return value.
+  pub fn has_ret_attribute(&self, kind: AttrKind) -> bool {
+    self.attribute_sets.has_ret_attr(kind)
+  }
 
   // Check if an attributes is in the list of attributes.
   pub fn has_param_attribute(&self, arg_no:u32, kind: AttrKind) -> bool {
@@ -271,53 +293,234 @@ impl Function {
     self.attribute_sets.get_param_no_fp_class(arg_no)
   }
 
-  pub fn is_presplit_coroutine() {}
-  pub fn set_presplit_coroutine() {}
-  pub fn set_splitted_coroutine() {}
-  pub fn does_not_access_memory() {}
-  pub fn set_does_not_access_memory() {}
-  pub fn only_reads_memory() {}
-  pub fn set_only_reads_memory() {}
-  pub fn only_writes_memory() {}
-  pub fn set_only_writes_memory() {}
-  pub fn only_accesses_arg_memory() {}
-  pub fn set_only_accesses_arg_memory() {}
-  pub fn only_accesses_inaccessible_memory() {}
-  pub fn set_only_accesses_inaccessible_memory() {}
-  pub fn only_accesses_inaccessible_mem_or_arg_mem() {}
-  pub fn set_only_accesses_inaccessible_mem_or_arg_mem() {}
-  pub fn does_not_return() {}
-  pub fn set_does_not_return() {}
-  pub fn does_no_cf_check() {}
-  pub fn does_not_throw() {}
-  pub fn set_does_not_throw() {}
-  pub fn cannot_duplicate() {}
-  pub fn set_cannot_duplicate() {}
-  pub fn is_convergent() {}
-  pub fn set_convergent() {}
-  pub fn set_not_convergent() {}
-  pub fn is_speculatable() {}
-  pub fn set_speculatable() {}
-  pub fn does_not_free_memory() {}
-  pub fn set_does_not_free_memory() {}
-  pub fn has_no_sync() {}
-  pub fn set_no_sync() {}
-  pub fn does_not_recurse() {}
-  pub fn set_does_not_recurse() {}
-  pub fn must_progress() {}
-  pub fn set_must_progress() {}
-  pub fn will_return() {}
-  pub fn set_will_return() {}
-  pub fn get_uw_table_kind() {}
-  pub fn has_uw_table() {}
-  pub fn set_uw_table_kind() {}
-  pub fn needs_unwind_table_entry() {}
-  pub fn has_struct_ret_attr() {}
-  pub fn return_does_not_alias() {}
-  pub fn set_return_does_not_alias() {}
-  pub fn has_opt_none() {}
-  pub fn has_min_size() {}
-  pub fn has_opt_size() {}
+  // Determine if the function is presplit coroutine.
+  pub fn is_presplit_coroutine(&self) -> bool {
+    self.has_fn_atribute(AttrKind::PresplitCoroutine)
+  }
+
+  pub fn set_presplit_coroutine(&self) {
+    self.add_fn_attr(AttrKind::PresplitCoroutine)
+  }
+
+  pub fn set_splitted_coroutine(&self) {
+    self.remove_fn_attr(AttrKind::PresplitCoroutine)
+  }
+
+  pub fn get_memory_effects(&self) -> MemoryEffects {
+    self.attribute_sets.get_memory_effects()
+  }
+
+  pub fn set_memory_effects(&self, _me: MemoryEffects) {}
+
+  // Determine if the function does not access memory.
+  pub fn does_not_access_memory(&self) -> bool {
+    self.get_memory_effects().does_not_access_memory()
+  }
+
+  pub fn set_does_not_access_memory(&self) {
+    self.set_memory_effects(MemoryEffects::none())
+  }
+
+  // Determine if the function does not access or only reads memory.
+  pub fn only_reads_memory(&self) -> bool {
+    self.get_memory_effects().only_reads_memory()
+  }
+
+  pub fn set_only_reads_memory(&self) {
+    self.set_memory_effects(MemoryEffects::read_only())
+  }
+
+  // Determine if the function does not access ot only writes memory.
+  pub fn only_writes_memory(&self) -> bool {
+    self.get_memory_effects().only_writes_memory()
+  }
+
+  pub fn set_only_writes_memory(&self) {
+    self.set_memory_effects(MemoryEffects::write_only())
+  }
+
+  // Determine if the call can access memory only using pointers
+  // based on its arguments.
+  pub fn only_accesses_arg_memory(&self) -> bool {
+    self.get_memory_effects().only_accesses_arg_pointees()
+  }
+
+  pub fn set_only_accesses_arg_memory(&self) {
+    self.set_memory_effects(
+      MemoryEffects::arg_mem_only(ModRefInfo::ModRef))
+  }
+
+  // Determine if the function may only access memory that is
+  // inaccessible from the IR.
+  pub fn only_accesses_inaccessible_memory(&self) -> bool {
+    self.get_memory_effects().only_accesses_inaccessible_mem()
+  }
+
+  pub fn set_only_accesses_inaccessible_memory(&self) {
+    self.set_memory_effects(
+      MemoryEffects::inaccessible_mem_only(ModRefInfo::ModRef))
+  }
+
+  // Determine if the function may only access memory that is
+  // either inaccessible from the IR or pointed to by its arguments.
+  pub fn only_accesses_inaccessible_mem_or_arg_mem(&self) -> bool {
+    self.get_memory_effects().only_accesses_inaccessible_or_arg_mem()
+  }
+  
+  pub fn set_only_accesses_inaccessible_mem_or_arg_mem(&self) {
+    self.set_memory_effects(
+      MemoryEffects::inaccessible_or_arg_mem_only(ModRefInfo::ModRef))
+  }
+
+  // Determine if the function cannot return.
+  pub fn does_not_return(&self) -> bool {
+    self.has_fn_atribute(AttrKind::NoReturn)
+  }
+
+  pub fn set_does_not_return(&self) {
+    self.add_fn_attr(AttrKind::NoReturn)
+  }
+
+  // Determine if the function should not perform indirect branch tracking.
+  pub fn does_no_cf_check(&self) -> bool {
+    self.has_fn_atribute(AttrKind::NoCfCheck)
+  }
+
+  // Determine if the function cannot unwind.
+  pub fn does_not_throw(&self) -> bool {
+    self.has_fn_atribute(AttrKind::NoUnwind)
+  }
+
+  pub fn set_does_not_throw(&self) {
+    self.add_fn_attr(AttrKind::NoUnwind)
+  }
+
+  // Determine if the call cannot duplicated.
+  pub fn cannot_duplicate(&self) -> bool {
+    self.has_fn_atribute(AttrKind::NoDuplicate)
+  }
+
+  pub fn set_cannot_duplicate(&self) {
+    self.add_fn_attr(AttrKind::NoDuplicate)
+  }
+
+  // Determine if the call is convergent.
+  pub fn is_convergent(&self) -> bool {
+    self.has_fn_atribute(AttrKind::Convergent)
+  }
+
+  pub fn set_convergent(&self) {
+    self.add_fn_attr(AttrKind::Convergent)
+  }
+
+  pub fn set_not_convergent(&self) {
+    self.remove_fn_attr(AttrKind::Convergent)
+  }
+
+  // Determine if the call has sideeffects.
+  pub fn is_speculatable(&self) -> bool {
+    self.has_fn_atribute(AttrKind::Speculatable)
+  }
+
+  pub fn set_speculatable(&self) {
+    self.add_fn_attr(AttrKind::Speculatable)
+  }
+
+  // Determine if the call might deallocate memory.
+  pub fn does_not_free_memory(&self) -> bool {
+    self.only_reads_memory() || self.has_fn_atribute(AttrKind::NoFree)
+  }
+
+  pub fn set_does_not_free_memory(&self) {
+    self.add_fn_attr(AttrKind::NoFree)
+  }
+
+  // Determine if the call can synchronize with other threads.
+  pub fn has_no_sync(&self) -> bool {
+    self.has_fn_atribute(AttrKind::NoSync)
+  }
+
+  pub fn set_no_sync(&self) {
+    self.add_fn_attr(AttrKind::NoSync)
+  }
+
+  // Determine if the function is known not to recurse, directly
+  // or indirectly.
+  pub fn does_not_recurse(&self) -> bool {
+    self.has_fn_atribute(AttrKind::NoRecurse)
+  }
+
+  pub fn set_does_not_recurse(&self) {
+    self.add_fn_attr(AttrKind::NoRecurse)
+  }
+
+  // Determine if the function is required to make forward progress.
+  pub fn must_progress(&self) -> bool {
+    self.has_fn_atribute(AttrKind::MustProgress) ||
+    self.has_fn_atribute(AttrKind::WillReturn)
+  }
+
+  pub fn set_must_progress(&self) {
+    self.add_fn_attr(AttrKind::MustProgress)
+  }
+
+  /// Determine if the function will return.
+  pub fn will_return(&self) -> bool {
+    self.has_fn_atribute(AttrKind::WillReturn)
+  }
+
+  pub fn set_will_return(&self) {
+    self.add_fn_attr(AttrKind::WillReturn)
+  }
+
+  // Get what kind of unwind table entry to generate for this function.
+  pub fn get_uw_table_kind(&self) -> UWTableKind {
+    self.attribute_sets.get_uw_table_kind()
+  }
+
+  pub fn has_uw_table(&self) -> bool {
+    self.get_uw_table_kind() != UWTableKind::None
+  }
+
+  pub fn set_uw_table_kind(&self) {}
+
+  // True if this function needs an unwind table.
+  pub fn needs_unwind_table_entry(&self) -> bool {
+    self.has_uw_table() || !self.does_not_throw() || self.has_personality_fn()
+  }
+
+  // Determine if the function returns a structure through first or
+  // second pointer argument.
+  pub fn has_struct_ret_attr(&self) -> bool {
+    self.attribute_sets.has_param_attr(0, AttrKind::StructRet) ||
+    self.attribute_sets.has_param_attr(1, AttrKind::StructRet)
+  }
+
+  // Determine if the parameter or return value is marked with no_alias
+  // attribute.
+  pub fn return_does_not_alias(&self) -> bool {
+    self.attribute_sets.has_ret_attr(AttrKind::NoAlias)
+  }
+
+  pub fn set_return_does_not_alias(&self) {
+    self.add_ret_attr(AttrKind::NoAlias)
+  }
+
+  // Do not optimize this function (-O0).
+  pub fn has_opt_none(&self) -> bool {
+    self.has_fn_atribute(AttrKind::OptimizeNone)
+  }
+
+  // Optimize this function for minimum size (-Oz).
+  pub fn has_min_size(&self) -> bool {
+    self.has_fn_atribute(AttrKind::MinSize)
+  }
+
+  // Optimize this function for size (-Os) or minimum size (-Oz).
+  pub fn has_opt_size(&self) -> bool {
+    self.has_fn_atribute(AttrKind::OptimizeForSize) || self.has_min_size()
+  }
+  
   pub fn get_denormal_mode() {}
   pub fn copy_attributes_from() {}
   pub fn delete_body() {}
@@ -352,20 +555,44 @@ impl Function {
 
   pub fn arg_begin() {}
   pub fn arg_end() {}
-  pub fn get_arg() {}
-  pub fn args() {}
-  pub fn arg_size() {}
-  pub fn arg_empty() {}
 
-  pub fn has_personality_fn() {}
+  pub fn get_arg(&self, i: usize) -> Option<&Argument> {
+    self.arguments.get(i)
+  }
+
+  pub fn args(&self) -> &Vec<Argument> {
+    &self.arguments
+  }
+
+  pub fn arg_size(&self) -> usize {
+    self.arguments.len()
+  }
+
+  pub fn arg_empty(&self) -> bool {
+    self.arguments.is_empty()
+  }
+
+  // Check whether this function has a persomnality function.
+  pub fn has_personality_fn(&self) -> bool {
+    self.get_subclass_data_from_value() & (1<<3) != 0
+  }
+
   pub fn get_personality_fn() {}
   pub fn set_personality_fn() {}
 
-  pub fn has_prefix_data() {}
+  // Check whether this function has a prefix data.
+  pub fn has_prefix_data(&self) -> bool {
+    self.get_subclass_data_from_value() & (1<<1) != 0
+  }
+
   pub fn get_prefix_data() {}
   pub fn set_prefix_data() {}
 
-  pub fn has_prologue_data() {}
+  // Check whether this function has a prologue data.
+  pub fn has_prologue_data(&self) -> bool {
+    self.get_subclass_data_from_value() & (1<<2) != 0
+  }
+
   pub fn get_prologue_data() {}
   pub fn set_prologue_data() {}
 
@@ -374,11 +601,21 @@ impl Function {
   pub fn view_cfg() {}
   pub fn view_cfg_only() {}
 
+  // Methods for support type inquiry through isa, cast, and dyn_cast.
+  pub fn class_of(v: Box<dyn Value>) -> bool {
+    v.get_value_id() == ValueType::FunctionVal
+  }
+
   pub fn drop_all_references() {}
   pub fn has_address_taken() {}
   pub fn is_def_trivially_dead() {}
   pub fn calls_function_that_returns_twice() {}
-  pub fn set_sub_program() {}
+
+  // Set the attached subprogram.
+  pub fn set_sub_program(&self, _sp: DISubprogram) {
+    //self.set_metadata(kind_id, node)
+  }
+
   pub fn is_debug_info_for_profiling() {}
   pub fn null_pointer_is_defined() {}
 }
@@ -403,4 +640,6 @@ impl Value for Function {
   fn set_value_subclass_data(&mut self, val: u32) {
     self.sub_class_data = val;
   }
+
+  fn set_metadata(&mut self, _kind_id: u32, _node: Option<Box<dyn MDNode>>) {}
 }

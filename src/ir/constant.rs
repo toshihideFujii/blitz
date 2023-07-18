@@ -6,7 +6,7 @@ use super::{
   type_::{Type, FixedVectorType, /*TypeID, IntegerType,*/ /*IntegerType*/},
   constants::{ConstantFP, ConstantAggregateZero,
   ConstantPointerNull, ConstantTokenNone, ConstantTargetNone},
-  value::{ValueType},
+  value::ValueType,
 };
 
 enum PossibleRelocationsType {

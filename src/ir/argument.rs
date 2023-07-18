@@ -2,13 +2,16 @@
 
 // This file declares the Argument class.
 
-use crate::{support::alignment::MaybeAlign, adt::floating_point_mode::FPClassTest};
+use crate::{support::alignment::MaybeAlign,
+  adt::floating_point_mode::FPClassTest};
 use super::{
-  blits_context::BlitzContext, function::{Function},
-  value::{Value, ValueType}, type_::Type, attributes::{AttrKind, Attribute, AttributeSet}
+  blits_context::BlitzContext, function::Function,
+  value::{Value, ValueType},
+  type_::Type, attributes::{AttrKind, Attribute, AttributeSet}
 };
 
-struct Argument {
+#[derive(Debug)]
+pub struct Argument {
   v_type: Box<dyn Type>,
   parent: Option<Function>,
   arg_no: u32

@@ -1,7 +1,18 @@
 #![allow(dead_code)]
 
-struct FixedPointBuilder {}
-impl FixedPointBuilder {
+// This file defines FixedPointBuilder class, which is used as
+// a convenient way to lower fixed-point arithmetic operations
+// to Blitz IR.
+
+struct FixedPointBuilder<IRBuilderType> {
+  builder: IRBuilderType
+}
+
+impl<IRBuilderType> FixedPointBuilder<IRBuilderType> {
+  pub fn new(builder: IRBuilderType) -> Self {
+    FixedPointBuilder { builder: builder }
+  }
+  
   pub fn convert() {}
   pub fn get_common_binop_semantic() {}
   pub fn get_accommodating_float_type() {}

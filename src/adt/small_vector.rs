@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{ops::*};
+use std::ops::*;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd)]
 pub struct SmallVector<T> {

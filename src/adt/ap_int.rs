@@ -4,8 +4,8 @@
 // This file implements a class to represent arbitrary precision
 // integral constant values and operations on them.
 
-use crate::support::{math_extras::*};
-use std::{ops::*};
+use crate::support::math_extras::*;
+use std::ops::*;
 
 // Byte size of a word.
 const APINT_WORD_SIZE: u32 = 8;

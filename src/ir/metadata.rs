@@ -3,6 +3,7 @@
 // This file contains the declarations for metadata subclasses.
 // They represent the different flavors of metadata that live in Blitz.
 
+use std::any::Any;
 use std::cmp::max;
 use std::fmt::Debug;
 use std::mem::size_of;
@@ -43,6 +44,8 @@ pub enum MetadataKind {
   DIGlobalVariableKind,
   DITemplateValueParameterKind,
   DITemplateTypeParameterKind,
+  DIArgListKind,
+  DILocationKind,
 }
 
 // Active type of storage.
@@ -53,10 +56,15 @@ pub enum StorageType {
   Temporary
 }
 
+// Root of the metadata hierarchy.
+// This is a root class for typeless data in the IR.
 pub trait Metadata : Debug {
-  fn get_metadata_id(&self) -> MetadataKind { MetadataKind::MDStringKind }
+  fn get_metadata_id(&self) -> MetadataKind { MetadataKind::MDTupleKind }
+  fn as_any(&self) -> &dyn Any;
 }
 
+// Metadata wrapper in the Valiue hierarchy.
+// A member of the Value hierarchy to represent a reference to metadata.
 #[derive(Debug, PartialEq)]
 pub struct MetadataAsValue {}
 
@@ -67,7 +75,6 @@ impl MetadataTracking {
   pub fn untrack(_md: &Option<Box<dyn Metadata>>) {}
   pub fn retrack(_md: &Option<Box<dyn Metadata>>, _new: &Option<Box<dyn Metadata>>) -> bool { false }
   pub fn is_replaceable(_md: &Option<Box<dyn Metadata>>) -> bool { false }
-
   fn track_internal() {}
 }
 
@@ -417,6 +424,10 @@ impl MDNode for MDNodeBase {
 impl Metadata for MDNodeBase {
   fn get_metadata_id(&self) -> MetadataKind {
     MetadataKind::MDTupleKind
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 

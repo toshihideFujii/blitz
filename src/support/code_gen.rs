@@ -69,6 +69,7 @@ enum ZeroCallUsedRegs {
   All
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum UWTableKind {
   None = 0, // No unwind table requested
   Sync = 1, // 'Synchronous' unwind tables

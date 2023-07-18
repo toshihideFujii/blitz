@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{collections::HashMap, hash::{Hash}, fmt::Debug};
+use std::{collections::HashMap, hash::Hash, fmt::Debug};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DenseMap<Key, Value> where Key: Eq + Hash {

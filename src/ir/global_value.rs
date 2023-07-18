@@ -397,7 +397,7 @@ impl GlobalValue {
   pub fn get_guid() {}
   pub fn is_materializable() {}
   pub fn materialize() {}
-  pub fn is_declaration() {}
+  pub fn is_declaration(&self) -> bool { false }
   pub fn is_declaration_for_linker() {}
   pub fn is_strong_definition_for_linker() {}
   pub fn get_aliasee_object() {}

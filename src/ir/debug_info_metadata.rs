@@ -3,7 +3,7 @@
 // Declarations for metadata specific to debug info.
 
 //use std::ops::BitOr;
-
+use std::any::Any;
 use crate::adt::{string_ref::StringRef, ap_int::APInt,
   string_switch::StringSwitch};
 use super::{
@@ -319,7 +319,7 @@ impl DIGenericSubrange {
 }
 
 // Enumration value.
-struct DIEnumerator {
+pub struct DIEnumerator {
   node: DINode,
   value: APInt,
   is_unsigned: bool
@@ -335,7 +335,11 @@ impl DIEnumerator {
     }
   }
 
-  pub fn get_impl() {}
+  pub fn get(c: BlitzContext, value: APInt,
+    is_unsigned: bool, _name: StringRef) -> Self
+  {
+    DIEnumerator::new(c, StorageType::Distinct, value, is_unsigned) // TODO
+  }
 
   pub fn get_value(&self) -> &APInt {
     &self.value
@@ -379,6 +383,54 @@ pub trait DIScope {
   fn get_raw_file(&self) {}
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct DIScopeBase {
+  node: DINode
+}
+
+impl DIScopeBase {
+  pub fn new(c: BlitzContext, id: MetadataKind,
+    storage: StorageType, tag: u32) -> Self
+  {
+    DIScopeBase { node: DINode::new(c, id, storage, tag) }
+  }
+
+  pub fn get_operand_as<T>(&self, i: u32) -> Option<T> {
+    self.node.get_operand_as(i)
+  }
+
+  pub fn get_string_operand(&self, i: u32) -> StringRef {
+    self.node.get_string_operand(i)
+  }
+
+  pub fn get_canonical_md_string(&self, c: &BlitzContext,
+    s: StringRef) -> Option<MDString>
+  {
+    self.node.get_canonical_md_string(c, s)
+  }
+
+  // Allow subclasses to mutate the tag.
+  pub fn set_tag(&mut self, tag: u32) {
+    self.node.set_tag(tag)
+  }
+
+  pub fn get_tag(&self) -> u32 {
+    self.node.get_tag()
+  }
+}
+
+impl MDNode for DIScopeBase {
+  fn get_header(&self) -> &Header {
+    self.node.get_header()
+  }
+
+  fn get_operand(&self, i: usize) -> MDOperand {
+    self.node.get_operand(i)
+  }
+}
+
+impl DIScope for DIScopeBase {}
+
 // Which algorithm (e.g. MD5) a checksum was generated with.
 // The encoding is explicit because it is used directly in Bitcode.
 // The value 0 is reserved to indicate the absence of a checksum in Bitcode.
@@ -396,7 +448,7 @@ impl ChecksumInfo {
 
 // File.
 pub struct DIFile {
-  node: DINode,
+  scope: DIScopeBase,
   source: Option<MDString>
 }
 
@@ -405,17 +457,17 @@ impl DIFile {
       source: Option<MDString>) -> Self
   {
     DIFile {
-      node: DINode::new(c, MetadataKind::DIFileKind, storage, 0),
+      scope: DIScopeBase::new(c, MetadataKind::DIFileKind, storage, 0),
       source: source
     }
   }
 
   pub fn get_filename(&self) -> StringRef {
-    self.node.get_string_operand(0)
+    self.scope.get_string_operand(0)
   }
 
   pub fn get_directory(&self) -> StringRef {
-    self.node.get_string_operand(1)
+    self.scope.get_string_operand(1)
   }
 
   pub fn get_checksum() {}
@@ -428,11 +480,11 @@ impl DIFile {
   }
 
   pub fn get_raw_filename(&self) -> Option<MDString> {
-    self.node.get_operand_as::<MDString>(0)
+    self.scope.get_operand_as::<MDString>(0)
   }
 
   pub fn get_raw_directory(&self) -> Option<MDString> {
-    self.node.get_operand_as::<MDString>(1)
+    self.scope.get_operand_as::<MDString>(1)
   }
 
   pub fn get_raw_source(&self) -> &MDString {
@@ -449,9 +501,12 @@ impl DIFile {
 
   pub fn get_checksum_kind(s: StringRef) -> Option<ChecksumKind> {
     let mut switch = StringSwitch::new(s);
-    switch.case(StringRef::new_from_string("MD5"), Some(ChecksumKind::MD5))
-      .case(StringRef::new_from_string("SHA1"), Some(ChecksumKind::SHA1))
-      .case(StringRef::new_from_string("SHA256"), Some(ChecksumKind::SHA256))
+    switch.case(StringRef::new_from_string("MD5"),
+    Some(ChecksumKind::MD5))
+      .case(StringRef::new_from_string("SHA1"),
+      Some(ChecksumKind::SHA1))
+      .case(StringRef::new_from_string("SHA256"),
+      Some(ChecksumKind::SHA256))
       .default(None)
   }
 
@@ -462,19 +517,19 @@ impl DIFile {
 
 impl DIScope for DIFile {
   fn get_file(&self) -> Option<&DIFile> {
-    Some(self)
+    self.scope.get_file()
   }
 
   fn get_file_name(&self) -> Option<StringRef> {
-    Some(self.get_filename())
+    self.scope.get_file_name()
   }
 
   fn get_directory(&self) -> Option<StringRef> {
-    Some(self.get_directory())
+    self.scope.get_directory()
   }
 
   fn get_source(&self) -> Option<StringRef> {
-    self.get_source()
+    self.scope.get_source()
   }
 }
 
@@ -512,7 +567,7 @@ pub trait DIType {
 
 #[derive(Debug, Clone, PartialEq)]
 struct DITypeBase {
-  node: DINode,
+  scope: DIScopeBase,
   line: u32,
   size_in_bits: u64,
   align_in_bits: u32,
@@ -526,22 +581,22 @@ impl DITypeBase {
     offset_in_bits: u64, flags: DIFlags) -> Self
   {
     DITypeBase {
-      node: DINode::new(c, id, storage, tag),
+      scope: DIScopeBase::new(c, id, storage, tag),
       line: line, size_in_bits: size_in_bits, align_in_bits: align_in_bits,
       offset_in_bits: offset_in_bits, flags: flags
     }
   }
 
   pub fn get_operand(&self, i: usize) -> MDOperand {
-    self.node.get_operand(i)
+    self.scope.get_operand(i)
   }
 
   pub fn get_operand_as<T>(&self, i: u32) -> Option<T> {
-    self.node.get_operand_as(i)
+    self.scope.get_operand_as(i)
   }
 
   pub fn get_string_operand(&self, i: u32) -> StringRef {
-    self.node.get_string_operand(i)
+    self.scope.get_string_operand(i)
   }
 }
 
@@ -567,11 +622,11 @@ impl DIType for DITypeBase {
   }
 
   fn get_name(&self) -> StringRef {
-    self.node.get_string_operand(2)
+    self.scope.get_string_operand(2)
   }
 
   fn get_raw_name(&self) -> Option<MDString> {
-    self.node.get_operand_as::<MDString>(2)
+    self.scope.get_operand_as::<MDString>(2)
   }
 
   fn is_private(&self) -> bool {
@@ -815,7 +870,7 @@ impl DICompositeType {
   pub fn get_identifier(&self) -> StringRef {
     self.node.get_string_operand(7)
   }
-  
+
   pub fn get_runtime_lang() {}
 
   pub fn get_raw_base_type(&self) -> MDOperand { // TOFO: -> Metadata
@@ -883,14 +938,237 @@ impl DICompositeType {
   }
 }
 
-struct DISubroutineType {}
+// Type array for a subprogram.
+struct DISubroutineType {
+  node: DITypeBase,
+  cc: u8
+}
 
-struct DICompileUnit {}
+impl DISubroutineType {
+  pub fn new(c: BlitzContext, storage: StorageType, flags: DIFlags, cc: u8) -> Self {
+    DISubroutineType { node: DITypeBase::new(c, MetadataKind::DISubroutineTypeKind,
+      storage, 0, 0, 0, 0, 0, flags),
+      cc: cc
+    }
+  }
 
+  pub fn get_impl() {}
+
+  pub fn get_cc(&self) -> u8 {
+    self.cc
+  }
+
+  pub fn get_type_array() {}
+
+  pub fn get_raw_type_array(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(3)
+  }
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DISubroutineTypeKind
+  }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DebugEmissionKind {
+  NoDebug = 0,
+  FullDebug,
+  LineTablesOnly,
+  DebugDirectivesOnly,
+}
+
+#[derive(Debug, Clone)]
+pub enum DebugNameTableKind {
+  Default,
+  GNU,
+  None
+}
+
+// Compile unit.
+//#[derive(Debug, Clone)]
+pub struct DICompileUnit {
+  node: DINode,
+  source_languages: u32,
+  is_optimized: bool,
+  runtime_version: u32,
+  emission_kind: DebugEmissionKind,
+  dwo_id: u64,
+  split_debug_inlining: bool,
+  debug_info_for_profiling: bool,
+  name_table_kind: DebugNameTableKind,
+  ranges_base_address: bool
+}
+
+impl DICompileUnit {
+  pub fn new() {}
+
+  pub fn get_emission_kind(&self) -> DebugEmissionKind {
+    self.emission_kind.clone()
+  }
+
+  pub fn emission_kind_string() {}
+
+  pub fn get_name_table_kind(&self) -> DebugNameTableKind {
+    self.name_table_kind.clone()
+  }
+
+  pub fn name_table_kind_string() {}
+  pub fn get_impl() {}
+
+  pub fn get_source_language(&self) -> u32 {
+    self.source_languages
+  }
+
+  pub fn is_optimized(&self) -> bool {
+    self.is_optimized
+  }
+
+  pub fn get_runtime_version(&self) -> u32 {
+    self.runtime_version
+  }
+
+  pub fn is_debug_directives_only(&self) -> bool {
+    self.emission_kind == DebugEmissionKind::DebugDirectivesOnly
+  }
+
+  pub fn get_debug_info_for_profiling(&self) -> bool {
+    self.debug_info_for_profiling
+  }
+
+  pub fn get_ranges_base_address(&self) -> bool {
+    self.ranges_base_address
+  }
+
+  pub fn get_producer(&self) -> StringRef {
+    self.node.get_string_operand(1)
+  }
+
+  pub fn get_flags(&self) -> StringRef {
+    self.node.get_string_operand(2)
+  }
+
+  pub fn get_split_debug_filename(&self) -> StringRef {
+    self.node.get_string_operand(3)
+  }
+
+  pub fn get_enum_types() {}
+  pub fn get_retained_types() {}
+  pub fn get_clobal_variables() {}
+  pub fn get_imported_entities() {}
+  pub fn get_macros() {}
+
+  pub fn get_dwo_id(&self) -> u64 {
+    self.dwo_id
+  }
+
+  pub fn set_dwo_id(&mut self, dwo_id: u64) {
+    self.dwo_id = dwo_id;
+  }
+
+  pub fn get_split_debug_inlining(&self) -> bool {
+    self.split_debug_inlining
+  }
+
+  pub fn set_split_debug_inlining(&mut self, split_debug_inlining: bool) {
+    self.split_debug_inlining = split_debug_inlining;
+  }
+
+  pub fn get_sys_root(&self) -> StringRef {
+    self.node.get_string_operand(9)
+  }
+
+  pub fn get_sdk(&self) -> StringRef {
+    self.node.get_string_operand(10)
+  }
+
+  pub fn get_raw_producer(&self) -> Option<MDString> {
+    self.node.get_operand_as::<MDString>(1)
+  }
+
+  pub fn get_raw_flags(&self) -> Option<MDString> {
+    self.node.get_operand_as::<MDString>(2)
+  }
+
+  pub fn get_raw_split_debug_filename(&self) -> Option<MDString> {
+    self.node.get_operand_as::<MDString>(3)
+  }
+
+  pub fn get_raw_enum_types(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(4)
+  }
+
+  pub fn get_raw_retained_types(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(5)
+  }
+
+  pub fn get_raw_global_variables(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(6)
+  }
+
+  pub fn get_raw_imported_entities(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(7)
+  }
+
+  pub fn get_raw_macros(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(8)
+  }
+
+  pub fn get_raw_sys_root(&self) -> Option<MDString> {
+    self.node.get_operand_as::<MDString>(9)
+  }
+
+  pub fn get_raw_sdk(&self) -> Option<MDString> {
+    self.node.get_operand_as::<MDString>(10)
+  }
+
+  pub fn replace_enum_types() {}
+  pub fn replace_retained_types() {}
+  pub fn replace_global_variables() {}
+  pub fn replace_imported_entities() {}
+  pub fn replace_macros() {}
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DICompileUnitKind
+  }
+}
+
+// A scope for locals.
+// A legal scope for lexical blocks, local variables, and debuh info
+// locations.
 struct DILocalScope {}
+impl DILocalScope {
+  pub fn new() {}
+  pub fn get_subprogram() {}
+  pub fn get_non_lexical_block_file_scope() {}
+  pub fn class_of() {}
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DISPFlags {
+  Zero,
+  Virtual,
+  PreVirtual,
+  LocalToUnit,
+  Definition,
+  Optimized,
+  Pure,
+  Elemental,
+  Recursive,
+  MainSubprogram,
+  Deleted
+}
 
 // Subprogram description.
-struct DISubprogram {}
+#[derive(Debug)]
+pub struct DISubprogram {
+  line: u32,
+  scope_line: u32,
+  virtual_index: u32,
+  this_adjustment: i32,
+  flags: DIFlags,
+  sp_flags: DISPFlags
+}
+
 impl DISubprogram {
   pub fn new() {}
   pub fn get_flag() {}
@@ -898,33 +1176,114 @@ impl DISubprogram {
   pub fn split_flags() {}
   pub fn to_sp_flags() {}
   pub fn clone_with_flags() {}
-  pub fn get_line() {}
+
+  pub fn get_line(&self) -> u32 {
+    self.line
+  }
+
   pub fn get_virtuality() {}
-  pub fn get_virtual_index() {}
-  pub fn get_this_adjustment() {}
-  pub fn get_scope_line() {}
-  pub fn get_flags() {}
-  pub fn get_sp_flags() {}
-  pub fn is_local_to_unit() {}
-  pub fn is_definition() {}
-  pub fn is_optimized() {}
-  pub fn is_main_subprogram() {}
-  pub fn is_artificial() {}
-  pub fn is_private() {}
-  pub fn is_protected() {}
-  pub fn is_public() {}
-  pub fn is_explicit() {}
-  pub fn is_prototyped() {}
-  pub fn are_all_calls_described() {}
-  pub fn is_pure() {}
-  pub fn is_elemental() {}
-  pub fn is_recursive() {}
-  pub fn is_objc_direct() {}
-  pub fn is_deleted() {}
-  pub fn is_l_value_reference() {}
-  pub fn is_r_value_reference() {}
-  pub fn is_no_return() {}
-  pub fn is_thunk() {}
+
+  pub fn get_virtual_index(&self) -> u32 {
+    self.virtual_index
+  }
+
+  pub fn get_this_adjustment(&self) -> i32 {
+    self.this_adjustment
+  }
+
+  pub fn get_scope_line(&self) -> u32 {
+    self.scope_line
+  }
+
+  pub fn get_flags(&self) -> DIFlags {
+    self.flags.clone()
+  }
+
+  pub fn get_sp_flags(&self) -> DISPFlags {
+    self.sp_flags.clone()
+  }
+
+  pub fn is_local_to_unit(&self) -> bool {
+    self.sp_flags.clone() as u32 & DISPFlags::LocalToUnit as u32 != 0
+  }
+
+  pub fn is_definition(&self) -> bool {
+    self.sp_flags.clone() as u32 & DISPFlags::Definition as u32 != 0
+  }
+
+  pub fn is_optimized(&self) -> bool {
+    self.sp_flags.clone() as u32 & DISPFlags::Optimized as u32 != 0
+  }
+
+  pub fn is_main_subprogram(&self) -> bool {
+    self.sp_flags.clone() as u32 & DISPFlags::MainSubprogram as u32 != 0
+  }
+
+  pub fn is_artificial(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::Artificial as u32 != 0
+  }
+
+  pub fn is_private(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::Private as u32 != 0
+  }
+
+  pub fn is_protected(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::Protected as u32 != 0
+  }
+
+  pub fn is_public(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::Public as u32 != 0
+  }
+
+  pub fn is_explicit(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::Explicit as u32 != 0
+  }
+
+  pub fn is_prototyped(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::Prototyped as u32 != 0
+  }
+
+  pub fn are_all_calls_described(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::AllCallsDescribe as u32 != 0
+  }
+
+  pub fn is_pure(&self) -> bool {
+    self.sp_flags.clone() as u32 & DISPFlags::Pure as u32 != 0
+  }
+
+  pub fn is_elemental(&self) -> bool {
+    self.sp_flags.clone() as u32 & DISPFlags::Elemental as u32 != 0
+  }
+
+  pub fn is_recursive(&self) -> bool {
+    self.sp_flags.clone() as u32 & DISPFlags::Recursive as u32 != 0
+  }
+
+  // Check if this is deleted member function.
+  pub fn is_deleted(&self) -> bool {
+    self.sp_flags.clone() as u32 & DISPFlags::Deleted as u32 != 0
+  }
+
+  // Check if this is reference-qualified.
+  pub fn is_l_value_reference(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::LValueReference as u32 != 0
+  }
+
+  // Check if this is rvalue-reference-qualified.
+  pub fn is_r_value_reference(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::RValueReference as u32 != 0
+  }
+
+  // Check if this is marked as noreturn.
+  pub fn is_no_return(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::NoReturn as u32 != 0
+  }
+
+  // Check if this routine is a compiler-generated thunk.
+  pub fn is_thunk(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::Thunk as u32 != 0
+  }
+
   pub fn get_scope() {}
   pub fn get_name() {}
   pub fn get_linkage_name() {}
@@ -953,21 +1312,59 @@ impl DISubprogram {
   pub fn get_raw_target_func_name() {}
   pub fn replace_raw_linkage_name() {}
   pub fn describes() {}
-  pub fn class_of() {}
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DISubprogramKind
+  }
 }
 
+//impl MDNode for DISubprogram {
+//}
+
+// Debug location.
 // A debug location in source code, used for debug info and otherwise.
-pub struct DILocation {}
+#[derive(Debug)]
+pub struct DILocation {
+  node: Box<dyn MDNode>,
+  sub_class_data_1: bool,
+  sub_class_data_16: u32,
+  sub_class_data_32: u32 
+}
+
 impl DILocation {
-  pub fn new() {}
+  pub fn new(c: BlitzContext, storage: StorageType, line: u32,
+    column: u32, implicit_code: bool) -> Self
+  {
+    DILocation {
+      node: Box::new(MDNodeBase::new(c, MetadataKind::DILocationKind, storage)),
+      sub_class_data_1: implicit_code,
+      sub_class_data_16: column,
+      sub_class_data_32: line
+    }
+  }
+
   pub fn replace_operand_with() {}
-  pub fn get_line() {}
-  pub fn get_column() {}
+
+  pub fn get_line(&self) -> u32 {
+    self.sub_class_data_32
+  }
+
+  pub fn get_column(&self) -> u32 {
+    self.sub_class_data_16
+  }
+
   pub fn get_scope() {}
   pub fn get_subprogram_linkage_name() {}
   pub fn get_inlined_at() {}
-  pub fn is_implicit_code() {}
-  pub fn set_implicit_code() {}
+
+  pub fn is_implicit_code(&self) -> bool {
+    self.sub_class_data_1
+  }
+
+  pub fn set_implicit_code(&mut self, implicit_code: bool) {
+    self.sub_class_data_1 = implicit_code;
+  }
+
   pub fn get_file() {}
   pub fn get_filename() {}
   pub fn get_directory() {}
@@ -989,35 +1386,500 @@ impl DILocation {
   pub fn decode_discriminator() {}
   pub fn get_duplication_factor_from_discriminator() {}
   pub fn get_copy_identifier_from_discriminator() {}
-  pub fn get_raw_scope() {}
-  pub fn get_raw_inlined_at() {}
-  pub fn class_of() {}
+
+  pub fn get_raw_scope(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(0)
+  }
+
+  pub fn get_raw_inlined_at(&self) -> MDOperand { // TODO: -> Metadata
+    if self.node.get_num_operands() == 2 {
+      return self.node.get_operand(1);
+    }
+    MDOperand::new()
+  }
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DILocationKind
+  }
 }
 
-struct DILexicalBlock {}
+impl Metadata for DILocation {
+  fn get_metadata_id(&self) -> MetadataKind {
+    MetadataKind::DILocationKind
+  }
 
-struct DILexicalBlockFile {}
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
+}
 
-struct DINamespace {}
+struct DILexicalBlock {
+  line: u32,
+  column: u32
+}
 
-struct DIModule {}
+impl DILexicalBlock {
+  pub fn new() {}
+  pub fn get_impl() {}
 
-struct DITemplateParameter {}
+  pub fn get_line(&self) -> u32 {
+    self.line
+  }
 
-struct DITemplateTypeParameter {}
+  pub fn get_column(&self) -> u32 {
+    self.column
+  }
 
-struct DITemplateValueParameter {}
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DILexicalBlockKind
+  }
+}
 
-struct DIVariable {}
+struct DILexicalBlockFile {
+  discriminator: u32
+}
+
+impl DILexicalBlockFile {
+  pub fn new() {}
+  pub fn get_impl() {}
+
+  pub fn get_discriminator(&self) -> u32 {
+    self.discriminator
+  }
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DILexicalBlockFileKind
+  }
+}
+
+struct DINamespace {
+  export_symbols: bool
+}
+
+impl DINamespace {
+  pub fn new() {}
+  pub fn get_impl() {}
+
+  pub fn get_export_symbols(&self) -> bool {
+    self.export_symbols
+  }
+
+  pub fn get_scope() {}
+  pub fn get_name() {}
+  pub fn get_raw_scope() {}
+  pub fn get_raw_name() {}
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DINamespaceKind
+  }
+}
+
+// Represents a module in the programming language.
+struct DIModule {
+  line_no: u32,
+  is_decl: bool
+}
+
+impl DIModule {
+  pub fn new() {}
+  pub fn get_impl() {}
+  pub fn get_scope() {}
+  pub fn get_name() {}
+  pub fn get_configuration_macros() {}
+  pub fn get_include_path() {}
+  pub fn get_api_notes_file() {}
+
+  pub fn get_line_no(&self) -> u32 {
+    self.line_no
+  }
+
+  pub fn get_is_decl(&self) -> bool {
+    self.is_decl
+  }
+
+  pub fn get_raw_scope() {}
+  pub fn get_raw_name() {}
+  pub fn get_raw_configuration_macros() {}
+  pub fn get_raw_include_path() {}
+  pub fn get_raw_api_notes_file() {}
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DIModuleKind
+  }
+}
+
+struct DITemplateTypeParameter {
+  node: DINode,
+  is_default: bool
+}
+
+impl DITemplateTypeParameter {
+  pub fn new(c: BlitzContext, storage: StorageType, tag: u32, is_default: bool) -> Self {
+    DITemplateTypeParameter {
+      node: DINode::new(c, MetadataKind::DITemplateTypeParameterKind, storage, tag),
+      is_default: is_default
+    }
+  }
+
+  pub fn get_impl() {}
+
+  pub fn get_name(&self) -> StringRef {
+    self.node.get_string_operand(0)
+  }
+
+  pub fn get_type() {}
+
+  pub fn get_raw_name(&self) -> Option<MDString> {
+    self.node.get_operand_as::<MDString>(0)
+  }
+
+  pub fn get_raw_type(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(1)
+  }
+
+  pub fn is_default(&self) -> bool {
+    self.is_default
+  }
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DITemplateTypeParameterKind
+  }
+}
+
+struct DITemplateValueParameter {
+  node: DINode,
+  is_default: bool
+}
+
+impl DITemplateValueParameter {
+  pub fn new(c: BlitzContext, storage: StorageType, tag: u32, is_default: bool) -> Self {
+    DITemplateValueParameter {
+      node: DINode::new(c, MetadataKind::DITemplateValueParameterKind, storage, tag),
+      is_default: is_default
+    }
+  }
+
+  pub fn get_impl() {}
+
+  pub fn get_name(&self) -> StringRef {
+    self.node.get_string_operand(0)
+  }
+
+  pub fn get_type() {}
+
+  pub fn get_value(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(2)
+  }
+
+  pub fn get_raw_name(&self) -> Option<MDString> {
+    self.node.get_operand_as::<MDString>(0)
+  }
+
+  pub fn get_raw_type(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(1)
+  }
+
+  pub fn is_default(&self) -> bool {
+    self.is_default
+  }
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DITemplateValueParameterKind
+  }
+}
+
+struct DIVariable {
+  node: DINode,
+  line: u32,
+  align_in_bits: u32
+}
+
+impl DIVariable {
+  pub fn new() {}
+  pub fn get_line() {}
+  pub fn get_scope() {}
+  pub fn get_name() {}
+  pub fn get_file() {}
+  pub fn get_type() {}
+  pub fn get_align_in_bits() {}
+  pub fn get_align_in_bytes() {}
+  pub fn get_size_in_bits() {}
+}
 
 struct DIExpression {}
 
 struct ExprOperand {}
 
-struct DIGlobalVariable {}
+// global variables.
+struct DIGlobalVariable {
+  node: DINode,
+  line: u32,
+  align_in_bits: u32,
+  is_local_to_unit: bool,
+  is_definition: bool
+}
+
+impl DIGlobalVariable {
+  pub fn new(c: BlitzContext, storage: StorageType, line: u32,
+    is_local_to_unit: bool, is_definition: bool, align_in_bits: u32) -> Self
+  {
+    DIGlobalVariable {
+      node: DINode::new(c, MetadataKind::DIGlobalVariableKind, storage, 0),
+      line: line, align_in_bits: align_in_bits, is_local_to_unit: is_local_to_unit,
+      is_definition: is_definition
+    }
+  }
+
+  pub fn get_line(&self) -> u32 {
+    self.line
+  }
+
+  pub fn get_scope() {}
+  pub fn get_name() {}
+  pub fn get_file() {}
+  pub fn get_type() {}
+  pub fn get_align_in_bits() {}
+  pub fn get_align_in_bytes() {}
+  pub fn get_size_in_bits() {}
+
+  pub fn is_local_to_unit(&self) -> bool {
+    self.is_local_to_unit
+  }
+
+  pub fn is_definition(&self) -> bool {
+    self.is_definition
+  }
+
+  pub fn get_display_name(&self) -> StringRef {
+    self.node.get_string_operand(4)
+  }
+
+  pub fn get_linkage_name(&self) -> StringRef {
+    self.node.get_string_operand(5)
+  }
+
+  pub fn get_static_data_member_declaration() {}
+  pub fn get_annotations() {}
+
+  pub fn get_raw_linkage_name(&self) -> Option<MDString> {
+    self.node.get_operand_as::<MDString>(5)
+  }
+
+  pub fn get_raw_static_data_member_declaration(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(6)
+  }
+
+  pub fn get_raw_template_params(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(7)
+  }
+
+  pub fn get_template_params(&self) -> Option<MDTuple> {
+    self.node.get_operand_as::<MDTuple>(7)
+  }
+
+  pub fn get_raw_annotations(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(8)
+  }
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DIGlobalVariableKind
+  }
+}
 
 struct DICommonBlock {}
+impl DICommonBlock {
+  pub fn new() {}
+  pub fn get_impl() {}
+  pub fn get_scope() {}
+  pub fn get_decl() {}
+  pub fn get_name() {}
+  pub fn get_file() {}
+  pub fn get_line_no() {}
+  pub fn get_raw_scope() {}
+  pub fn get_raw_decl() {}
+  pub fn get_raw_name() {}
+  pub fn get_raw_file() {}
 
-struct DILocalVariable {}
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DICommonBlockKind
+  }
+}
 
-struct DILabel {}
+struct DILocalVariable {
+  node: DINode,
+  line: u32,
+  align_in_bits: u32,
+  arg: u32,
+  flags: DIFlags
+}
+
+impl DILocalVariable {
+  pub fn new(c: BlitzContext, storage: StorageType, line: u32,
+    arg: u32, flags: DIFlags, align_in_bits: u32) -> Self {
+    DILocalVariable {
+      node: DINode::new(c, MetadataKind::DILocalVariableKind, storage, 0),
+      line: line, align_in_bits: align_in_bits, arg: arg, flags: flags
+    }
+  }
+
+  pub fn get_line(&self) -> u32 {
+    self.line
+  }
+
+  pub fn get_scope() {}
+
+  pub fn get_name(&self) -> StringRef {
+    self.node.get_string_operand(1)
+  }
+
+  pub fn get_file() {}
+  pub fn get_type() {}
+
+  pub fn get_align_in_bits(&self) -> u32 {
+    self.align_in_bits
+  }
+
+  pub fn get_align_in_bytes() {}
+  pub fn get_size_in_bits() {}
+  
+  pub fn get_signedness() {}
+  pub fn get_file_name() {}
+  pub fn get_directory() {}
+  pub fn get_source() {}
+
+  pub fn get_raw_scope(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(0)
+  }
+
+  pub fn get_raw_name(&self) -> Option<MDString> {
+    self.node.get_operand_as::<MDString>(1)
+  }
+
+  pub fn get_raw_file(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(2)
+  }
+
+  pub fn get_raw_type(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(3)
+  }
+
+  pub fn is_parameter(&self) -> bool {
+    self.arg != 0
+  }
+
+  pub fn get_arg(&self) -> u32 {
+    self.arg
+  }
+
+  pub fn get_flags(&self) -> DIFlags {
+    self.flags.clone()
+  }
+
+  pub fn get_annotations() {}
+
+  pub fn is_artificial(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::Artificial as u32 != 0
+  }
+
+  pub fn is_object_pointer(&self) -> bool {
+    self.flags.clone() as u32 & DIFlags::ObjectPointer as u32 != 0
+  }
+
+  pub fn is_valid_location_for_intrinsic() {}
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DILocalVariableKind
+  }
+}
+
+// Label.
+struct DILabel {
+  node: DINode,
+  line: u32
+}
+
+impl DILabel {
+  pub fn new(c: BlitzContext, storage: StorageType, line: u32) -> Self {
+    DILabel {
+      node: DINode::new(c, MetadataKind::DILabelKind, storage, 0),
+      line: line
+    }
+  }
+
+  pub fn get_impl() {}
+  pub fn get_scope() {}
+
+  pub fn get_line(&self) -> u32 {
+    self.line
+  }
+
+  pub fn get_name(&self) -> StringRef {
+    self.node.get_string_operand(1)
+  }
+
+  pub fn get_file() {}
+
+  pub fn get_raw_scope(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(0)
+  }
+
+  pub fn get_raw_name(&self) -> Option<MDString> {
+    self.node.get_operand_as::<MDString>(1)
+  }
+
+  pub fn get_raw_file(&self) -> MDOperand { // TODO: -> Metadata
+    self.node.get_operand(2)
+  }
+
+  pub fn is_valid_location_for_intrinsic() {}
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DILabelKind
+  }
+}
+
+struct DIImportedEntity {}
+
+struct DIMacroNode {
+  node: Box<dyn MDNode>
+}
+
+impl DIMacroNode {
+  pub fn new() {}
+  pub fn get_operand_as() {}
+  pub fn get_string_operand() {}
+  pub fn get_canonical_md_string() {}
+}
+
+struct DIMacro {}
+
+struct DIMacroFile {}
+
+struct DIArgList {
+  node: Box<dyn MDNode>
+}
+
+impl DIArgList {
+  pub fn new() {}
+  pub fn track() {}
+  pub fn untrack() {}
+  pub fn drop_all_references() {}
+  pub fn get_args() {}
+
+  pub fn class_of(md: Box<dyn Metadata>) -> bool {
+    md.get_metadata_id() == MetadataKind::DIArgListKind
+  }
+}
+
+// Identifies a unique instance of a variable.
+struct DebugVariable {}
+impl DebugVariable {
+  pub fn new() {}
+  pub fn get_variable() {}
+  pub fn get_fragment() {}
+  pub fn get_inlined_at() {}
+  pub fn get_fragment_or_default() {}
+  pub fn is_default_fragment() {}
+}
+
+struct DebugVariableAggregate {}

@@ -67,7 +67,9 @@ impl TypedTrackingMDRef {
     TypedTrackingMDRef { md_ref: TrackingMDRef::new(Some(md)) }
   }
   
-  pub fn get() {}
+  pub fn get(&self) -> &Option<Box<dyn Metadata>> {
+    self.md_ref.get()
+  }
   
   pub fn reset(&mut self) {
     self.md_ref.reset()

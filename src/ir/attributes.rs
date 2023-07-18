@@ -16,8 +16,9 @@ use crate::{
 };
 
 use super::{
-  blits_context::BlitzContext, attribute_impl::{AttributeImpl, AttributeSetNode},
-  type_::{Type}
+  blits_context::BlitzContext,
+  attribute_impl::{AttributeImpl, AttributeSetNode},
+  type_::Type
 };
 
 pub enum AllocFnKind {
@@ -44,6 +45,7 @@ pub enum AttrKind {
   StackAlignment,
   UWTable,
   VScaleRange,
+
   // EnumAttr
   InReg,
   Nest,
@@ -55,6 +57,21 @@ pub enum AttrKind {
   Returned,
   SExt,
   ZExt,
+  PresplitCoroutine,
+  NoReturn,
+  NoCfCheck,
+  NoUnwind,
+  NoDuplicate,
+  Convergent,
+  Speculatable,
+  NoSync,
+  NoRecurse,
+  MustProgress,
+  WillReturn,
+  OptimizeNone,
+  MinSize,
+  OptimizeForSize,
+
   // TypeAttr
   ByVal,
   ByRef,
@@ -62,6 +79,7 @@ pub enum AttrKind {
   InAlloca,
   Preallocated,
   StructRet,
+
   // Others
   EndAttrKinds,
   EmptyKey,
@@ -672,12 +690,18 @@ impl AttributeList {
     self.has_attribute_at_index(arg_no + AttrIndex::FirstArgIndex as u32, kind)
   }
 
-  pub fn has_param_attrs() {}
-  pub fn has_ret_attr() {}
-  pub fn has_ret_attrs() {}
-  pub fn has_fn_attr() {}
-  pub fn has_fn_attrs() {}
-  pub fn has_attr_somewhere() {}
+  pub fn has_param_attrs(&self) -> bool { false }
+
+  // Return true if the attribute exists for the return value.
+  pub fn has_ret_attr(&self, _kind: AttrKind) -> bool { false }
+
+  pub fn has_ret_attrs(&self) -> bool { false }
+
+  // Return true if the attribute exists for the function.
+  pub fn has_fn_attr(&self, _kind: AttrKind) -> bool { false }
+
+  pub fn has_fn_attrs(&self) -> bool { false }
+  pub fn has_attr_somewhere(&self) -> bool { false }
 
   // Return the attribute object that exists at the given idex.
   pub fn get_attribute_at_index(&self, _index: u32, _kind: AttrKind) -> Attribute {
@@ -734,4 +758,18 @@ impl AttributeList {
   pub fn get_param_no_fp_class(&self, _index: u32) -> FPClassTest {
     FPClassTest::None
   }
+
+  pub fn get_uw_table_kind(&self) -> UWTableKind {
+    UWTableKind::None
+  }
+
+  pub fn get_alloc_kind() {}
+
+  // Returns memory effects of the function.
+  pub fn get_memory_effects(&self) -> MemoryEffects {
+    MemoryEffects::new(0)
+  }
+
+  pub fn get_as_string() {}
+  pub fn has_parent_context() {}
 }
