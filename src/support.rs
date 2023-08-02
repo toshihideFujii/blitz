@@ -1,4 +1,5 @@
 pub mod alignment;
+pub mod atomic_ordering;
 pub mod data_extractor;
 pub mod code_gen_coverage;
 pub mod code_gen;

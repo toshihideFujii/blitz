@@ -1,12 +1,33 @@
 #![allow(dead_code)]
 
-use crate::adt::ap_int::APInt;
+// This file defines the IRBuilder class, which is used as a
+// convenient way to create Blitz instructions with a consistent
+// and simplified interface.
 
-use super::{constants::ConstantInt, blits_context::BlitzContext, type_::{IntegerType, self}};
+use crate::adt::{ap_int::APInt, twine::Twine};
+use super::{constants::ConstantInt, blits_context::BlitzContext,
+  type_::{IntegerType, self}, instruction::Instruction,
+  basic_block::BasicBlock, value::Value};
 
+// This provides the default implementation of the IRBuilder
+// 'inser_helper' method that is called whenever an instruction is
+// created by IRBuilder and needs to be inserted.
 struct IRBuilderDefaultInserter {}
+impl IRBuilderDefaultInserter {
+  pub fn new() {}
+  pub fn insert_helper(&self, i: Instruction, name: Twine, bb: Option<BasicBlock>) {
+    if bb.is_some() {
+      i.insert_into(bb.unwrap());
+    }
+    Value::set_name(&i, name);
+  }
+}
 
 struct IRBuilderCallbackInserter {}
+impl IRBuilderCallbackInserter {
+  pub fn new() {}
+  pub fn insert_helper() {}
+}
 
 struct InsertPoint {}
 
@@ -14,7 +35,12 @@ struct InsertPointGuard {}
 
 struct FastMathFlagGuard {}
 
+// RAII object that stores the current default operand bundles and restores
+// them when the object is destroyed.
 struct OperandBundlesGuard {}
+impl OperandBundlesGuard {
+  pub fn new() {}
+}
 
 
 // This provides a uniform API for creating instructions and inserting
@@ -158,6 +184,8 @@ impl IRBuilder {
   pub fn create_mem_transfer_inst() {}
   pub fn create_element_unordered_atomic_mem_cpy() {}
   pub fn create_element_unordered_atomic_mem_move() {}
+
+  pub fn get_reduction_intrinsic() {}
 
   pub fn create_f_add_reduce() {}
   pub fn create_f_mul_reduce() {}

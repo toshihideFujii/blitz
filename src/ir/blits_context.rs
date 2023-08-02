@@ -5,7 +5,7 @@
 
 use crate::adt::string_ref::StringRef;
 
-use super::blitz_context_impl::BlitzContextImpl;
+use super::{blitz_context_impl::BlitzContextImpl, /*type_::IntegerType*/};
 
 enum SyncScope {
   SingleThread,
@@ -76,15 +76,22 @@ enum OperandBundle {
 // careful to have one context per thread.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlitzContext {
-  pub p_impl: Option<Box::<BlitzContextImpl>>
+  pub p_impl: Option<Box::<BlitzContextImpl>>,
+  //pub int_1_type: Option<Box<IntegerType>>
 }
 
 impl BlitzContext {
   pub fn new() -> Self {
-    let mut instance = BlitzContext { p_impl: None };
+    let mut instance = BlitzContext { p_impl: None, /*int_1_type: None*/ };
     instance.p_impl = Some(Box::new(BlitzContextImpl::new(&instance)));
     instance
   }
+
+  //pub fn new_2() -> Self {
+    //let mut c = BlitzContext { p_impl: None, int_1_type: None };
+    //c.int_1_type = Some(Box::new(IntegerType::new(c, 1)));
+    //c
+  //}
 
   // Return a unique non-zero id for the specified metadata kind.
   pub fn get_md_kind_id(&self, _name: StringRef) -> u32 {
@@ -134,6 +141,10 @@ impl BlitzContext {
   pub fn get_impl(&self) -> BlitzContextImpl {
     let pimpl = self.p_impl.clone();
     pimpl.unwrap().as_ref().clone()
+  }
+
+  pub fn get_impl_2(&mut self) -> &mut Box<BlitzContextImpl> {
+    self.p_impl.as_mut().unwrap()
   }
 }
 

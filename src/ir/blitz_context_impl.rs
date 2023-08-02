@@ -20,7 +20,7 @@ use super::{
   metadata::{MDString, /*ValueAsMetadata, Metadata, MetadataAsValue, MDNode*/},
   /*value::Value,*/
   debug_info_metadata::DICompositeType,
-  type_::{/*Type,*/ IntegerType, LabelType},
+  type_::{/*Type,*/ IntegerType, LabelType, VoidType},
   global_object::GlobalObject,
   global_value::GlobalValue,
   blits_context::BlitzContext,
@@ -71,8 +71,7 @@ pub struct BlitzContextImpl {
   the_false_val: Option<ConstantInt>,
 
   // Basic type instances.
-  //void_type: Box<dyn Type>,
-  
+  pub void_type: VoidType,
   pub label_type: LabelType,
   /*
   half_type: Box<dyn Type>,
@@ -135,6 +134,7 @@ impl BlitzContextImpl {
       //distinct_md_nodes: Vec::new(),
       the_true_val: None,
       the_false_val: None,
+      void_type: VoidType::new(c.clone()),
       label_type: LabelType::new(c.clone()),
       int_1_type: IntegerType::new(c.clone(), 1),
       int_8_type: IntegerType::new(c.clone(), 8),

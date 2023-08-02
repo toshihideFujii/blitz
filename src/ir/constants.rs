@@ -93,10 +93,22 @@ impl ConstantInt {
     slot.unwrap().clone()
   }
 
+  pub fn get_from_apint_2(c: &mut BlitzContext, v: APInt) -> ConstantInt {
+    let slot = c.get_impl_2().int_constants.find(&v);
+    if slot.is_none() {
+      let i_type = IntegerType::get_2(c, v.get_bit_width());
+      let c_int = ConstantInt::new(i_type, v.clone());
+      c.get_impl_2().int_constants.insert(v.clone(), c_int.clone());
+      return c_int;
+    }
+    slot.unwrap().clone()
+  }
+
   // Return a ConstantInt with the specified integer value for the specified type.
-  pub fn get(t: IntegerType, v: u64, is_signed: bool) -> ConstantInt {
+  pub fn get(mut t: IntegerType, v: u64, is_signed: bool) -> ConstantInt {
     let val = APInt::new(t.get_bit_width(), v as i64, is_signed);
-    ConstantInt::get_from_apint(t.get_context().clone(), val)
+    //ConstantInt::get_from_apint(t.get_context().clone(), val)
+    ConstantInt::get_from_apint_2(t.get_context_2(), val)
   }
 
   // Return a ConstantInt with the specified value for the specified type.

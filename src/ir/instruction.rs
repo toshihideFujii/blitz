@@ -3,18 +3,18 @@
 // This file contains the declaration of the Instruction class,
 // which is the base class for all of the instructions.
 
-use crate::adt::string_ref::StringRef;
+use crate::adt::{string_ref::StringRef, twine::Twine};
 use super::{
   basic_block::BasicBlock,
   blits_context::{BlitzContext, MDKind},
   debug_loc::DebugLoc, function::Function,
   value::{Value, ValueType}, 
-  type_::Type, metadata::MDNode
+  type_::Type, metadata::MDNode, use_::Use
 };
 
 // These instructions are used to terminate a basic block of the program.
 //#[derive(Debug, PartialEq, PartialOrd)]
-enum TermOps {
+pub enum TermOps {
   Ret = 1,
   Br = 2,
   Switch = 3,
@@ -29,12 +29,12 @@ enum TermOps {
 }
 
 // Standard unary operators.
-enum UnaryOps {
+pub enum UnaryOps {
   FNeg = 12
 }
 
 // Standard binary operators.
-enum BinaryOps {
+pub enum BinaryOps {
   Add = 13,
   FAdd = 14,
   Sub = 15,
@@ -55,7 +55,19 @@ enum BinaryOps {
   Xor = 30
 }
 
-enum CastOps {
+#[derive(Debug, Clone, PartialEq)]
+pub enum MemoryOps {
+  Alloca,
+  Load,
+  Store,
+  GetElementPtr,
+  Fence,
+  AtomicCmpXchg,
+  AtomicRMW
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum CastOps {
   Trunc = 38,
   ZExt = 39,
   SExt = 40,
@@ -84,7 +96,7 @@ pub enum OtherOps {
   Select = 57,
   UserOp1 = 58,
   UserOp2 = 59,
-  VaArg = 60,
+  VAArg = 60,
   ExtractElement = 61,
   InsertElement = 62,
   ShuffleVector = 63,
@@ -98,21 +110,34 @@ pub enum OtherOps {
 pub struct Instruction {
   v_type: Box<dyn Type>,
   has_metadata: bool,
-  parent: BasicBlock,
-  dbg_loc: Option<DebugLoc>
+  parent: Option<BasicBlock>,
+  dbg_loc: Option<DebugLoc>,
+  order: u32
 }
 
 impl Instruction {
-  pub fn new() {}
+  pub fn new_ib(v_type: Box<dyn Type>, _i_type: u32, _ops: Option<Use>,
+    _num_ops: u32, _insert_before: Option<Box<Instruction>>) -> Self
+  {
+    Instruction { v_type: v_type, has_metadata: false, parent: None,
+      dbg_loc: None, order: 0 }
+  }
+
+  pub fn new_ie(v_type: Box<dyn Type>, _i_type: u32, _ops: Option<Use>,
+    _num_ops: u32, _insert_at_end: Option<BasicBlock>) -> Self
+  {
+    Instruction { v_type: v_type, has_metadata: false, parent: None,
+      dbg_loc: None, order: 0 }
+  }
 
   pub fn user_back() {}
 
-  pub fn get_parent(&self) -> &BasicBlock {
+  pub fn get_parent(&self) -> &Option<BasicBlock> {
     &self.parent
   }
 
   pub fn set_parent(&mut self, p: BasicBlock) {
-    self.parent = p;
+    self.parent = Some(p);
   }
 
   pub fn get_module(&self) /*-> &Module*/ {
@@ -121,14 +146,14 @@ impl Instruction {
 
   // Return the function this instruction belongs to.
   pub fn get_function(&self) -> &Option<Function> {
-    self.parent.get_parent()
+    self.parent.as_ref().unwrap().get_parent()
   }
   
   pub fn remove_from_parent() {}
   pub fn erase_from_parent() {}
   pub fn insert_before() {}
   pub fn insert_after() {}
-  pub fn insert_into() {}
+  pub fn insert_into(&self, _bb: BasicBlock) {}
   pub fn move_before() {}
   pub fn move_after() {}
   pub fn comes_before() {}
@@ -318,7 +343,7 @@ impl Instruction {
   pub fn may_write_to_memory() {}
   pub fn may_read_from_memory() {}
   pub fn may_read_or_write_memory() {}
-  pub fn is_atomic() {}
+  pub fn is_atomic(&self) -> bool { false }
   pub fn has_atomic_load() {}
   pub fn has_atomic_store() {}
   pub fn is_volatile() {}
@@ -341,6 +366,9 @@ impl Instruction {
   pub fn get_num_successors(&self) -> usize { 0 }
   pub fn get_successor(&self, _index: u32) -> Option<&BasicBlock> { None }
   pub fn replace_successor_with() {}
+
+  pub fn get_subclass_data(&self) {}
+  pub fn set_subclass_data(&self) {}
   pub fn class_of() {}
 
   fn get_metadata_by_id_impl(&self, _kind_id: u32) -> Option<Box<dyn MDNode>> {
@@ -397,6 +425,8 @@ impl Value for Instruction {
 
     // Value::set_metadata()
   }
+
+  fn set_name(&self, _name: Twine) {}
 }
 
 struct ICmpInst {}
@@ -420,28 +450,6 @@ impl ICmpInst {
 struct FCmpInst {}
 impl FCmpInst {
   pub fn new() {}
-}
-
-enum TailCallKind {
-  None,
-  Tail,
-  MustTail,
-  NoTail
-}
-
-struct CallInst {}
-impl CallInst {
-  pub fn new() {}
-  pub fn get_tail_call_kind() {}
-  pub fn is_tail_call() {}
-  pub fn is_must_tail_call() {}
-  pub fn is_no_tail_call() {}
-  pub fn set_tail_call_kind() {}
-  pub fn set_tail_call() {}
-  pub fn can_return_twice() {}
-  pub fn set_can_return_twice() {}
-  pub fn class_of() {}
-  pub fn update_prof_weight() {}
 }
 
 struct SelectInst {}

@@ -154,7 +154,10 @@ impl std::cmp::PartialEq for Type {
 }
 */
 
-pub fn get_void_type() {}
+pub fn get_void_type(c: &mut BlitzContext) -> VoidType {
+  //c.get_impl().void_type.clone()
+  c.get_impl_2().void_type.clone()
+}
 
 pub fn get_label_type(c: &BlitzContext) -> LabelType {
   c.get_impl().label_type.clone()
@@ -172,8 +175,9 @@ pub fn get_x86_mmx_type() {}
 pub fn get_x86_amx_type() {}
 pub fn get_token_type() {}
 
-pub fn get_int_1_type(c: &BlitzContext) -> IntegerType {
-  c.get_impl().get_int_1_type().clone()
+pub fn get_int_1_type(c: &mut BlitzContext) -> IntegerType {
+  //c.get_impl().get_int_1_type().clone()
+  c.get_impl_2().get_int_1_type().clone()
 }
 
 pub fn get_int_8_type(c: &BlitzContext) -> IntegerType {
@@ -204,6 +208,36 @@ pub fn get_int_n_type(c: BlitzContext, n: u32) -> IntegerType {
 enum IntConstants {
   MinIntBits = 1,
   MaxIntBits = 1<<23
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VoidType {
+  context: BlitzContext,
+  id: TypeID
+}
+
+impl VoidType {
+  pub fn new(c: BlitzContext) -> Self {
+    VoidType { context: c, id: TypeID::Void }
+  }
+}
+
+impl Type for VoidType {
+  fn get_type_id(&self) -> TypeID {
+    TypeID::Void
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    &self.context
+  }
+
+  fn get_subclass_data(&self) -> u32 {
+    0
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -263,7 +297,7 @@ impl IntegerType {
     debug_assert!(num_bits <= IntConstants::MaxIntBits as u32, "Bitwidth too large.");
 
     match num_bits {
-      1 => return get_int_1_type(&c),
+      //1 => return get_int_1_type(&c),
       8 => return get_int_8_type(&c),
       16 => return get_int_16_type(&c),
       32 => return get_int_32_type(&c),
@@ -279,6 +313,31 @@ impl IntegerType {
       let new_entry_c = new_entry.clone();
       c_impl.integer_types.insert(num_bits, new_entry);
       return new_entry_c;
+    } else {
+      return entry.unwrap().clone();
+    }
+  }
+
+  pub fn get_2(c: &mut BlitzContext, num_bits: u32) -> IntegerType {
+    debug_assert!(num_bits >= IntConstants::MinIntBits as u32, "Bitwidth too small.");
+    debug_assert!(num_bits <= IntConstants::MaxIntBits as u32, "Bitwidth too large.");
+
+    match num_bits {
+      1 => return get_int_1_type(c),
+      8 => return get_int_8_type(c),
+      16 => return get_int_16_type(c),
+      32 => return get_int_32_type(c),
+      64 => return get_int_64_type(c),
+      128 => return get_int_128_type(c),
+      _ => println!("num_bits: {}", num_bits),
+    };
+
+    let entry = c.get_impl_2().integer_types.find(&num_bits);
+    if entry.is_none() {
+      let new_entry = IntegerType::new(c.clone(), num_bits);
+      let ret_v = new_entry.clone();
+      c.get_impl_2().integer_types.insert(num_bits, new_entry);
+      ret_v
     } else {
       return entry.unwrap().clone();
     }
@@ -316,6 +375,10 @@ impl IntegerType {
   // Methods for support type inquiry through isa, cast, and dyn_cast.
   fn class_of(t: &dyn Type) -> bool {
     t.get_type_id() == TypeID::Integer
+  }
+
+  pub fn get_context_2(&mut self) -> &mut BlitzContext {
+    &mut self.context
   }
 }
 
@@ -424,8 +487,10 @@ impl FunctionType {
     self.get_subclass_data() != 0
   }
 
-  pub fn get_return_type(&self) -> &Box<dyn Type>{
-    &self.contained_types[0]
+  pub fn get_return_type(&self) /*-> Box<dyn Type>*/ {
+    //self.contained_types[0]
+    //let mut cp = Vec::new();
+    //cp.clone_from_slice(&self.contained_types);
   }
 
   pub fn param_begin() {}

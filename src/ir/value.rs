@@ -2,7 +2,7 @@
 
 // This file declares the value class.
 
-use crate::adt::string_ref::StringRef;
+use crate::adt::{string_ref::StringRef, twine::Twine};
 use super::{type_::Type, use_::Use,
   blits_context::BlitzContext,
   metadata::MDNode
@@ -74,7 +74,9 @@ pub trait Value {
   // Return a constant reference to the value's name.
   fn get_name(&self) -> StringRef { StringRef::new() }
 
-  fn set_name(&self) {}
+  // Change the name of the value.
+  // Choose a new unique name if the provided name is taken.
+  fn set_name(&self, _name: Twine) {}
   fn take_name(&self) {}
   fn replace_all_uses_with(&self) {}
   fn replace_non_metadata_uses_with(&self) {}
@@ -149,3 +151,11 @@ pub trait Value {
   fn get_subclass_data_from_value(&self) -> u32 { 0 }
   fn set_value_subclass_data(&mut self, _val: u32) {}
 }
+
+/*
+impl Clone for Box<dyn Type>  {
+  fn clone(&self) -> Self {
+    *self
+  }
+}
+*/

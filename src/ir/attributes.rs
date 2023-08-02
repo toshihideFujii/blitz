@@ -71,6 +71,15 @@ pub enum AttrKind {
   OptimizeNone,
   MinSize,
   OptimizeForSize,
+  ReadNone,
+  ReadOnly,
+  WriteOnly,
+  NoBuiltin,
+  Builtin,
+  StrictFP,
+  NoInline,
+  NoMerge,
+  ReturnsTwice,
 
   // TypeAttr
   ByVal,
@@ -638,34 +647,69 @@ pub enum AttrIndex {
 pub struct AttributeList {}
 
 impl AttributeList {
-  pub fn new() {}
+  pub fn new() -> Self { AttributeList {  } }
   pub fn get() {}
-  pub fn add_attribute_at_index() {}
+
+  pub fn add_attribute_at_index(&self, _c: &BlitzContext, _i: u32, _attr: Attribute) -> Self {
+    AttributeList::new()
+  }
+
   pub fn add_attributes_at_index() {}
-  pub fn add_fn_attribute() {}
+
+  pub fn add_fn_attribute(&self, _c: &BlitzContext, _kind: AttrKind) -> Self {
+    AttributeList::new()
+  }
+
   pub fn add_fn_attributes() {}
-  pub fn add_ret_attribute() {}
+
+  pub fn add_ret_attribute(&self, _c: &BlitzContext, _attr: Attribute) -> Self {
+    AttributeList::new()
+  }
+
   pub fn add_ret_attributes() {}
 
   // Add an argument attribute to the list.
-  pub fn add_param_attribute(&self, _c: &BlitzContext, _arg_no: u32, _kind: AttrKind) {}
+  pub fn add_param_attribute(&self, _c: &BlitzContext, _arg_no: u32, _kind: AttrKind) -> Self {
+    AttributeList::new()
+  }
 
   pub fn add_param_attributes() {}
-  pub fn remove_attribute_at_index() {}
+
+  pub fn remove_attribute_at_index(&self, _c: &BlitzContext, _i: u32, _kind: AttrKind) -> Self {
+    AttributeList::new()
+  }
+
   pub fn remove_attributes_at_index() {}
-  pub fn remove_fn_attribute() {}
+
+  pub fn remove_fn_attribute(&self, _c: &BlitzContext, _kind: AttrKind) -> Self {
+    AttributeList::new()
+  }
+
   pub fn remove_fn_attributes() {}
-  pub fn remove_ret_attirbute() {}
+
+  pub fn remove_ret_attirbute(&self, _c: &BlitzContext, _kind: AttrKind) -> Self {
+    AttributeList::new()
+  }
+
   pub fn remove_ret_attributes() {}
 
   // Remove the specified attribute at the specified arg index from this
   // attribute list.
-  pub fn remove_param_attribute(&self, _c: &BlitzContext, _arg_no: u32, _kind: AttrKind) {}
+  pub fn remove_param_attribute(&self, _c: &BlitzContext, _arg_no: u32, _kind: AttrKind) -> Self {
+    AttributeList::new()
+  }
 
   pub fn remove_param_attributes() {}
   pub fn replace_attribute_type_at_index() {}
-  pub fn add_dereferenceable_ret_attr() {}
-  pub fn add_dereferenceable_param_attr() {}
+
+  pub fn add_dereferenceable_ret_attr(&self, _c: &BlitzContext, _bytes: u64) -> Self {
+    AttributeList::new()
+  }
+
+  pub fn add_dereferenceable_param_attr(&self, _c: &BlitzContext, _i: u32, _bytes: u64) -> Self {
+    AttributeList::new()
+  }
+
   pub fn add_dereferenceable_or_null_param_attr() {}
   pub fn add_alloc_size_param_attr() {}
 
@@ -701,7 +745,7 @@ impl AttributeList {
   pub fn has_fn_attr(&self, _kind: AttrKind) -> bool { false }
 
   pub fn has_fn_attrs(&self) -> bool { false }
-  pub fn has_attr_somewhere(&self) -> bool { false }
+  pub fn has_attr_somewhere(&self, _kind: AttrKind) -> bool { false }
 
   // Return the attribute object that exists at the given idex.
   pub fn get_attribute_at_index(&self, _index: u32, _kind: AttrKind) -> Attribute {
@@ -713,7 +757,10 @@ impl AttributeList {
     self.get_attribute_at_index(arg_no, kind)
   }
 
-  pub fn get_fn_attr() {}
+  pub fn get_fn_attr(&self, _kind: AttrKind) -> Attribute {
+    Attribute::new()
+  }
+
   pub fn get_ret_alignment() {}
 
   pub fn get_param_alignment(&self, _arg_no: u32) -> MaybeAlign {
@@ -736,13 +783,18 @@ impl AttributeList {
     self.get_attributes(index + AttrIndex::FirstArgIndex as u32).get_by_ref_type()
   }
 
-  pub fn get_param_preallocated_type() {}
+  pub fn get_param_preallocated_type(&self, index: u32) -> Option<Box<dyn Type>> {
+    self.get_attributes(index + AttrIndex::FirstArgIndex as u32).get_by_ref_type() // TODO
+  }
 
   pub fn get_param_in_alloca_type(&self, index: u32) -> Option<Box<dyn Type>> {
     self.get_attributes(index + AttrIndex::FirstArgIndex as u32).get_in_alloca_type()
   }
 
-  pub fn get_param_element_type() {}
+  pub fn get_param_element_type(&self, index: u32) -> Option<Box<dyn Type>> {
+    self.get_attributes(index + AttrIndex::FirstArgIndex as u32).get_in_alloca_type() // TODO
+  }
+
   pub fn get_fn_stack_alignment() {}
   pub fn get_ret_stack_alignment() {}
   pub fn get_ret_dereferenceable_bytes() {}
@@ -773,3 +825,5 @@ impl AttributeList {
   pub fn get_as_string() {}
   pub fn has_parent_context() {}
 }
+
+pub struct AttributeMask {}

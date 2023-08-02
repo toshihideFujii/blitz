@@ -80,8 +80,8 @@ impl Function {
   }
 
   // Returns the type of the ret val.
-  pub fn get_return_type(&self) -> &Box<dyn Type> {
-    self.v_type.get_return_type()
+  pub fn get_return_type(&self) /*-> Box<dyn Type>*/ {
+    //self.v_type.get_return_type()
   }
 
   // Return true if this function takes a variable number of arguments.
@@ -195,7 +195,7 @@ impl Function {
 
   // Adds the attribute to the list of attributes for the given arg.
   pub fn add_param_attr_by_kind(&self, arg_no:u32, kind: AttrKind) {
-    self.attribute_sets.add_param_attribute(self.get_context(), arg_no, kind)
+    self.attribute_sets.add_param_attribute(self.get_context(), arg_no, kind);
   }
 
   pub fn add_param_attrs(&self) {}
@@ -210,7 +210,7 @@ impl Function {
 
   // Removes the attribute from the list of attributes.
   pub fn remove_param_attr(&self, arg_no:u32, kind: AttrKind) {
-    self.attribute_sets.remove_param_attribute(self.get_context(), arg_no, kind)
+    self.attribute_sets.remove_param_attribute(self.get_context(), arg_no, kind);
   }
 
   pub fn remove_param_attrs() {}

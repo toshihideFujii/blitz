@@ -8,7 +8,7 @@ use super::{
   function::Function,
   symbol_table_list::SymbolTableList,
   instruction::Instruction,
-  value::{Value, ValueType}, type_::{Type}, blits_context::BlitzContext, module::Module
+  value::{Value, ValueType}, type_::Type, blits_context::BlitzContext, module::Module
 };
 
 // This represents a single basic block in Blitz.
