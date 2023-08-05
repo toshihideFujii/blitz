@@ -6,7 +6,7 @@ use super::{
   type_::{Type, FixedVectorType, /*TypeID, IntegerType,*/ /*IntegerType*/},
   constants::{ConstantFP, ConstantAggregateZero,
   ConstantPointerNull, ConstantTokenNone, ConstantTargetNone},
-  value::ValueType,
+  value::{ValueType, Value},
 };
 
 enum PossibleRelocationsType {
@@ -259,7 +259,7 @@ impl ConstantTemp {
   }
 }
 
-pub trait Constant {
+pub trait Constant: Value {
     
   // Return true if this is the value that would be returned by get_null_value().
   fn is_null_value(&self) -> bool { false }

@@ -3,9 +3,9 @@
 // This file declares BlitzContext, a container of global state in
 // Blitz, such as the global type and constant uniquing tables.
 
+//use std::collections::HashSet;
 use crate::adt::string_ref::StringRef;
-
-use super::{blitz_context_impl::BlitzContextImpl, /*type_::IntegerType*/};
+use super::{blitz_context_impl::BlitzContextImpl, /*constants::ConstantExpr,*/ /*type_::IntegerType*/};
 
 enum SyncScope {
   SingleThread,
@@ -78,11 +78,15 @@ enum OperandBundle {
 pub struct BlitzContext {
   pub p_impl: Option<Box::<BlitzContextImpl>>,
   //pub int_1_type: Option<Box<IntegerType>>
+  //expr_constants: HashSet<ConstantExpr>
 }
 
 impl BlitzContext {
   pub fn new() -> Self {
-    let mut instance = BlitzContext { p_impl: None, /*int_1_type: None*/ };
+    let mut instance = BlitzContext {
+      p_impl: None, /*int_1_type: None*/
+      //expr_constants: HashSet::new()
+    };
     instance.p_impl = Some(Box::new(BlitzContextImpl::new(&instance)));
     instance
   }
@@ -145,6 +149,10 @@ impl BlitzContext {
 
   pub fn get_impl_2(&mut self) -> &mut Box<BlitzContextImpl> {
     self.p_impl.as_mut().unwrap()
+  }
+
+  pub fn get_impl_3(&mut self) -> &Option<Box<BlitzContextImpl>> {
+    &self.p_impl
   }
 }
 

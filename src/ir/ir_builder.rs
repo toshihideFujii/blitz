@@ -126,7 +126,7 @@ impl IRBuilder {
 
   // Get a constant integer value.
   pub fn get_int(&mut self, apint: &APInt) -> ConstantInt {
-    ConstantInt::get_from_apint(self.context.clone(), apint.clone())
+    ConstantInt::get_from_apint(&mut self.context.clone(), apint.clone())
   }
 
   // Fetch the type representing a single bit.
@@ -161,7 +161,7 @@ impl IRBuilder {
 
   // Fetch the type representing an n-bit integer.
   pub fn get_int_n_type(&self, n: u32) -> IntegerType {
-    type_::get_int_n_type(self.context.clone(), n)
+    type_::get_int_n_type(&mut self.context.clone(), n)
   }
 
   pub fn get_half_type() {}

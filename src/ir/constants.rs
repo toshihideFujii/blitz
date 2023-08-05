@@ -10,16 +10,17 @@
 // Constants are created on demand as needed and never deleted:
 // thus clients don't have to worry about the lifetime of the objects.
 
-use crate::adt::{ap_int::APInt, ap_float::APFloat};
+use crate::{adt::{ap_int::APInt, ap_float::APFloat}, ir::constants_context::ConstantExprKeyType};
 
 use super::{
   blits_context::BlitzContext,
   type_::{self, /*FixedVectorType*/},
   type_::{IntegerType, Type},
   value::{Value, ValueType},
-  instruction::{Instruction, OtherOps},
+  instruction::{Instruction, OtherOps, BinaryOps},
   constant::Constant,
-  use_::Use
+  constant_fold,
+  use_::Use, operator::OverflowBinOpWrap
 };
 
 
@@ -78,27 +79,12 @@ impl ConstantInt {
 
   // Return a ConstantInt with the specified value and an implied Type.
   // The type is the integer type that corresponds to the bit width of the value.
-  pub fn get_from_apint(context: BlitzContext, v: APInt) -> ConstantInt {
-    let c_clone = context.clone();
-    let v_clone = v.clone();
-    let mut pimpl = context.get_impl();
-    let slot = pimpl.int_constants.find(&v);
+  pub fn get_from_apint(c: &mut BlitzContext, v: APInt) -> ConstantInt {
+    let slot = c.get_impl_3().as_ref().unwrap().int_constants.find(&v);
     if slot.is_none() {
-      let int_type = IntegerType::get(c_clone, v.get_bit_width());
-      let const_int = ConstantInt::new(int_type, v);
-      let const_int_clone = const_int.clone();
-      pimpl.int_constants.insert(v_clone, const_int);
-      return const_int_clone;
-    }
-    slot.unwrap().clone()
-  }
-
-  pub fn get_from_apint_2(c: &mut BlitzContext, v: APInt) -> ConstantInt {
-    let slot = c.get_impl_2().int_constants.find(&v);
-    if slot.is_none() {
-      let i_type = IntegerType::get_2(c, v.get_bit_width());
+      let i_type = IntegerType::get(c, v.get_bit_width());
       let c_int = ConstantInt::new(i_type, v.clone());
-      c.get_impl_2().int_constants.insert(v.clone(), c_int.clone());
+      //c.get_impl_3().as_deref_mut().unwrap().int_constants.insert(v.clone(), c_int.clone());
       return c_int;
     }
     slot.unwrap().clone()
@@ -107,8 +93,7 @@ impl ConstantInt {
   // Return a ConstantInt with the specified integer value for the specified type.
   pub fn get(mut t: IntegerType, v: u64, is_signed: bool) -> ConstantInt {
     let val = APInt::new(t.get_bit_width(), v as i64, is_signed);
-    //ConstantInt::get_from_apint(t.get_context().clone(), val)
-    ConstantInt::get_from_apint_2(t.get_context_2(), val)
+    ConstantInt::get_from_apint(&mut t.get_context_2().clone(), val)
   }
 
   // Return a ConstantInt with the specified value for the specified type.
@@ -502,13 +487,14 @@ struct NoCFIValue {}
 // This class uses the standard instruction opcodes to define the various
 // constant expressions. The opcode field for the ConstantExpr class id
 // maintainedin the Value::sub_class_data field.
+//#[derive(Debug, Clone, PartialEq)]
 pub struct ConstantExpr {
   v_type: Box<dyn Type>,
   v_id: ValueType
 }
 
 impl ConstantExpr {
-  pub fn new(v_type: Box<dyn Type>) -> Self {
+  pub fn new(v_type: Box<dyn Type>, _op_code: u32, _ops: Option<Use>, _num_ops: u32) -> Self {
     ConstantExpr { v_type: v_type, v_id: ValueType::ConstantExprVal }
   }
 
@@ -516,7 +502,20 @@ impl ConstantExpr {
   pub fn get_size_of() {}
   pub fn get_neg() {}
   pub fn get_not() {}
-  pub fn get_add() {}
+
+  pub fn get_add(c1: Box<dyn Constant>, c2: Box<dyn Constant>,
+    has_nuw: bool, has_nsw: bool) -> Option<Box<dyn Constant>>
+  {
+    let mut f1 = 0;
+    if has_nuw { f1 = OverflowBinOpWrap::NoUnsignedWrap as u32; }
+
+    let mut f2 = 0;
+    if has_nsw { f2 = OverflowBinOpWrap::NoSignedWrap as u32; }
+
+    let flags = f1 | f2;
+    ConstantExpr::get(BinaryOps::Add as u32, c1, c2, flags)
+  }
+
   pub fn get_sub() {}
   pub fn get_mul() {}
   pub fn get_and() {}
@@ -575,10 +574,31 @@ impl ConstantExpr {
   
   // Return a binary or shift operator constant expression,
   // folding if possible.
-  pub fn get(_opcode: u32,
-    _c1: Option<Box<dyn Constant>>,
-    _c2: Option<Box<dyn Constant>>,
-    _flags: u32) {}
+  pub fn get(opcode: u32, c1: Box<dyn Constant>, c2: Box<dyn Constant>,
+    flags: u32) -> Option<Box<dyn Constant>>
+  {
+    debug_assert!(Instruction::is_binary_op_static(opcode),
+      "Invalid opcode in binary constant expression.");
+
+    debug_assert!(ConstantExpr::is_supported_bin_op(opcode),
+      "Binop not supported as constant expression.");
+
+    //debug_assert!(c1.get_type() == c2.get_type(),
+    //  "Operand types in binary constant expression should match.");
+
+    let fc =
+      constant_fold::constant_fold_binary_instruction(opcode, &c1, &c2);
+    if fc.is_some() { return fc; }
+    
+    // TODO: only_if_reduced_type == c1.get_type()
+    let arg_vec = vec![c1, c2];
+    let _key =ConstantExprKeyType::new(opcode, arg_vec,
+      0, flags);
+
+    //let pimpl = c1.get_context().p_impl;
+
+    None
+  }
 
   pub fn get_compare() {}
   pub fn get_icmp() {}
@@ -601,7 +621,35 @@ impl ConstantExpr {
   pub fn get_with_operands() {}
   pub fn get_as_instruction() {}
   pub fn is_desirable_bin_op() {}
-  pub fn is_supported_bin_op() {}
+
+  // Whether creating a constant expression for this binary operator
+  // supported.
+  pub fn is_supported_bin_op(opcode: u32) -> bool {
+    match opcode {
+      // true
+      13 => return true, // Add
+      15 => return true, // Sub
+      17 => return true, // Mul
+      25 => return true, // Shl
+      26 => return true, // LShr
+      27 => return true, // AShr
+      28 => return true, // And
+      29 => return true, // Or
+      30 => return true, // Xor
+      // false
+      19 => return false, // UDiv
+      20 => return false, // SDiv
+      22 => return false, // URem
+      23 => return false, // SRem
+      14 => return false, // FAdd
+      16 => return false, // FSub
+      18 => return false, // FMul
+      21 => return false, // FDiv
+      24 => return false, // FRem
+      _ => panic!("Argument must be binop code."),
+    };
+  }
+
   pub fn is_supported_get_element_ptr() {}
   pub fn class_of() {}
 }

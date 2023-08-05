@@ -39,7 +39,7 @@ pub enum TypeID {
   TargetExt
 }
 
-pub trait Type: Debug /*+ std::clone::Clone*/ /*+ std::cmp::PartialEq*/ {
+pub trait Type: Debug /*+ Clone + Sized*/ /*+ std::cmp::PartialEq*/ {
   fn get_subclass_data(&self) -> u32;
   fn set_subclass_data(&mut self, val: u32) {}
   fn dump(&self) {}
@@ -138,13 +138,13 @@ pub trait Type: Debug /*+ std::clone::Clone*/ /*+ std::cmp::PartialEq*/ {
   fn as_any(&self) -> &dyn Any;
 }
 
-/*
-impl std::clone::Clone for dyn Type {
-  fn clone(&self) -> Self {
-    *self
-  }
-}
-*/
+
+//impl Clone for dyn Type {
+//  fn clone(&self) -> Self {
+//    *self
+//  }
+//}
+
 
 /*
 impl std::cmp::PartialEq for Type {
@@ -177,30 +177,35 @@ pub fn get_token_type() {}
 
 pub fn get_int_1_type(c: &mut BlitzContext) -> IntegerType {
   //c.get_impl().get_int_1_type().clone()
-  c.get_impl_2().get_int_1_type().clone()
+  IntegerType::new(c.clone(), 1)
 }
 
 pub fn get_int_8_type(c: &BlitzContext) -> IntegerType {
-  c.get_impl().get_int_8_type().clone()
+  //c.get_impl().get_int_8_type().clone()
+  IntegerType::new(c.clone(), 1)
 }
 
 pub fn get_int_16_type(c: &BlitzContext) -> IntegerType {
-  c.get_impl().get_int_16_type().clone()
+  //c.get_impl().get_int_16_type().clone()
+  IntegerType::new(c.clone(), 1)
 }
 
 pub fn get_int_32_type(c: &BlitzContext) -> IntegerType {
-  c.get_impl().get_int_32_type().clone()
+  //c.get_impl().get_int_32_type().clone()
+  IntegerType::new(c.clone(), 1)
 }
 
 pub fn get_int_64_type(c: &BlitzContext) -> IntegerType {
-  c.get_impl().get_int_64_type().clone()
+  //c.get_impl().get_int_64_type().clone()
+  IntegerType::new(c.clone(), 1)
 }
 
 pub fn get_int_128_type(c: &BlitzContext) -> IntegerType {
-  c.get_impl().get_int_128_type().clone()
+  //c.get_impl().get_int_128_type().clone()
+  IntegerType::new(c.clone(), 1)
 }
 
-pub fn get_int_n_type(c: BlitzContext, n: u32) -> IntegerType {
+pub fn get_int_n_type(c: &mut BlitzContext, n: u32) -> IntegerType {
   IntegerType::get(c, n)
 }
 
@@ -292,33 +297,7 @@ impl IntegerType {
   // Otherwise a new one will be created.
   // Only one instance with a given num_bits value is ever created.
   // Get or create an IntegerType instance.
-  pub fn get(c: BlitzContext, num_bits: u32) -> IntegerType {
-    debug_assert!(num_bits >= IntConstants::MinIntBits as u32, "Bitwidth too small.");
-    debug_assert!(num_bits <= IntConstants::MaxIntBits as u32, "Bitwidth too large.");
-
-    match num_bits {
-      //1 => return get_int_1_type(&c),
-      8 => return get_int_8_type(&c),
-      16 => return get_int_16_type(&c),
-      32 => return get_int_32_type(&c),
-      64 => return get_int_64_type(&c),
-      128 => return get_int_128_type(&c),
-      _ => println!("num_bits: {}", num_bits),
-    }
-
-    let mut c_impl = c.get_impl();
-    let entry = c_impl.integer_types.find(&num_bits);
-    if entry == None {
-      let new_entry = IntegerType::new(c, num_bits);
-      let new_entry_c = new_entry.clone();
-      c_impl.integer_types.insert(num_bits, new_entry);
-      return new_entry_c;
-    } else {
-      return entry.unwrap().clone();
-    }
-  }
-
-  pub fn get_2(c: &mut BlitzContext, num_bits: u32) -> IntegerType {
+  pub fn get(c: &mut BlitzContext, num_bits: u32) -> IntegerType {
     debug_assert!(num_bits >= IntConstants::MinIntBits as u32, "Bitwidth too small.");
     debug_assert!(num_bits <= IntConstants::MaxIntBits as u32, "Bitwidth too large.");
 

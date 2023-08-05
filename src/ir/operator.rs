@@ -2,6 +2,12 @@
 
 struct Operator {}
 
+pub enum OverflowBinOpWrap {
+  AnyWrap = 0,
+  NoUnsignedWrap = (1 << 0),
+  NoSignedWrap = (1 << 1)
+}
+
 struct OverflowingBinaryOperator {}
 
 struct PossiblyExactOperator {}

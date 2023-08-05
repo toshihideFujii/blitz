@@ -728,7 +728,7 @@ struct FreezeInst {}
 
 #[cfg(test)]
 mod tests {
-  //use crate::ir::{type_::IntegerType, constants::ConstantInt};
+  use crate::ir::{type_::IntegerType, constants::ConstantInt};
   use super::*;
 
   #[test]
@@ -737,10 +737,10 @@ mod tests {
     let r0 = ReturnInst::new_ib(&mut c, None, None);
     assert_eq!(r0.get_num_operands(), 0);
 
-    //let c1 = BlitzContext::new();
-    //let i1 = IntegerType::get_2(&mut c, 1);
-    //let _one = ConstantInt::get(i1, 1, true);
-    //let r1 = ReturnInst::new_ib(&c1, Some(Box::new(one)), None);
-    //assert_eq!(r1.get_num_operands(), 1);
+    let i1 = IntegerType::get(&mut c, 1);
+    let one = ConstantInt::get(i1, 1, true);
+    let r1 = ReturnInst::new_ib(&mut c, Some(Box::new(one)), None);
+    assert_eq!(r1.get_num_operands(), 1);
+    //assert_eq!(r1.get_operand(0).unwrap().as_ref(), one);
   }
 }
