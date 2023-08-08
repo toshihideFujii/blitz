@@ -16,8 +16,9 @@ use super::blits_context::BlitzContext;
 pub enum TypeID {
   // Primitive types
   Half,
-  BFloat,
-  Double,
+  BFloat, // 16-bit floating point type
+  Float, // 32-bit floating point type
+  Double, // 64-bit floating point type
   X86Fp80,
   Fp128,
   PpcFp128,
@@ -60,7 +61,30 @@ pub trait Type: Debug /*+ Clone + Sized*/ /*+ std::cmp::PartialEq*/ {
   fn is_x86_fp80_type(&self) -> bool { false }
   fn is_fp128_type(&self) -> bool { false }
   fn is_ppc_fp128_type(&self) -> bool { false }
-  fn is_floating_point_type(&self) -> bool { false }
+
+  // Return true if this is a well-behaved IEEE-like type, which has a
+  // IEEE compatible layout as defined by is_ieee(), and does not have
+  // unnormal values.
+  fn is_ieee_like_fp_type(&self) -> bool {
+    match self.get_type_id() {
+      TypeID::Double => return true,
+      TypeID::Float => return true,
+      TypeID::Half => return true,
+      TypeID::BFloat => return true,
+      TypeID::Fp128 => return true,
+      _ => return false,
+    };
+  }
+
+  // Return true if this is one of the floating-point types.
+  fn is_floating_point_type(&self) -> bool {
+    self.is_ieee_like_fp_type() || self.get_type_id()== TypeID::X86Fp80 ||
+    self.get_type_id() == TypeID::PpcFp128
+  }
+
+  fn is_multi_unit_fp_type(&self) -> bool { false }
+  fn get_flt_semantics(&self) {}
+
   fn is_x86_mmx_type(&self) -> bool { false }
   fn is_x86_amx_type(&self) -> bool { false }
 
@@ -112,7 +136,11 @@ pub trait Type: Debug /*+ Clone + Sized*/ /*+ std::cmp::PartialEq*/ {
 
   fn get_fp_mantissa_width(&self) {}
   fn is_ieee(&self) {}
-  fn get_scalar_type(&self) {}
+
+  // If this is a vector type, return the element type, otherwise
+  // return 'self'.
+  fn get_scalar_type(&self) -> Box<&dyn Type>;
+
   fn get_contained_type(&self) {}
   fn get_num_contained_type(&self) {}
   fn get_integer_bit_width(&self) {}
@@ -155,12 +183,11 @@ impl std::cmp::PartialEq for Type {
 */
 
 pub fn get_void_type(c: &mut BlitzContext) -> VoidType {
-  //c.get_impl().void_type.clone()
-  c.get_impl_2().void_type.clone()
+  c.get_impl().as_ref().unwrap().void_type.clone()
 }
 
 pub fn get_label_type(c: &BlitzContext) -> LabelType {
-  c.get_impl().label_type.clone()
+  c.get_impl().as_ref().unwrap().label_type.clone()
 }
 
 pub fn get_half_type() {}
@@ -175,7 +202,7 @@ pub fn get_x86_mmx_type() {}
 pub fn get_x86_amx_type() {}
 pub fn get_token_type() {}
 
-pub fn get_int_1_type(c: &mut BlitzContext) -> IntegerType {
+pub fn get_int_1_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_1_type().clone()
   IntegerType::new(c.clone(), 1)
 }
@@ -240,6 +267,10 @@ impl Type for VoidType {
     0
   }
 
+  fn get_scalar_type(&self) -> Box<&dyn Type> {
+    Box::new(self)
+  }
+
   fn as_any(&self) -> &dyn Any {
     self
   }
@@ -270,6 +301,10 @@ impl Type for LabelType {
     0
   }
 
+  fn get_scalar_type(&self) -> Box<&dyn Type> {
+    Box::new(self)
+  }
+
   fn as_any(&self) -> &dyn Any {
     self
   }
@@ -297,7 +332,7 @@ impl IntegerType {
   // Otherwise a new one will be created.
   // Only one instance with a given num_bits value is ever created.
   // Get or create an IntegerType instance.
-  pub fn get(c: &mut BlitzContext, num_bits: u32) -> IntegerType {
+  pub fn get(c: &BlitzContext, num_bits: u32) -> IntegerType {
     debug_assert!(num_bits >= IntConstants::MinIntBits as u32, "Bitwidth too small.");
     debug_assert!(num_bits <= IntConstants::MaxIntBits as u32, "Bitwidth too large.");
 
@@ -311,11 +346,12 @@ impl IntegerType {
       _ => println!("num_bits: {}", num_bits),
     };
 
-    let entry = c.get_impl_2().integer_types.find(&num_bits);
+    let entry = c.get_impl().as_ref().unwrap().integer_types.find(&num_bits);
     if entry.is_none() {
+      // TODO
       let new_entry = IntegerType::new(c.clone(), num_bits);
       let ret_v = new_entry.clone();
-      c.get_impl_2().integer_types.insert(num_bits, new_entry);
+      //c.get_impl().as_ref().unwrap().integer_types.insert(num_bits, new_entry);
       ret_v
     } else {
       return entry.unwrap().clone();
@@ -391,6 +427,10 @@ impl Type for IntegerType {
     self.get_primitive_size_in_bits().unwrap().get_fixed_value() as u32
   }
 
+  fn get_scalar_type(&self) -> Box<&dyn Type> {
+    Box::new(self)
+  }
+
   fn as_any(&self) -> &dyn Any {
     self
   }
@@ -424,6 +464,10 @@ impl Type for FunctionType {
 
   fn is_function_type(&self) -> bool {
     true
+  }
+
+  fn get_scalar_type(&self) -> Box<&dyn Type> {
+    Box::new(self)
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -571,6 +615,10 @@ impl Type for StructType {
     false
   }
 
+  fn get_scalar_type(&self) -> Box<&dyn Type> {
+    Box::new(self)
+  }
+
   fn as_any(&self) -> &dyn Any {
     self
   }
@@ -690,6 +738,10 @@ impl Type for ArrayType {
     true
   }
 
+  fn get_scalar_type(&self) -> Box<&dyn Type> {
+    Box::new(self)
+  }
+
   fn as_any(&self) -> &dyn Any {
     self
   }
@@ -745,6 +797,10 @@ impl Type for FixedVectorType {
 
   fn is_vector_type(&self) -> bool {
     true
+  }
+
+  fn get_scalar_type(&self) -> Box<&dyn Type> {
+    Box::new(self) // TODO
   }
 
   fn as_any(&self) -> &dyn Any {
@@ -814,6 +870,10 @@ impl Type for ScalableVectorType {
     true
   }
 
+  fn get_scalar_type(&self) -> Box<&dyn Type> {
+    Box::new(self) // TODO
+  }
+
   fn as_any(&self) -> &dyn Any {
     self
   }
@@ -876,6 +936,10 @@ impl Type for PointerType {
 
   fn is_pointer_type(&self) -> bool {
     true
+  }
+
+  fn get_scalar_type(&self) -> Box<&dyn Type> {
+    Box::new(self)
   }
 
   fn as_any(&self) -> &dyn Any {

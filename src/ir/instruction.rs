@@ -337,7 +337,22 @@ impl Instruction {
   pub fn drop_location() {}
   pub fn merge_di_assign_id() {}
   pub fn is_associative() {}
-  pub fn is_commutative() {}
+
+  // Return true if the instruction is commutative.
+  // Commutative operators satisfy: (x op y) == (y op x).
+  pub fn is_commutative_static(opcode: u32) -> bool {
+    match opcode {
+      13 => return true, // Add
+      14 => return true, // FAdd
+      17 => return true, // Mul
+      18 => return true, // FMul
+      28 => return true, // And
+      29 => return true, // Or
+      30 => return true, // Xor
+      _ => return false,
+    };
+  }
+
   pub fn is_idempotent() {}
   pub fn is_nilpotent() {}
   pub fn may_write_to_memory() {}

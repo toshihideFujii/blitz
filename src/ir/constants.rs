@@ -14,10 +14,11 @@ use crate::{adt::{ap_int::APInt, ap_float::APFloat}, ir::constants_context::Cons
 
 use super::{
   blits_context::BlitzContext,
-  type_::{self, /*FixedVectorType*/},
+  //type_::{self, /*FixedVectorType*/},
   type_::{IntegerType, Type},
   value::{Value, ValueType},
   instruction::{Instruction, OtherOps, BinaryOps},
+  constant,
   constant::Constant,
   constant_fold,
   use_::Use, operator::OverflowBinOpWrap
@@ -47,40 +48,26 @@ impl ConstantInt {
     }
   }
 
-  pub fn get_true(context: &mut BlitzContext) -> Option<ConstantInt> {
-    let mut c_context = context.clone();
-    let mut pimpl = context.get_impl();
-    if pimpl.get_true_value().is_none() {
-      let t = type_::get_int_1_type(&mut c_context);
-      let int_1 = ConstantInt::get(t, 1, false);
-      pimpl.set_true_value(Some(int_1));
-    }
-    pimpl.get_true_value()
+  pub fn get_true(c: &BlitzContext) -> Option<ConstantInt> {
+    c.get_impl().as_ref().unwrap().get_true_value()
   }
 
-  pub fn get_false(context: &mut BlitzContext) -> Option<ConstantInt> {
-    let mut c_context = context.clone();
-    let mut pimpl = context.get_impl();
-    if pimpl.get_false_value().is_none() {
-      let t = type_::get_int_1_type(&mut c_context);
-      let int_0 = ConstantInt::get(t, 0, false);
-      pimpl.set_false_value(Some(int_0));
-    }
-    pimpl.get_false_value()
+  pub fn get_false(c: &BlitzContext) -> Option<ConstantInt> {
+    c.get_impl().as_ref().unwrap().get_false_value()
   }
 
-  pub fn get_bool(context: &mut BlitzContext, v: bool) -> Option<ConstantInt> {
+  pub fn get_bool(c: &BlitzContext, v: bool) -> Option<ConstantInt> {
     if v {
-      ConstantInt::get_true(context)
+      ConstantInt::get_true(c)
     } else {
-      ConstantInt::get_false(context)
+      ConstantInt::get_false(c)
     }
   }
 
   // Return a ConstantInt with the specified value and an implied Type.
   // The type is the integer type that corresponds to the bit width of the value.
-  pub fn get_from_apint(c: &mut BlitzContext, v: APInt) -> ConstantInt {
-    let slot = c.get_impl_3().as_ref().unwrap().int_constants.find(&v);
+  pub fn get_from_apint(c: &BlitzContext, v: APInt) -> ConstantInt {
+    let slot = c.get_impl().as_ref().unwrap().int_constants.find(&v);
     if slot.is_none() {
       let i_type = IntegerType::get(c, v.get_bit_width());
       let c_int = ConstantInt::new(i_type, v.clone());
@@ -91,15 +78,18 @@ impl ConstantInt {
   }
 
   // Return a ConstantInt with the specified integer value for the specified type.
-  pub fn get(mut t: IntegerType, v: u64, is_signed: bool) -> ConstantInt {
-    let val = APInt::new(t.get_bit_width(), v as i64, is_signed);
-    ConstantInt::get_from_apint(&mut t.get_context_2().clone(), val)
+  pub fn get(t: &IntegerType, v: i64, is_signed: bool) -> ConstantInt {
+    let val = APInt::new(t.get_bit_width(), v, is_signed);
+    ConstantInt::get_from_apint(t.get_context(), val)
   }
 
   // Return a ConstantInt with the specified value for the specified type.
   // The value v will be canonicalized to an unsigned APInt.
-  pub fn get_signed(&self, t: IntegerType, v: i64) -> ConstantInt {
-    ConstantInt::get(t, v as u64, true)
+  // Accessing it with either get_sext_value() or get_zext_value() will yield
+  // a correctly sized and signed value for the type t.
+  // Get a ConstantInt for a specific signed value.
+  pub fn get_signed(t: &IntegerType, v: i64) -> ConstantInt {
+    ConstantInt::get(t, v, true)
   }
 
   // Return the content as an APInt value reference.
@@ -267,9 +257,13 @@ impl Constant for ConstantInt {
   fn is_not_min_signed_value(&self) -> bool {
     !self.is_min_value(true)
   }
+
+  //fn get_null_value(&self, _t: Box<dyn Type>) -> Box<dyn Constant> {
+    //Box::new(ConstantInt::get(&self.v_type, 0, false))
+  //}
 }
 
-// Floating point values (float, double).
+// Floating point values [float, double].
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstantFP {
   v_type: IntegerType,
@@ -284,7 +278,9 @@ impl ConstantFP {
   pub fn get_nan() {}
   pub fn get_q_nan() {}
   pub fn get_s_nan() {}
-  pub fn get_zero() {}
+
+  pub fn get_zero(_t: &Box<dyn Type>, _negative: bool) {}
+
   pub fn get_negative_zero() {}
   pub fn get_infinity() {}
   pub fn is_value_valid_for_type() {}
@@ -379,6 +375,11 @@ impl Constant for ConstantFP {
   fn is_nan(&self) -> bool {
     self.is_nan()
   }
+
+  // TODO
+  //fn get_null_value(&self, _t: Box<dyn Type>) -> Box<dyn Constant> {
+    //Box::new(ConstantInt::get(&self.v_type, 0, false))
+  //}
 }
 
 // All zero aggregate value.
@@ -550,7 +551,59 @@ impl ConstantExpr {
   pub fn get_exact_ashr() {}
   pub fn get_exact_lshr() {}
   pub fn get_exact_log_base_2() {}
-  pub fn get_bin_op_identity() {}
+
+  // Return the identity constant for a binary opcode.
+  // The identity constant c is defined as x op c = x and c op x = x for
+  // every x when the binary operation is commutative.
+  pub fn get_bin_op_identity(opcode: u32, t: &Box<dyn Type>,
+    allow_rhs_constant: bool, _nsz: bool) -> Option<Box<dyn Constant>>
+  {
+    debug_assert!(Instruction::is_binary_op_static(opcode), "Only binops allowed.");
+    if Instruction::is_commutative_static(opcode) {
+      if opcode == 13 || // Add: x + 0 = x
+        opcode == 29 || // Or: x | 0 = x
+        opcode == 30 // Xor: x ^ 0 = x
+      {
+        return Some(constant::get_null_value(t));
+      } else if opcode == 17 { // Mul: x * 1 = x
+        return Some(Box::new(ConstantInt::get(&t.as_any().
+          downcast_ref::<IntegerType>().unwrap(), 1, false)));
+      } else if opcode == 28 { // And: x & -1 = x
+        return Some(constant::get_all_ones_value(t));
+      } else if opcode == 14 { // FAdd: x + -0.0 = x
+        // TODO
+      } else if opcode == 18 { // FMul: x * 1.0 = x
+        // TODO
+      } else {
+        //panic!("Every commutative binop has an identity constant.");
+      }
+    }
+
+    // Non-commutative opcodes: allow_rhs_constant must be set.
+    if !allow_rhs_constant { return None; }
+
+    if opcode == 15 || // Sub: x - 0 = x
+      opcode == 25 || // Shl: x << 0 = x
+      opcode == 26 || // LShr: x >>u 0 = x
+      opcode == 27 || // AShr: x >> 0 = x
+      opcode == 16 // FSub: x - 0.0 = x
+    {
+      return Some(constant::get_null_value(t));
+    } else if
+      opcode == 20 || // SDiv: x / 1 = x
+      opcode == 19 // UDiv: x /u 1 = x
+    {
+      return Some(Box::new(ConstantInt::get(&t.as_any().
+        downcast_ref::<IntegerType>().unwrap(), 1, false)));
+    } else if opcode == 21 { // FDiv: x / 1.0 = x
+      // TODO
+    } else {
+      return None;
+    }
+
+    None
+  }
+
   pub fn get_bin_op_absorber() {}
   pub fn get_cast() {}
   pub fn get_zext_or_bit_cast() {}
@@ -660,10 +713,18 @@ struct PoisonValue {}
 
 #[cfg(test)]
 mod tests {
+  use super::*;
+  use crate::ir::blits_context::BlitzContext;
+  use crate::ir::type_::IntegerType;
 
-  //#[test]
+
+  #[test]
   fn test_integer_i1() {
-    //let c = BlitzContext::new();
-    //let int1 = 
+    let c = BlitzContext::new();
+    let int1 = IntegerType::get(&c, 1);
+    let _one = ConstantInt::get(&int1, 1, true);
+    let _zero = ConstantInt::get(&int1, 0, false);
+    let neg_one = ConstantInt::get(&int1, -1, true);
+    assert_eq!(neg_one, ConstantInt::get_signed(&int1, -1))
   }
 }

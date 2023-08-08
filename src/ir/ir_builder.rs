@@ -96,32 +96,32 @@ impl IRBuilder {
 
   // Get a constant value representing either true or false.
   pub fn get_int_1(&mut self, v: bool) -> ConstantInt {
-    ConstantInt::get(self.get_int_1_type(), v as u64, false)
+    ConstantInt::get(&self.get_int_1_type(), v as i64, false)
   }
 
   // Get a constant 8-bit value.
   pub fn get_int_8(&mut self, c: u8) -> ConstantInt {
-    ConstantInt::get(self.get_int_8_type(), c as u64, false)
+    ConstantInt::get(&self.get_int_8_type(), c as i64, false)
   }
 
   // Get a constant 16-bit value.
   pub fn get_int_16(&mut self, c: u16) -> ConstantInt {
-    ConstantInt::get(self.get_int_16_type(), c as u64, false)
+    ConstantInt::get(&self.get_int_16_type(), c as i64, false)
   }
 
   // Get a constant 32-bit value.
   pub fn get_int_32(&mut self, c: u32) -> ConstantInt {
-    ConstantInt::get(self.get_int_32_type(), c as u64, false)
+    ConstantInt::get(&self.get_int_32_type(), c as i64, false)
   }
 
   // Get a constant 64-bit value.
-  pub fn get_int_64(&mut self, c: u64) -> ConstantInt {
-    ConstantInt::get(self.get_int_64_type(), c, false)
+  pub fn get_int_64(&mut self, c: i64) -> ConstantInt {
+    ConstantInt::get(&self.get_int_64_type(), c, false)
   }
 
   // Get a constant n-bit value, zero extended or truncated from a 64-bit value.
-  pub fn get_int_n(&mut self, n: u32, c: u64) -> ConstantInt {
-    ConstantInt::get(self.get_int_n_type(n), c, false)
+  pub fn get_int_n(&mut self, n: u32, c: i64) -> ConstantInt {
+    ConstantInt::get(&self.get_int_n_type(n), c, false)
   }
 
   // Get a constant integer value.

@@ -4,7 +4,7 @@
 // interface. When possible, the DataLayout-aware constant folding
 // interface in analysis/constnt_folding.rs should be preferred.
 
-use crate::ir::instruction::Instruction;
+use crate::ir::{instruction::Instruction, /*constants::ConstantExpr*/};
 
 use super::constant::Constant;
 
@@ -23,6 +23,10 @@ pub fn constant_fold_binary_instruction(opcode: u32,
     debug_assert!(Instruction::is_binary_op_static(opcode),
       "Non-binary instruction detected.");
 
+    //let c1_type = c1.get_type().clone();
+    //let identity =
+      //ConstantExpr::get_bin_op_identity(opcode, &Box::new(*c1_type),
+        //false, false);
     //Some(*c1)
     None
 }

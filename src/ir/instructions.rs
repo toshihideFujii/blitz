@@ -738,7 +738,7 @@ mod tests {
     assert_eq!(r0.get_num_operands(), 0);
 
     let i1 = IntegerType::get(&mut c, 1);
-    let one = ConstantInt::get(i1, 1, true);
+    let one = ConstantInt::get(&i1, 1, true);
     let r1 = ReturnInst::new_ib(&mut c, Some(Box::new(one)), None);
     assert_eq!(r1.get_num_operands(), 1);
     //assert_eq!(r1.get_operand(0).unwrap().as_ref(), one);
