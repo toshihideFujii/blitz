@@ -5,6 +5,7 @@
 
 use std::any::Any;
 use std::fmt::Debug;
+use crate::adt::ap_float::FltSemantics;
 use crate::adt::ap_int::APInt;
 use crate::support::type_size::TypeSize;
 use super::blits_context::BlitzContext;
@@ -83,13 +84,28 @@ pub trait Type: Debug /*+ Clone + Sized*/ /*+ std::cmp::PartialEq*/ {
   }
 
   fn is_multi_unit_fp_type(&self) -> bool { false }
-  fn get_flt_semantics(&self) {}
+
+  fn get_flt_semantics(&self) -> FltSemantics {
+    match self.get_type_id() {
+      TypeID::Half => return FltSemantics::ieee_half(),
+      TypeID::BFloat => return FltSemantics::bloat(),
+      TypeID::Float => return FltSemantics::ieee_single(),
+      TypeID::Double => return FltSemantics::ieee_double(),
+      TypeID::X86Fp80 => return FltSemantics::x87_double_extended(),
+      TypeID::Fp128 => return FltSemantics::ieee_quad(),
+      TypeID::PpcFp128 => return FltSemantics::ppc_double_double(),
+      _ => panic!("Invalid floating type.")
+    };
+  }
 
   fn is_x86_mmx_type(&self) -> bool { false }
   fn is_x86_amx_type(&self) -> bool { false }
 
   // Return true if this is a fp type or a vector of fp.
-  fn is_fp_or_fpvector_type(&self) -> bool { false }
+  fn is_fp_or_fpvector_type(&self) -> bool {
+    self.get_scalar_type().is_floating_point_type()
+  }
+
   fn is_label_type(&self) -> bool { false }
   fn is_metadata_type(&self) -> bool { false }
   fn is_token_type(&self) -> bool { false }
@@ -99,7 +115,11 @@ pub trait Type: Debug /*+ Clone + Sized*/ /*+ std::cmp::PartialEq*/ {
     false
   }
 
-  fn is_int_or_int_vector_type(&self) {}
+  // Return true if this is an integer type or a vector of integer types.
+  fn is_int_or_int_vector_type(&self) -> bool { 
+    self.get_scalar_type().is_integer_type()
+  }
+
   fn is_int_or_int_ptr_type(&self) {}
 
   // True if this is an instance of FunctionType.
@@ -131,7 +151,22 @@ pub trait Type: Debug /*+ Clone + Sized*/ /*+ std::cmp::PartialEq*/ {
   fn is_aggregate_type(&self) -> bool { false }
   fn is_sized(&self) -> bool { false }
 
-  fn get_primitive_size_in_bits(&self) -> Option<TypeSize> { None }
+  // Return the basic size of this type if it is a primitive type.
+  fn get_primitive_size_in_bits(&self) -> TypeSize {
+    match self.get_type_id() {
+      TypeID::Half => return TypeSize::fixed(16),
+      TypeID::BFloat => return TypeSize::fixed(16),
+      TypeID::Float => return TypeSize::fixed(32),
+      TypeID::Double => return TypeSize::fixed(64),
+      TypeID::X86Fp80 => return TypeSize::fixed(80),
+      TypeID::Fp128 => return TypeSize::fixed(128),
+      TypeID::PpcFp128 => return TypeSize::fixed(128),
+      TypeID::X86Mmx => return TypeSize::fixed(64),
+      TypeID::X86Amx => return TypeSize::fixed(8192),
+      _ => return TypeSize::fixed(0)
+    };
+  }
+
   fn get_scalar_size_in_bits(&self) -> u32 { 0 }
 
   fn get_fp_mantissa_width(&self) {}
@@ -182,12 +217,16 @@ impl std::cmp::PartialEq for Type {
 }
 */
 
-pub fn get_void_type(c: &mut BlitzContext) -> VoidType {
+pub fn get_void_type(c: &BlitzContext) -> BasicType {
   c.get_impl().as_ref().unwrap().void_type.clone()
 }
 
-pub fn get_label_type(c: &BlitzContext) -> LabelType {
+pub fn get_label_type(c: &BlitzContext) -> BasicType {
   c.get_impl().as_ref().unwrap().label_type.clone()
+}
+
+pub fn get_fp128_type(c: &BlitzContext) -> BasicType {
+  c.get_impl().as_ref().unwrap().fp128_type.clone()
 }
 
 pub fn get_half_type() {}
@@ -196,7 +235,6 @@ pub fn get_float_type() {}
 pub fn get_double_type() {}
 pub fn get_metadata_type() {}
 pub fn get_x86_fp80_type() {}
-pub fn get_fp128_type() {}
 pub fn get_ppc_fp128_type() {}
 pub fn get_x86_mmx_type() {}
 pub fn get_x86_amx_type() {}
@@ -209,30 +247,30 @@ pub fn get_int_1_type(c: &BlitzContext) -> IntegerType {
 
 pub fn get_int_8_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_8_type().clone()
-  IntegerType::new(c.clone(), 1)
+  IntegerType::new(c.clone(), 8)
 }
 
 pub fn get_int_16_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_16_type().clone()
-  IntegerType::new(c.clone(), 1)
+  IntegerType::new(c.clone(), 16)
 }
 
 pub fn get_int_32_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_32_type().clone()
-  IntegerType::new(c.clone(), 1)
+  IntegerType::new(c.clone(), 32)
 }
 
 pub fn get_int_64_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_64_type().clone()
-  IntegerType::new(c.clone(), 1)
+  IntegerType::new(c.clone(), 64)
 }
 
 pub fn get_int_128_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_128_type().clone()
-  IntegerType::new(c.clone(), 1)
+  IntegerType::new(c.clone(), 128)
 }
 
-pub fn get_int_n_type(c: &mut BlitzContext, n: u32) -> IntegerType {
+pub fn get_int_n_type(c: &BlitzContext, n: u32) -> IntegerType {
   IntegerType::get(c, n)
 }
 
@@ -243,54 +281,20 @@ enum IntConstants {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct VoidType {
-  context: BlitzContext,
-  id: TypeID
-}
-
-impl VoidType {
-  pub fn new(c: BlitzContext) -> Self {
-    VoidType { context: c, id: TypeID::Void }
-  }
-}
-
-impl Type for VoidType {
-  fn get_type_id(&self) -> TypeID {
-    TypeID::Void
-  }
-
-  fn get_context(&self) -> &BlitzContext {
-    &self.context
-  }
-
-  fn get_subclass_data(&self) -> u32 {
-    0
-  }
-
-  fn get_scalar_type(&self) -> Box<&dyn Type> {
-    Box::new(self)
-  }
-
-  fn as_any(&self) -> &dyn Any {
-    self
-  }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct LabelType {
+pub struct BasicType {
   context: BlitzContext,
   id: TypeID,
 }
 
-impl LabelType {
-  pub fn new(c: BlitzContext) -> Self {
-    LabelType { context: c, id: TypeID::Label }
+impl BasicType {
+  pub fn new(c: BlitzContext, id: TypeID) -> Self {
+    BasicType { context: c, id: id }
   }
 }
 
-impl Type for LabelType {
+impl Type for BasicType {
   fn get_type_id(&self) -> TypeID {
-    TypeID::Label
+    self.id.clone()
   }
 
   fn get_context(&self) -> &BlitzContext {
@@ -309,7 +313,6 @@ impl Type for LabelType {
     self
   }
 }
-
 
 // Class to represent integer types.
 // Note that this class is also used to represent the built-in
@@ -419,12 +422,12 @@ impl Type for IntegerType {
     true
   }
 
-  fn get_primitive_size_in_bits(&self) -> Option<TypeSize> {
-    Some(TypeSize::fixed(self.get_bit_width() as u64))
+  fn get_primitive_size_in_bits(&self) -> TypeSize {
+    TypeSize::fixed(self.get_bit_width() as u64)
   }
 
   fn get_scalar_size_in_bits(&self) -> u32 {
-    self.get_primitive_size_in_bits().unwrap().get_fixed_value() as u32
+    self.get_primitive_size_in_bits().get_fixed_value() as u32
   }
 
   fn get_scalar_type(&self) -> Box<&dyn Type> {

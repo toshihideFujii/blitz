@@ -1213,6 +1213,12 @@ impl APInt {
   }
 }
 
+impl PartialEq<u64> for APInt {
+  fn eq(&self, other: &u64) -> bool {
+    self.val_ == *other as i64
+  }
+}
+
 // Array-indexing support.
 // Returns the bit value at bit position.
 impl Index<u32> for APInt {
@@ -1223,6 +1229,129 @@ impl Index<u32> for APInt {
       return &true;
     } else {
       return &false;
+    }
+  }
+}
+
+impl Add<APInt> for APInt {
+  type Output = APInt;
+  fn add(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() && rhs.is_single_word() {
+      APInt::new(self.bit_width_ , self.val_ + rhs.val_, false)
+    } else { // TODO
+      APInt::new(self.bit_width_ , self.val_ + rhs.val_, false)
+    }
+  }
+}
+
+impl AddAssign<APInt> for APInt {
+  fn add_assign(&mut self, rhs: APInt) {
+    if self.is_single_word() && rhs.is_single_word() {
+      self.val_ = rhs.val_;
+      self.bit_width_ = rhs.bit_width_;
+    }
+    // TODO
+    // assign_slow_case()
+  }
+}
+
+impl AddAssign<u64> for APInt {
+  fn add_assign(&mut self, rhs: u64) {
+    if self.is_single_word() {
+      self.val_ = rhs as i64;
+      self.clear_unused_bits();
+      return;
+    }
+    // TODO
+    // self.pval_ = rhs;
+  }
+}
+
+impl Sub<APInt> for APInt {
+  type Output = APInt;
+  fn sub(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() && rhs.is_single_word() {
+      APInt::new(self.bit_width_ , self.val_ - rhs.val_, false)
+    } else { // TODO
+      APInt::new(self.bit_width_ , self.val_ - rhs.val_, false)
+    }
+  }
+}
+
+impl SubAssign<APInt> for APInt {
+  fn sub_assign(&mut self, rhs: APInt) {
+    if self.is_single_word() {
+      self.val_ -= rhs.val_;
+    } else {
+      // TODO
+    }
+  }
+}
+
+impl SubAssign<u64> for APInt {
+  fn sub_assign(&mut self, rhs: u64) {
+    if self.is_single_word() {
+      self.val_ -= rhs as i64;
+    } else {
+      // TODO
+    }
+  }
+}
+
+impl Mul<APInt> for APInt {
+  type Output = APInt;
+  fn mul(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() {
+      APInt::new(self.bit_width_, self.val_*rhs.val_, false)
+    } else {
+      // TODO
+      APInt { val_: self.val_ * rhs.val_, pval_: self.pval_, bit_width_: self.bit_width_ }
+    }
+  }
+}
+
+impl MulAssign<APInt> for APInt {
+  fn mul_assign(&mut self, rhs: APInt) {
+    if self.is_single_word() {
+      self.val_ *= rhs.val_;
+    } else {
+      // TODO
+    }
+  }
+}
+
+impl MulAssign<u64> for APInt {
+  fn mul_assign(&mut self, rhs: u64) {
+    if self.is_single_word() {
+      self.val_ *= rhs as i64;
+    } else {
+      // TODO
+    }
+  }
+}
+
+impl Div<APInt> for APInt {
+  type Output = APInt;
+  fn div(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() {
+      assert!(rhs.val_ != 0, "Div<APInt>: rhs.val == 0.");
+      APInt::new(self.bit_width_, self.val_ / rhs.val_, false)
+    } else {
+      // TODO
+      APInt { val_: self.val_ * rhs.val_, pval_: self.pval_, bit_width_: self.bit_width_ }
+    }
+  }
+}
+
+impl Rem<APInt> for APInt {
+  type Output = APInt;
+  fn rem(self, rhs: APInt) -> Self::Output {
+    if self.is_single_word() {
+      assert!(rhs.val_ != 0, "Div<APInt>: rhs.val == 0.");
+      APInt::new(self.bit_width_, self.val_ % rhs.val_, false)
+    } else {
+      // TODO
+      APInt { val_: self.val_ * rhs.val_, pval_: self.pval_, bit_width_: self.bit_width_ }
     }
   }
 }
@@ -1320,103 +1449,6 @@ impl BitXorAssign<u64> for APInt {
   }
 }
 
-impl Mul<APInt> for APInt {
-  type Output = APInt;
-  fn mul(self, rhs: APInt) -> Self::Output {
-    if self.is_single_word() {
-      APInt::new(self.bit_width_, self.val_*rhs.val_, false)
-    } else {
-      // TODO
-      APInt { val_: self.val_ * rhs.val_, pval_: self.pval_, bit_width_: self.bit_width_ }
-    }
-  }
-}
-
-impl MulAssign<APInt> for APInt {
-  fn mul_assign(&mut self, rhs: APInt) {
-    if self.is_single_word() {
-      self.val_ *= rhs.val_;
-    } else {
-      // TODO
-    }
-  }
-}
-
-impl MulAssign<u64> for APInt {
-  fn mul_assign(&mut self, rhs: u64) {
-    if self.is_single_word() {
-      self.val_ *= rhs as i64;
-    } else {
-      // TODO
-    }
-  }
-}
-
-impl Add<APInt> for APInt {
-  type Output = APInt;
-  fn add(self, rhs: APInt) -> Self::Output {
-    if self.is_single_word() && rhs.is_single_word() {
-      APInt::new(self.bit_width_ , self.val_ + rhs.val_, false)
-    } else { // TODO
-      APInt::new(self.bit_width_ , self.val_ + rhs.val_, false)
-    }
-  }
-}
-
-impl AddAssign<APInt> for APInt {
-  fn add_assign(&mut self, rhs: APInt) {
-    if self.is_single_word() && rhs.is_single_word() {
-      self.val_ = rhs.val_;
-      self.bit_width_ = rhs.bit_width_;
-    }
-    // TODO
-    // assign_slow_case()
-  }
-}
-
-impl AddAssign<u64> for APInt {
-  fn add_assign(&mut self, rhs: u64) {
-    if self.is_single_word() {
-      self.val_ = rhs as i64;
-      self.clear_unused_bits();
-      return;
-    }
-    // TODO
-    // self.pval_ = rhs;
-  }
-}
-
-impl Sub<APInt> for APInt {
-  type Output = APInt;
-  fn sub(self, rhs: APInt) -> Self::Output {
-    if self.is_single_word() && rhs.is_single_word() {
-      APInt::new(self.bit_width_ , self.val_ - rhs.val_, false)
-    } else { // TODO
-      APInt::new(self.bit_width_ , self.val_ - rhs.val_, false)
-    }
-  }
-}
-
-impl SubAssign<APInt> for APInt {
-  fn sub_assign(&mut self, rhs: APInt) {
-    if self.is_single_word() {
-      self.val_ -= rhs.val_;
-    } else {
-      // TODO
-    }
-  }
-}
-
-impl SubAssign<u64> for APInt {
-  fn sub_assign(&mut self, rhs: u64) {
-    if self.is_single_word() {
-      self.val_ -= rhs as i64;
-    } else {
-      // TODO
-    }
-  }
-}
-
 impl Shl<APInt> for APInt {
   type Output = APInt;
   fn shl(self, rhs: APInt) -> Self::Output {
@@ -1437,12 +1469,6 @@ impl ShlAssign<APInt> for APInt {
 impl ShlAssign<u32> for APInt {
   fn shl_assign(&mut self, rhs: u32) {
     // TODO
-  }
-}
-
-impl PartialEq<u64> for APInt {
-  fn eq(&self, other: &u64) -> bool {
-    self.val_ == *other as i64
   }
 }
 

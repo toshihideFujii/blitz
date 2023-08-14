@@ -2,8 +2,8 @@
 
 // This file contains the declaration of the Constant class.
 
+use std::any::Any;
 use crate::adt::ap_int::APInt;
-
 use super::{
   type_::{Type, TypeID, FixedVectorType, IntegerType, /*TypeID, IntegerType,*/ /*IntegerType*/},
   constants::{ConstantFP, ConstantAggregateZero,
@@ -345,9 +345,11 @@ pub trait Constant: Value {
   fn is_manifest_constant(&self) {}
   fn get_relocation_info(&self) {}
   fn has_n_live_uses(&self) {}
+
+  fn as_any(&self) -> &dyn Any;
 }
 
-pub fn get_null_value(t: &Box<dyn Type>) -> Box<dyn Constant> {
+pub fn get_null_value(t: &Box<&dyn Type>) -> Box<dyn Constant> {
   match t.get_type_id() {
     TypeID::Integer =>
       return Box::new(
@@ -360,7 +362,7 @@ pub fn get_null_value(t: &Box<dyn Type>) -> Box<dyn Constant> {
 // Returns the value for an integer or vector of integer constant of
 // the given typethat has all its bits set to true.
 // Get the all ones value.
-pub fn get_all_ones_value(t: &Box<dyn Type>) -> Box<dyn Constant> {
+pub fn get_all_ones_value(t: &Box<&dyn Type>) -> Box<dyn Constant> {
   if t.as_any().downcast_ref::<IntegerType>().is_some() {
     let int_t = t.as_any().downcast_ref::<IntegerType>().unwrap();
     return Box::new(ConstantInt::get_from_apint(int_t.get_context(),

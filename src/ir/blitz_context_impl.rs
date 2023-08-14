@@ -20,7 +20,7 @@ use super::{
   metadata::{MDString, /*ValueAsMetadata, Metadata, MetadataAsValue, MDNode*/},
   /*value::Value,*/
   debug_info_metadata::DICompositeType,
-  type_::{/*Type,*/ IntegerType, LabelType, VoidType},
+  type_::{/*Type,*/TypeID, IntegerType, BasicType},
   global_object::GlobalObject,
   global_value::GlobalValue,
   blits_context::BlitzContext,
@@ -71,8 +71,9 @@ pub struct BlitzContextImpl {
   the_false_val: Option<ConstantInt>,
 
   // Basic type instances.
-  pub void_type: VoidType,
-  pub label_type: LabelType,
+  pub void_type: BasicType,
+  pub label_type: BasicType,
+  pub fp128_type: BasicType,
   /*
   half_type: Box<dyn Type>,
   b_float_type: Box<dyn Type>,
@@ -82,7 +83,6 @@ pub struct BlitzContextImpl {
   token_type: Box<dyn Type>,
 
   x86_fp80_type: Box<dyn Type>,
-  fp128_type: Box<dyn Type>,
   ppc_fp128_type: Box<dyn Type>,
   x86_mmx_type: Box<dyn Type>,
   x86_amx_type: Box<dyn Type>,
@@ -134,8 +134,9 @@ impl BlitzContextImpl {
       //distinct_md_nodes: Vec::new(),
       the_true_val: None,
       the_false_val: None,
-      void_type: VoidType::new(c.clone()),
-      label_type: LabelType::new(c.clone()),
+      void_type: BasicType::new(c.clone(), TypeID::Void),
+      label_type: BasicType::new(c.clone(), TypeID::Label),
+      fp128_type: BasicType::new(c.clone(), TypeID::Fp128),
       int_1_type: IntegerType::new(c.clone(), 1),
       int_8_type: IntegerType::new(c.clone(), 8),
       int_16_type: IntegerType::new(c.clone(), 16),

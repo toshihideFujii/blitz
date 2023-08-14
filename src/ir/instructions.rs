@@ -7,7 +7,7 @@
 use crate::{support::atomic_ordering::AtomicOrdering, adt::twine::Twine};
 use super::{instr_types::{UnaryInstruction, CmpInst, Predicate, CallBase,
   OperandBundleDefType}, type_, type_::{Type, /*FunctionType*/},
-    instruction::{Instruction, MemoryOps, OtherOps, TermOps}, value::Value,
+    instruction::{Instruction, TermOps, OpCode}, value::Value,
     attributes::{AttrKind, /*AttributeList*/}, blits_context::BlitzContext,
   /*basic_block::BasicBlock*/};
 
@@ -51,7 +51,7 @@ impl AllocaInst {
   pub fn set_used_with_in_alloca() {}
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == MemoryOps::Alloca as u32
+    i.get_op_code() == OpCode::Alloca
   }
 }
 
@@ -113,7 +113,7 @@ impl LoadInst {
   pub fn get_pointer_address_space() {}
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == MemoryOps::Load as u32
+    i.get_op_code() == OpCode::Load 
   }
 }
 
@@ -183,7 +183,7 @@ impl StoreInst {
   pub fn get_pointer_address_space() {}
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == MemoryOps::Store as u32
+    i.get_op_code() == OpCode::Store
   }
 }
 
@@ -214,7 +214,7 @@ impl FenceInst {
   }
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == MemoryOps::Fence as u32
+    i.get_op_code() == OpCode::Fence
   }
 }
 
@@ -289,7 +289,7 @@ impl AtomicCmpXchgInst {
   pub fn get_strongest_failure_ordering() {}
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == MemoryOps::AtomicCmpXchg as u32
+    i.get_op_code() == OpCode::AtomicCmpXchg
   }
 }
 
@@ -361,7 +361,7 @@ impl AtomicRMWInst {
   pub fn is_floating_pointer_operation() {}
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == MemoryOps::AtomicRMW as u32
+    i.get_op_code() == OpCode::AtomicRMW
   }
 }
 
@@ -428,7 +428,7 @@ impl GetElementPtrInst {
   pub fn collect_offset() {}
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == MemoryOps::GetElementPtr as u32
+    i.get_op_code() == OpCode::GetElementPtr
   }
 }
 
@@ -472,7 +472,7 @@ impl ICmpInst {
   pub fn compare() {}
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == OtherOps::ICmp as u32
+    i.get_op_code() == OpCode::ICmp
   }
 }
 
@@ -501,7 +501,7 @@ impl FCmpInst {
   pub fn compare() {}
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == OtherOps::FCmp as u32
+    i.get_op_code() == OpCode::FCmp
   }
 }
 
@@ -591,7 +591,7 @@ impl CallInst {
   }
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == OtherOps::Call as u32
+    i.get_op_code() == OpCode::Call
   }
 
   pub fn update_prof_weight() {}
@@ -665,7 +665,7 @@ impl ReturnInst {
   }
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == TermOps::Ret as u32
+    i.get_op_code() == OpCode::Ret
   }
 }
 

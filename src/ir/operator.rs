@@ -10,6 +10,10 @@ pub enum OverflowBinOpWrap {
 
 struct OverflowingBinaryOperator {}
 
+pub enum PossiblyExactOp {
+  IsExact = (1 << 0)
+}
+
 struct PossiblyExactOperator {}
 
 struct FPMathOperator {}

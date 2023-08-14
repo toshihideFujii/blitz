@@ -1,10 +1,16 @@
 #![allow(dead_code)]
 
-use crate::{ir::type_::Type, adt::{twine::Twine, string_ref::StringRef},
-  support::{alignment::MaybeAlign, mod_ref::MemoryEffects}};
-use super::{instruction::{Instruction, MemoryOps, OtherOps, CastOps,
-  UnaryOps, BinaryOps, TermOps}, value::Value, attributes::{AttributeList,
-  AttrKind, Attribute}, use_::Use, type_::FunctionType, basic_block::BasicBlock};
+use crate::{
+  ir::{type_::Type, instruction::OpCode},
+  adt::{twine::Twine, string_ref::StringRef},
+  support::{alignment::MaybeAlign, mod_ref::MemoryEffects}
+};
+
+use super::{
+  instruction::{Instruction,
+  UnaryOps, BinaryOps}, value::Value, attributes::{AttributeList,
+  AttrKind, Attribute}, use_::Use, type_::FunctionType, basic_block::BasicBlock
+};
 
 pub struct UnaryInstruction {
   pub inst: Instruction
@@ -18,7 +24,7 @@ impl UnaryInstruction {
       1, ib) }
   }
 
-  pub fn get_op_code(&self) -> u32 {
+  pub fn get_op_code(&self) -> OpCode {
     self.inst.get_op_code()
   }
 
@@ -28,12 +34,12 @@ impl UnaryInstruction {
 
   pub fn class_of(i: &Instruction) -> bool {
     i.is_unary_op() ||
-    i.get_op_code() == MemoryOps::Alloca as u32 ||
-    i.get_op_code() == MemoryOps::Load as u32 ||
-    i.get_op_code() == OtherOps::VAArg as u32 ||
-    i.get_op_code() == OtherOps::ExtractValue as u32 ||
-    i.get_op_code() >= CastOps::Trunc as u32 &&
-    i.get_op_code() <= CastOps::AddrSpaceCast as u32
+    i.get_op_code() == OpCode::Alloca ||
+    i.get_op_code() == OpCode::Load ||
+    i.get_op_code() == OpCode::VAArg ||
+    i.get_op_code() == OpCode::ExtractValue ||
+    i.get_op_code() >= OpCode::Trunc &&
+    i.get_op_code() <= OpCode::AddrSpaceCast
   }
 }
 
@@ -52,7 +58,7 @@ impl UnaryOperator {
   pub fn create_f_neg_fmf() {}
 
   pub fn get_op_code(&self) -> Option<UnaryOps> {
-    if self.uinst.get_op_code() == UnaryOps::FNeg as u32 {
+    if self.uinst.get_op_code() == OpCode::FNeg {
       return Some(UnaryOps::FNeg);
     }
     None
@@ -91,6 +97,7 @@ impl BinaryOperator {
   pub fn create_not() {}
 
   pub fn get_op_code(&self) -> Option<BinaryOps> {
+    /*
     let code = self.inst.get_op_code();
     if code == BinaryOps::Add as u32 {
       return Some(BinaryOps::Add);
@@ -129,6 +136,7 @@ impl BinaryOperator {
     } else if code == BinaryOps::Xor as u32 {
       return Some(BinaryOps::Xor);
     }
+    */
     None
   }
 
@@ -270,7 +278,7 @@ impl CmpInst {
   pub fn is_false_when_equal(_p: Predicate) -> bool { false }
 
   pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == OtherOps::ICmp as u32 || i.get_op_code() == OtherOps::FCmp as u32
+    i.get_op_code() == OpCode::ICmp || i.get_op_code() == OpCode::FCmp
   }
 }
 
@@ -329,11 +337,11 @@ impl CallBase {
   pub fn has_descriptor(&self) -> bool { false }
 
   pub fn get_num_subclass_extra_operands(&self) -> u32 {
-    if self.inst.get_op_code() == OtherOps::Call as u32 {
+    if self.inst.get_op_code() == OpCode::Call {
       return 0;
-    } else if self.inst.get_op_code() == TermOps::Invoke as u32 {
+    } else if self.inst.get_op_code() == OpCode::Invoke {
       return 2;
-    } else if self.inst.get_op_code() == TermOps::CallBr as u32 {
+    } else if self.inst.get_op_code() == OpCode::CallBr {
       return self.get_num_subclass_extra_operands_dynamic();
     }
     panic!("Invalid opcode.");

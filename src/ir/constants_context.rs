@@ -3,7 +3,7 @@
 // This file defines various helper methods and classes used by
 // BlitzContextImpl for creating and managing constants.
 
-use super::{constant::Constant, type_::Type};
+use super::{constant::Constant, type_::Type, instruction::OpCode};
 
 struct CastConstantExpr {}
 
@@ -40,7 +40,7 @@ impl ConstantUniqueMap {
 }
 
 pub struct ConstantExprKeyType {
-  opcode: u32,
+  opcode: OpCode,
   subclass_optional_data: u32,
   subclass_data: u32,
   ops: Vec<Box<dyn Constant>>,
@@ -49,7 +49,7 @@ pub struct ConstantExprKeyType {
 }
 
 impl ConstantExprKeyType {
-  pub fn new(opcode: u32, ops: Vec<Box<dyn Constant>>,
+  pub fn new(opcode: OpCode, ops: Vec<Box<dyn Constant>>,
     subclass_data: u32, subclass_optional_data: u32) -> Self
   {
     ConstantExprKeyType {

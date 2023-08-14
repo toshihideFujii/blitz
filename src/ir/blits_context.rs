@@ -136,14 +136,6 @@ impl BlitzContext {
   pub fn get_impl(&self) -> &Option<Box<BlitzContextImpl>> {
     &self.p_impl
   }
-
-  pub fn get_impl_2(&mut self) -> &mut Box<BlitzContextImpl> {
-    self.p_impl.as_mut().unwrap()
-  }
-
-  pub fn get_impl_3(&mut self) -> &Option<Box<BlitzContextImpl>> {
-    &self.p_impl
-  }
 }
 
 struct KeyType {}

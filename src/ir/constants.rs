@@ -10,18 +10,21 @@
 // Constants are created on demand as needed and never deleted:
 // thus clients don't have to worry about the lifetime of the objects.
 
-use crate::{adt::{ap_int::APInt, ap_float::APFloat}, ir::constants_context::ConstantExprKeyType};
-
+use std::any::Any;
+use crate::{
+  adt::{ap_int::APInt, ap_float::APFloat},
+  //ir::constants_context::ConstantExprKeyType
+};
 use super::{
   blits_context::BlitzContext,
   //type_::{self, /*FixedVectorType*/},
   type_::{IntegerType, Type},
   value::{Value, ValueType},
-  instruction::{Instruction, OtherOps, BinaryOps},
+  instruction::{Instruction, OpCode},
   constant,
   constant::Constant,
   constant_fold,
-  use_::Use, operator::OverflowBinOpWrap
+  use_::Use, operator::{OverflowBinOpWrap, PossiblyExactOp}
 };
 
 
@@ -71,7 +74,7 @@ impl ConstantInt {
     if slot.is_none() {
       let i_type = IntegerType::get(c, v.get_bit_width());
       let c_int = ConstantInt::new(i_type, v.clone());
-      //c.get_impl_3().as_deref_mut().unwrap().int_constants.insert(v.clone(), c_int.clone());
+      //c.get_impl().as_deref_mut().unwrap().int_constants.insert(v.clone(), c_int.clone());
       return c_int;
     }
     slot.unwrap().clone()
@@ -261,20 +264,23 @@ impl Constant for ConstantInt {
   //fn get_null_value(&self, _t: Box<dyn Type>) -> Box<dyn Constant> {
     //Box::new(ConstantInt::get(&self.v_type, 0, false))
   //}
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
 }
 
 // Floating point values [float, double].
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstantFP {
-  v_type: IntegerType,
-  v_id: ValueType,
+  v_type: IntegerType,//Box<dyn Type>,
   val: APFloat
 }
 
 impl ConstantFP {
   pub fn new() {}
   pub fn get_zero_value_for_negation(&self) {}
-  pub fn get() {}
+  pub fn get(_c: &BlitzContext, _v: &APFloat) {}
   pub fn get_nan() {}
   pub fn get_q_nan() {}
   pub fn get_s_nan() {}
@@ -323,7 +329,7 @@ impl ConstantFP {
 
 impl Value for ConstantFP {
   fn get_type(&self) -> &dyn Type {
-    &self.v_type
+    &self.v_type//.as_ref()
   }
 
   fn get_context(&self) -> &BlitzContext {
@@ -331,7 +337,7 @@ impl Value for ConstantFP {
   }
 
   fn get_value_id(&self) -> ValueType {
-    self.v_id.clone()
+    ValueType::ConstantFPVal
   }
 }
 
@@ -380,6 +386,10 @@ impl Constant for ConstantFP {
   //fn get_null_value(&self, _t: Box<dyn Type>) -> Box<dyn Constant> {
     //Box::new(ConstantInt::get(&self.v_type, 0, false))
   //}
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
 }
 
 // All zero aggregate value.
@@ -495,16 +505,38 @@ pub struct ConstantExpr {
 }
 
 impl ConstantExpr {
-  pub fn new(v_type: Box<dyn Type>, _op_code: u32, _ops: Option<Use>, _num_ops: u32) -> Self {
+  pub fn new(v_type: Box<dyn Type>, _op_code: u32, _ops: Option<Use>,
+    _num_ops: u32) -> Self
+  {
     ConstantExpr { v_type: v_type, v_id: ValueType::ConstantExprVal }
   }
 
   pub fn get_align_of() {}
   pub fn get_size_of() {}
-  pub fn get_neg() {}
-  pub fn get_not() {}
 
-  pub fn get_add(c1: Box<dyn Constant>, c2: Box<dyn Constant>,
+  /*
+  pub fn get_neg(c: &Box<dyn Constant>, has_nuw: bool, has_nsw: bool)
+    -> Option<Box<dyn Constant>>
+  {
+    debug_assert!(c.get_type().is_int_or_int_vector_type(),
+      "Cannot neg a nonintegral value.");
+    let int_t = c.as_any().downcast_ref::<IntegerType>(); 
+    ConstantExpr::get_sub(Box::new(ConstantInt::get(int_t.as_ref().unwrap(), 0,
+      false)), c, has_nuw, has_nsw)
+  }
+  */
+  /*
+  pub fn get_not(c: Box<dyn Constant>) -> Option<Box<dyn Constant>> {
+    debug_assert!(c.as_ref().get_type().is_int_or_int_vector_type(),
+      "Cannot neg a nonintegral value.");
+    let val = Box::new(c.as_ref().get_type());
+    ConstantExpr::get(OpCode::Xor, c,
+      constant::get_all_ones_value(&val),
+      0, None)
+  }
+  */
+
+  pub fn get_add(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>,
     has_nuw: bool, has_nsw: bool) -> Option<Box<dyn Constant>>
   {
     let mut f1 = 0;
@@ -514,23 +546,95 @@ impl ConstantExpr {
     if has_nsw { f2 = OverflowBinOpWrap::NoSignedWrap as u32; }
 
     let flags = f1 | f2;
-    ConstantExpr::get(BinaryOps::Add as u32, c1, c2, flags)
+    ConstantExpr::get(OpCode::Add, c1, c2, flags, None)
   }
 
-  pub fn get_sub() {}
-  pub fn get_mul() {}
-  pub fn get_and() {}
-  pub fn get_or() {}
-  pub fn get_xor() {}
-  pub fn get_shl() {}
-  pub fn get_lshr() {}
-  pub fn get_ashr() {}
+  pub fn get_sub(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>,
+    has_nuw: bool, has_nsw: bool) -> Option<Box<dyn Constant>> 
+  {
+    let mut f1 = 0;
+    if has_nuw { f1 = OverflowBinOpWrap::NoUnsignedWrap as u32; }
+
+    let mut f2 = 0;
+    if has_nsw { f2 = OverflowBinOpWrap::NoSignedWrap as u32; }
+
+    let flags = f1 | f2;
+    ConstantExpr::get(OpCode::Sub, c1, c2, flags, None)
+  }
+
+  pub fn get_mul(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>,
+    has_nuw: bool, has_nsw: bool) -> Option<Box<dyn Constant>>
+  {
+    let mut f1 = 0;
+    if has_nuw { f1 = OverflowBinOpWrap::NoUnsignedWrap as u32; }
+
+    let mut f2 = 0;
+    if has_nsw { f2 = OverflowBinOpWrap::NoSignedWrap as u32; }
+
+    let flags = f1 | f2;
+    ConstantExpr::get(OpCode::Mul, c1, c2, flags, None)
+  }
+
+  pub fn get_and(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get(OpCode::And, c1, c2, 0, None)
+  }
+
+  pub fn get_or(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get(OpCode::Or, c1, c2, 0, None)
+  }
+
+  pub fn get_xor(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get(OpCode::Xor, c1, c2, 0, None)
+  }
+
+  pub fn get_shl(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>,
+    has_nuw: bool, has_nsw: bool) -> Option<Box<dyn Constant>>
+  {
+    let mut f1 = 0;
+    if has_nuw { f1 = OverflowBinOpWrap::NoUnsignedWrap as u32; }
+
+    let mut f2 = 0;
+    if has_nsw { f2 = OverflowBinOpWrap::NoSignedWrap as u32; }
+
+    let flags = f1 | f2;
+    ConstantExpr::get(OpCode::Shl, c1, c2, flags, None)
+  }
+
+  pub fn get_lshr(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>, is_exact: bool)
+    -> Option<Box<dyn Constant>>
+  {
+    let mut flags = 0;
+    if is_exact { flags = PossiblyExactOp::IsExact as u32; }
+    ConstantExpr::get(OpCode::LShr, c1, c2, flags, None)
+  }
+
+  pub fn get_ashr(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>, is_exact: bool)
+  -> Option<Box<dyn Constant>>
+  {
+    let mut flags = 0;
+    if is_exact { flags = PossiblyExactOp::IsExact as u32; }
+    ConstantExpr::get(OpCode::AShr, c1, c2, flags, None)
+  }
+
   pub fn get_trunc() {}
   pub fn get_sext() {}
   pub fn get_zext() {}
   pub fn get_fp_trunc() {}
   pub fn get_fp_extend() {}
-  pub fn get_ui_to_fp() {}
+
+  pub fn get_ui_to_fp(c: &Box<dyn Constant>, t: &Box<dyn Type>, onlly_if_reduced: bool) {
+    debug_assert!(c.get_type().is_int_or_int_vector_type() && t.is_fp_or_fpvector_type(),
+      "This is an illegal uint to floating point cast.");
+
+    ConstantExpr::get_folded_cast(OpCode::UIToFP, c, t, onlly_if_reduced)
+  }
+
   pub fn get_si_to_fp() {}
   pub fn get_fp_to_ui() {}
   pub fn get_fp_to_si() {}
@@ -538,41 +642,98 @@ impl ConstantExpr {
   pub fn get_int_to_ptr() {}
   pub fn get_bit_cast() {}
   pub fn get_addr_space_cast() {}
-  pub fn get_nsw_neg() {}
-  pub fn get_nuw_neg() {}
-  pub fn get_nsw_add() {}
-  pub fn get_nuw_add() {}
-  pub fn get_nsw_sub() {}
-  pub fn get_nuw_sub() {}
-  pub fn get_nsw_mul() {}
-  pub fn get_nuw_mul() {}
-  pub fn get_nsw_shl() {}
-  pub fn get_nuw_shl() {}
-  pub fn get_exact_ashr() {}
-  pub fn get_exact_lshr() {}
+
+  //pub fn get_nsw_neg(c: Box<dyn Constant>) -> Option<Box<dyn Constant>> {
+    //ConstantExpr::get_neg(c, false, true)
+  //}
+
+  //pub fn get_nuw_neg(c: Box<dyn Constant>) -> Option<Box<dyn Constant>> {
+    //ConstantExpr::get_neg(c, true, false)
+  //}
+
+  pub fn get_nsw_add(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get_add(c1, c2, false, true)
+  }
+
+  pub fn get_nuw_add(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get_add(c1, c2, true, false)
+  }
+
+  pub fn get_nsw_sub(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get_sub(c1, c2, false, true)
+  }
+
+  pub fn get_nuw_sub(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get_sub(c1, c2, true, false)
+  }
+
+  pub fn get_nsw_mul(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get_mul(c1, c2, false, true)
+  }
+
+  pub fn get_nuw_mul(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get_mul(c1, c2, true, false)
+  }
+
+  pub fn get_nsw_shl(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get_shl(c1, c2, false, true)
+  }
+
+  pub fn get_nuw_shl(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get_shl(c1, c2, true, false)
+  }
+
+  pub fn get_exact_ashr(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get_ashr(c1, c2, true)
+  }
+
+  pub fn get_exact_lshr(c1: &Box<dyn Constant>, c2: &Box<dyn Constant>)
+    -> Option<Box<dyn Constant>>
+  {
+    ConstantExpr::get_lshr(c1, c2, true)
+  }
+
   pub fn get_exact_log_base_2() {}
 
   // Return the identity constant for a binary opcode.
   // The identity constant c is defined as x op c = x and c op x = x for
   // every x when the binary operation is commutative.
-  pub fn get_bin_op_identity(opcode: u32, t: &Box<dyn Type>,
+  pub fn get_bin_op_identity(opcode: &OpCode, t: &Box<&dyn Type>,
     allow_rhs_constant: bool, _nsz: bool) -> Option<Box<dyn Constant>>
   {
     debug_assert!(Instruction::is_binary_op_static(opcode), "Only binops allowed.");
     if Instruction::is_commutative_static(opcode) {
-      if opcode == 13 || // Add: x + 0 = x
-        opcode == 29 || // Or: x | 0 = x
-        opcode == 30 // Xor: x ^ 0 = x
+      if *opcode == OpCode::Add || // Add: x + 0 = x
+        *opcode == OpCode::Or || // Or: x | 0 = x
+        *opcode == OpCode::Xor // Xor: x ^ 0 = x
       {
         return Some(constant::get_null_value(t));
-      } else if opcode == 17 { // Mul: x * 1 = x
+      } else if *opcode == OpCode::Mul { // Mul: x * 1 = x
         return Some(Box::new(ConstantInt::get(&t.as_any().
           downcast_ref::<IntegerType>().unwrap(), 1, false)));
-      } else if opcode == 28 { // And: x & -1 = x
+      } else if *opcode == OpCode::And { // And: x & -1 = x
         return Some(constant::get_all_ones_value(t));
-      } else if opcode == 14 { // FAdd: x + -0.0 = x
+      } else if *opcode == OpCode::FAdd { // FAdd: x + -0.0 = x
         // TODO
-      } else if opcode == 18 { // FMul: x * 1.0 = x
+      } else if *opcode == OpCode::FMul { // FMul: x * 1.0 = x
         // TODO
       } else {
         //panic!("Every commutative binop has an identity constant.");
@@ -582,20 +743,20 @@ impl ConstantExpr {
     // Non-commutative opcodes: allow_rhs_constant must be set.
     if !allow_rhs_constant { return None; }
 
-    if opcode == 15 || // Sub: x - 0 = x
-      opcode == 25 || // Shl: x << 0 = x
-      opcode == 26 || // LShr: x >>u 0 = x
-      opcode == 27 || // AShr: x >> 0 = x
-      opcode == 16 // FSub: x - 0.0 = x
+    if *opcode == OpCode::Sub || // Sub: x - 0 = x
+      *opcode == OpCode::Shl || // Shl: x << 0 = x
+      *opcode == OpCode::LShr || // LShr: x >>u 0 = x
+      *opcode == OpCode::AShr || // AShr: x >> 0 = x
+      *opcode == OpCode::FSub // FSub: x - 0.0 = x
     {
       return Some(constant::get_null_value(t));
     } else if
-      opcode == 20 || // SDiv: x / 1 = x
-      opcode == 19 // UDiv: x /u 1 = x
+      *opcode == OpCode::SDiv || // SDiv: x / 1 = x
+      *opcode == OpCode::UDiv // UDiv: x /u 1 = x
     {
       return Some(Box::new(ConstantInt::get(&t.as_any().
         downcast_ref::<IntegerType>().unwrap(), 1, false)));
-    } else if opcode == 21 { // FDiv: x / 1.0 = x
+    } else if *opcode == OpCode::FDiv { // FDiv: x / 1.0 = x
       // TODO
     } else {
       return None;
@@ -621,32 +782,31 @@ impl ConstantExpr {
 
   // Return true if this is a compare constant expression.
   pub fn is_compare(&self) -> bool {
-    self.get_opcode() == OtherOps::ICmp as u32 ||
-    self.get_opcode() == OtherOps::FCmp as u32
+    self.get_opcode() == OpCode::ICmp || self.get_opcode() == OpCode::FCmp
   }
   
   // Return a binary or shift operator constant expression,
   // folding if possible.
-  pub fn get(opcode: u32, c1: Box<dyn Constant>, c2: Box<dyn Constant>,
-    flags: u32) -> Option<Box<dyn Constant>>
+  pub fn get(opcode: OpCode, c1: &Box<dyn Constant>, c2: &Box<dyn Constant>,
+    _flags: u32, _only_if_reduced_type: Option<Box<dyn Type>>) -> Option<Box<dyn Constant>>
   {
-    debug_assert!(Instruction::is_binary_op_static(opcode),
+    debug_assert!(Instruction::is_binary_op_static(&opcode),
       "Invalid opcode in binary constant expression.");
 
-    debug_assert!(ConstantExpr::is_supported_bin_op(opcode),
+    debug_assert!(ConstantExpr::is_supported_bin_op(&opcode),
       "Binop not supported as constant expression.");
 
-    //debug_assert!(c1.get_type() == c2.get_type(),
-    //  "Operand types in binary constant expression should match.");
+    debug_assert!(c1.get_type().get_type_id() == c2.get_type().get_type_id(),
+      "Operand types in binary constant expression should match.");
 
     let fc =
-      constant_fold::constant_fold_binary_instruction(opcode, &c1, &c2);
+      constant_fold::constant_fold_binary_instruction(&opcode, c1, c2);
     if fc.is_some() { return fc; }
     
     // TODO: only_if_reduced_type == c1.get_type()
-    let arg_vec = vec![c1, c2];
-    let _key =ConstantExprKeyType::new(opcode, arg_vec,
-      0, flags);
+    //let arg_vec = vec![c1, c2];
+    //let _key =ConstantExprKeyType::new(opcode.clone(), arg_vec,
+      //0, flags);
 
     //let pimpl = c1.get_context().p_impl;
 
@@ -663,8 +823,8 @@ impl ConstantExpr {
   pub fn get_shuffle_vector() {}
 
   // Return the opcode at the root of this constant expression.
-  pub fn get_opcode(&self) -> u32 {
-    0 //self.sub_class_data
+  pub fn get_opcode(&self) -> OpCode {
+    OpCode::Unknown //self.sub_class_data
   }
 
   pub fn get_predicate() {}
@@ -677,34 +837,42 @@ impl ConstantExpr {
 
   // Whether creating a constant expression for this binary operator
   // supported.
-  pub fn is_supported_bin_op(opcode: u32) -> bool {
+  pub fn is_supported_bin_op(opcode: &OpCode) -> bool {
     match opcode {
       // true
-      13 => return true, // Add
-      15 => return true, // Sub
-      17 => return true, // Mul
-      25 => return true, // Shl
-      26 => return true, // LShr
-      27 => return true, // AShr
-      28 => return true, // And
-      29 => return true, // Or
-      30 => return true, // Xor
+      OpCode::Add => return true,
+      OpCode::Sub => return true,
+      OpCode::Mul => return true,
+      OpCode::Shl => return true,
+      OpCode::LShr => return true,
+      OpCode::AShr => return true,
+      OpCode::And => return true,
+      OpCode::Or => return true,
+      OpCode::Xor => return true,
       // false
-      19 => return false, // UDiv
-      20 => return false, // SDiv
-      22 => return false, // URem
-      23 => return false, // SRem
-      14 => return false, // FAdd
-      16 => return false, // FSub
-      18 => return false, // FMul
-      21 => return false, // FDiv
-      24 => return false, // FRem
+      OpCode::UDiv => return false,
+      OpCode::SDiv => return false,
+      OpCode::URem => return false,
+      OpCode::SRem => return false,
+      OpCode::FAdd => return false,
+      OpCode::FSub => return false,
+      OpCode::FMul => return false,
+      OpCode::FDiv => return false,
+      OpCode::FRem => return false,
       _ => panic!("Argument must be binop code."),
     };
   }
 
   pub fn is_supported_get_element_ptr() {}
   pub fn class_of() {}
+
+  // This is a utility function to handle folding of casts and lookup of
+  // the cast in the exp_constants map. It is used by the various get* methods.
+  fn get_folded_cast(_opcode: OpCode, _c: &Box<dyn Constant>, t: &Box<dyn Type>,
+    _onlly_if_reduced: bool)
+  {
+    debug_assert!(t.is_first_class_type(), "Cannot cast to an aggregate type.");
+  }
 }
 
 struct UndefValue {}
@@ -716,7 +884,7 @@ mod tests {
   use super::*;
   use crate::ir::blits_context::BlitzContext;
   use crate::ir::type_::IntegerType;
-
+  use crate::ir::type_;
 
   #[test]
   fn test_integer_i1() {
@@ -725,6 +893,32 @@ mod tests {
     let _one = ConstantInt::get(&int1, 1, true);
     let _zero = ConstantInt::get(&int1, 0, false);
     let neg_one = ConstantInt::get(&int1, -1, true);
-    assert_eq!(neg_one, ConstantInt::get_signed(&int1, -1))
+    assert_eq!(neg_one, ConstantInt::get_signed(&int1, -1));
+
+    //assert_eq!(ConstantExpr::get_add(Box::new(one), Box::new(one), false, false),
+      //Some(Box::new(zero)));
+  }
+
+  #[test]
+  fn test_int_signs() {
+    let c = BlitzContext::new();
+    let int_8_type = type_::get_int_8_type(&c);
+    assert_eq!(ConstantInt::get(&int_8_type, 100, false).get_sext_value(), 100);
+    assert_eq!(ConstantInt::get(&int_8_type, 100, true).get_sext_value(), 100);
+    assert_eq!(ConstantInt::get_signed(&int_8_type, 100).get_sext_value(), 100);
+    assert_eq!(ConstantInt::get(&int_8_type, 206, false).get_sext_value(), -50);
+    assert_eq!(ConstantInt::get_signed(&int_8_type, -50).get_sext_value(), -50);
+    assert_eq!(ConstantInt::get_signed(&int_8_type, -50).get_zext_value(), 206);
+
+    // Overflow is handled by truncation.
+    assert_eq!(ConstantInt::get(&int_8_type, 0x13b, false).get_sext_value(), 0x3b);
+  }
+
+  //#[test]
+  fn test_fp_128() {
+    let c = BlitzContext::new();
+    let _fp128_type = type_::get_fp128_type(&c);
+    let int128_type = type_::get_int_n_type(&c, 128);
+    let _zero_128 = constant::get_null_value(&Box::new(&int128_type));
   }
 }

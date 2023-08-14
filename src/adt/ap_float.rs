@@ -76,8 +76,55 @@ pub struct FltSemantics {
 
 impl FltSemantics {
   pub fn new() -> Self {
-    FltSemantics { max_exponent: 0, min_exponent: 0, precision: 0, size_in_bits: 0 }
+    FltSemantics { max_exponent: 0, min_exponent: 0,
+      precision: 0, size_in_bits: 0 }
   }
+
+  pub fn ieee_half() -> Self {
+    FltSemantics { max_exponent: 15, min_exponent: -14,
+       precision: 11, size_in_bits: 16 }
+  }
+
+  pub fn bloat() -> Self {
+    FltSemantics { max_exponent: 127, min_exponent: -126,
+      precision: 8, size_in_bits: 16 }
+  }
+
+  pub fn ieee_single() -> Self {
+    FltSemantics { max_exponent: 127, min_exponent: -126,
+      precision: 24, size_in_bits: 32 }
+  }
+
+  pub fn ieee_double() -> Self {
+    FltSemantics { max_exponent: 1023, min_exponent: -1022,
+      precision: 53, size_in_bits: 64 }
+  }
+
+  pub fn ieee_quad() -> Self {
+    FltSemantics { max_exponent: 16383, min_exponent: -16382,
+      precision: 113, size_in_bits: 128 }
+  }
+
+  pub fn float_8e5m2() -> Self {
+    FltSemantics { max_exponent: 15, min_exponent: -14,
+      precision: 3, size_in_bits: 8 }
+  }
+
+  pub fn x87_double_extended() -> Self {
+    FltSemantics { max_exponent: 16383, min_exponent: -16382,
+      precision: 64, size_in_bits: 80 }
+  }
+
+  pub fn bogus() -> Self {
+    FltSemantics { max_exponent: 0, min_exponent: 0,
+      precision: 0, size_in_bits: 0 }
+  }
+
+  pub fn ppc_double_double() -> Self {
+    FltSemantics { max_exponent: -1, min_exponent: 0,
+      precision: 0, size_in_bits: 128 }
+  }
+
   pub fn is_representable_by() {}
 } 
 
@@ -125,7 +172,9 @@ impl IEEEFloat {
   pub fn change_sign(&self) {}
   pub fn convert(&self) {}
   pub fn convert_to_integer(&self) {}
-  pub fn convert_from_apint(&self) {}
+
+  pub fn convert_from_apint(&mut self, _input: &APInt, _is_signed: bool, _rm: RoundingMode) {}
+
   pub fn convert_from_sign_extended_integer(&self) {}
   pub fn convert_from_zero_extended_integer(&self) {}
   pub fn convert_from_string(&self) {}
@@ -264,6 +313,15 @@ pub struct APFloat {
 
 impl APFloat {
   pub fn new(_semantics: FltSemantics) -> Self {
+    APFloat {
+      sign: 0,
+      semantics: Semantics::IEEEDouble,
+      ieee: IEEEFloat::new(),
+      double: DoubleAPFloat::new()
+    }
+  }
+
+  pub fn new_from_apint(_s: FltSemantics, _apint: &APInt) -> Self {
     APFloat {
       sign: 0,
       semantics: Semantics::IEEEDouble,
@@ -623,7 +681,7 @@ impl APFloat {
 
   pub fn convert(&self) {}
   pub fn convert_to_integer(&self) {}
-  pub fn convert_from_apint(&self) {}
+  pub fn convert_from_apint(&mut self, _input: &APInt, _is_signed: bool, _rm: RoundingMode) {}
   pub fn convert_from_sign_extended_integer(&self) {}
   pub fn convert_from_zero_extended_integer(&self) {}
   pub fn convert_from_string(&self) {}

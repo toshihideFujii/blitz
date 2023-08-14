@@ -12,6 +12,85 @@ use super::{
   type_::Type, metadata::MDNode, use_::Use
 };
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum OpCode {
+  // TermOps
+  Ret = 1,
+  Br = 2,
+  Switch = 3,
+  IndirectBr = 4,
+  Invoke = 5,
+  Resume = 6,
+  Unreachable = 7,
+  CleanupRet = 8,
+  CatchRet = 9,
+  CatchSwitch = 10,
+  CallBr = 11,
+  // UnaryOps
+  FNeg = 12,
+  // BinaryOps
+  Add = 13,
+  FAdd = 14,
+  Sub = 15,
+  FSub = 16,
+  Mul = 17,
+  FMul = 18,
+  UDiv = 19,
+  SDiv = 20,
+  FDiv = 21,
+  URem = 22,
+  SRem = 23,
+  FRem = 24,
+  Shl = 25,
+  LShr = 26,
+  AShr = 27,
+  And = 28,
+  Or = 29,
+  Xor = 30,
+  // MemoryOps
+  Alloca,
+  Load,
+  Store,
+  GetElementPtr,
+  Fence,
+  AtomicCmpXchg,
+  AtomicRMW,
+  // CastOps
+  Trunc = 38,
+  ZExt = 39,
+  SExt = 40,
+  FPToUI = 41,
+  FPToSI = 42,
+  UIToFP = 43,
+  SIToFp = 44,
+  FPTrunc = 45,
+  FPExt = 46,
+  PtrToInt = 47,
+  IntToPtr = 48,
+  BitCast = 49,
+  AddrSpaceCast = 50,
+  // FuncletPadOps
+  CleanupPad,
+  CatchPad,
+  // OtherOps
+  ICmp = 53,
+  FCmp = 54,
+  Phi = 55,
+  Call = 56,
+  Select = 57,
+  UserOp1 = 58,
+  UserOp2 = 59,
+  VAArg = 60,
+  ExtractElement = 61,
+  InsertElement = 62,
+  ShuffleVector = 63,
+  ExtractValue = 64,
+  InsertValue = 65,
+  LandingPad = 66,
+  Freeze = 67,
+  Unknown
+}
+
 // These instructions are used to terminate a basic block of the program.
 //#[derive(Debug, PartialEq, PartialOrd)]
 pub enum TermOps {
@@ -25,7 +104,7 @@ pub enum TermOps {
   CleanupRet = 8,
   CatchRet = 9,
   CatchSwitch = 10,
-  CallBr = 11
+  CallBr = 11,
 }
 
 // Standard unary operators.
@@ -52,7 +131,7 @@ pub enum BinaryOps {
   AShr = 27,
   And = 28,
   Or = 29,
-  Xor = 30
+  Xor = 30,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -160,7 +239,7 @@ impl Instruction {
   pub fn get_insertion_poiint_after_def() {}
 
   // Returns a member of one of the enums like Instruction::Add.
-  pub fn get_op_code(&self) -> u32 { 0 }
+  pub fn get_op_code(&self) -> OpCode { OpCode::Unknown }
 
   pub fn get_opcode_name() {}
 
@@ -173,7 +252,7 @@ impl Instruction {
   }
 
   pub fn is_binary_op(&self) -> bool {
-    Instruction::is_binary_op_static(self.get_op_code())
+    Instruction::is_binary_op_static(&self.get_op_code())
   }
 
   pub fn is_int_div_rem(&self) -> bool {
@@ -196,59 +275,57 @@ impl Instruction {
   pub fn is_only_user_of_any_operand() {}
 
   pub fn is_logical_shift(&self) -> bool {
-    self.get_op_code() == BinaryOps::Shl as u32 ||
-    self.get_op_code() == BinaryOps::LShr as u32
+    self.get_op_code() == OpCode::Shl || self.get_op_code() == OpCode::LShr
   }
 
   pub fn is_arithmetic_shift(&self) -> bool {
-    self.get_op_code() == BinaryOps::AShr as u32
+    self.get_op_code() == OpCode::AShr
   }
 
   pub fn is_bitwise_logic_op(&self) -> bool {
     Instruction::is_bitwise_logic_op_static(self.get_op_code())
   }
 
-  pub fn is_terminator_static(opcode: u32) -> bool {
-    TermOps::Ret as u32 <= opcode && opcode < TermOps::CallBr as u32 + 1
+  pub fn is_terminator_static(opcode: OpCode) -> bool {
+    OpCode::Ret <= opcode && opcode <= OpCode::CallBr
   }
 
-  pub fn is_unary_op_static(opcode: u32) -> bool {
-    UnaryOps::FNeg as u32 <= opcode && opcode < UnaryOps::FNeg as u32 + 1
+  pub fn is_unary_op_static(opcode: OpCode) -> bool {
+    OpCode::FNeg <= opcode && opcode <= OpCode::FNeg
   }
 
-  pub fn is_binary_op_static(opcode: u32) -> bool {
-    BinaryOps::Add as u32 <= opcode && opcode < BinaryOps::Xor as u32 + 1
+  pub fn is_binary_op_static(opcode: &OpCode) -> bool {
+    OpCode::Add <= *opcode && *opcode <= OpCode::Xor //BinaryOps::Xor as u32 + 1
   }
 
-  pub fn is_int_div_rem_static(opcode: u32) -> bool {
-    opcode == BinaryOps::UDiv as u32 || opcode == BinaryOps::SDiv as u32 ||
-    opcode == BinaryOps::URem as u32 || opcode == BinaryOps::SRem as u32
+  pub fn is_int_div_rem_static(opcode: OpCode) -> bool {
+    opcode == OpCode::UDiv || opcode == OpCode::SDiv ||
+    opcode == OpCode::URem || opcode == OpCode::SRem
   }
 
-  pub fn is_shift_static(opcode: u32) -> bool {
-    BinaryOps::Shl as u32 <= opcode && opcode <= BinaryOps::AShr as u32
+  pub fn is_shift_static(opcode: OpCode) -> bool {
+    OpCode::Shl <= opcode && opcode <= OpCode::AShr
   }
 
-  pub fn is_bitwise_logic_op_static(opcode: u32) -> bool {
-    opcode == BinaryOps::And as u32 || opcode == BinaryOps::Or as u32 ||
-    opcode == BinaryOps::Xor as u32
+  pub fn is_bitwise_logic_op_static(opcode: OpCode) -> bool {
+    opcode == OpCode::And || opcode == OpCode::Or || opcode == OpCode::Xor
   }
 
   // Determine if the opcode is one of the CastInst instructions.
-  pub fn is_cast_static(opcode: u32) -> bool {
-    CastOps::Trunc as u32 <= opcode && opcode < CastOps::AddrSpaceCast as u32 + 1
+  pub fn is_cast_static(opcode: OpCode) -> bool {
+    OpCode::Trunc  <= opcode && opcode <= OpCode::AddrSpaceCast
   }
 
   // Determine if the opcode is one of the FuncletPadInst instructions.
-  pub fn is_funclet_pad_static(opcode: u32) -> bool {
-    FuncletPadOps::CleanupPad as u32 <= opcode && opcode < FuncletPadOps::CatchPad as u32 + 1
+  pub fn is_funclet_pad_static(opcode: OpCode) -> bool {
+    OpCode::CleanupPad <= opcode && opcode <= OpCode::CatchPad
   }
 
   // Return true if the opcode is a terminator related to exception handling.
-  pub fn is_exceptional_terminator_static(opcode: u32) -> bool {
-    if opcode == TermOps::CatchSwitch as u32 || opcode == TermOps::CatchRet as u32 ||
-       opcode == TermOps::CleanupRet as u32 || opcode == TermOps::Invoke as u32 ||
-       opcode == TermOps::Resume as u32
+  pub fn is_exceptional_terminator_static(opcode: OpCode) -> bool {
+    if opcode == OpCode::CatchSwitch || opcode == OpCode::CatchRet ||
+       opcode == OpCode::CleanupRet || opcode == OpCode::Invoke ||
+       opcode == OpCode::Resume
     {
       return true;
     }
@@ -340,15 +417,15 @@ impl Instruction {
 
   // Return true if the instruction is commutative.
   // Commutative operators satisfy: (x op y) == (y op x).
-  pub fn is_commutative_static(opcode: u32) -> bool {
+  pub fn is_commutative_static(opcode: &OpCode) -> bool {
     match opcode {
-      13 => return true, // Add
-      14 => return true, // FAdd
-      17 => return true, // Mul
-      18 => return true, // FMul
-      28 => return true, // And
-      29 => return true, // Or
-      30 => return true, // Xor
+      OpCode::Add => return true,
+      OpCode::FAdd => return true,
+      OpCode::Mul => return true,
+      OpCode::FMul => return true,
+      OpCode::And => return true,
+      OpCode::Or => return true,
+      OpCode::Xor => return true,
       _ => return false,
     };
   }
