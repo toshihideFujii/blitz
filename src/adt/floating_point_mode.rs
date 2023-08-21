@@ -131,6 +131,7 @@ pub fn parse_denormal_fp_attribute(str: StringRef) -> DenormalMode {
 
 // Floating-point class tests, supported by 'is-fpclass' intrinsic.
 // Actual test may be an OR combination of basic tests.
+#[derive(Debug, Clone, PartialEq)]
 pub enum FPClassTest {
   None = 0,
   SNan = 0x0001,

@@ -1,12 +1,14 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
+
 use crate::{
   adt::{
     //small_ptr_set::SmallPtrSet,
     dense_map::DenseMap,
     ap_int::APInt,
     ap_float::APFloat,
-    folding_set::FoldingSet,
+    folding_set::{FoldingSet, FoldingSetNodeID},
     string_map::StringMap, string_ref::StringRef,
   },
   remarks::remark_streamer::RemarkStreamer
@@ -52,10 +54,9 @@ pub struct BlitzContextImpl {
   blitz_rs: Option<BlitzRemarkStreamer>,
 
   pub int_constants: DenseMap<APInt, ConstantInt>,
-  fp_constants: DenseMap<APFloat, ConstantFP>,
-
-  attrs_set: FoldingSet<AttributeImpl>,
-  attrs_lists: FoldingSet<AttributeListImpl>,
+  pub fp_constants: DenseMap<APFloat, ConstantFP>,
+  pub attrs_set: HashMap<FoldingSetNodeID, AttributeImpl>, //FoldingSet<AttributeImpl>,
+  pub attrs_lists: HashMap<FoldingSetNodeID, AttributeListImpl>, //FoldingSet<AttributeListImpl>,
   attrs_set_nodes: FoldingSet<AttributeSetNode>,
 
   md_string_cache: StringMap<MDString>,
@@ -125,8 +126,8 @@ impl BlitzContextImpl {
       blitz_rs: None,
       int_constants: DenseMap::new(),
       fp_constants: DenseMap::new(),
-      attrs_set: FoldingSet::new(),
-      attrs_lists: FoldingSet::new(),
+      attrs_set: HashMap::new(), //FoldingSet::new(),
+      attrs_lists: HashMap::new(), //FoldingSet::new(),
       attrs_set_nodes: FoldingSet::new(),
       md_string_cache: StringMap::new(),
       //metadata_as_values: DenseMap::new(),

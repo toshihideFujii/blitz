@@ -65,7 +65,7 @@ impl GlobalVariable {
   pub fn add_attribute() {}
 
   // Return true if the attribute exists.
-  pub fn has_attribute(&self, kind: AttrKind) -> bool {
+  pub fn has_attribute(&self, kind: &AttrKind) -> bool {
     self.attrs.has_attribute(kind)
   }
 

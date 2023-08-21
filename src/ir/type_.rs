@@ -41,7 +41,7 @@ pub enum TypeID {
   TargetExt
 }
 
-pub trait Type: Debug /*+ Clone + Sized*/ /*+ std::cmp::PartialEq*/ {
+pub trait Type: Debug {
   fn get_subclass_data(&self) -> u32;
   fn set_subclass_data(&mut self, val: u32) {}
   fn dump(&self) {}
@@ -88,7 +88,7 @@ pub trait Type: Debug /*+ Clone + Sized*/ /*+ std::cmp::PartialEq*/ {
   fn get_flt_semantics(&self) -> FltSemantics {
     match self.get_type_id() {
       TypeID::Half => return FltSemantics::ieee_half(),
-      TypeID::BFloat => return FltSemantics::bloat(),
+      TypeID::BFloat => return FltSemantics::bfloat(),
       TypeID::Float => return FltSemantics::ieee_single(),
       TypeID::Double => return FltSemantics::ieee_double(),
       TypeID::X86Fp80 => return FltSemantics::x87_double_extended(),
@@ -447,6 +447,76 @@ pub struct FunctionType {
   contained_types: Vec<Box<dyn Type>>
 }
 
+impl FunctionType {
+  /*
+  pub fn new(result: &dyn Type, params: Vec<Box<dyn Type>>, is_var_args: bool) -> Self {
+    let mut data: u32 = 0;
+    if is_var_args { data = 1; }
+    let fn_type = FunctionType { sub_class_data: data,
+      context: result.get_context().clone(), contained_types: params };
+
+    debug_assert!(fn_type.is_valid_return_type(result), "Invalid return type for functioin.");
+    let params_len = fn_type.contained_types.len();
+    for i in 0.. params_len {
+      debug_assert!(fn_type.is_valid_argument_type(&*fn_type.contained_types[i]),
+        "Not a valid type for function argument.");
+    }
+    fn_type
+  }
+  */
+  pub fn new(result: Box<dyn Type>, paraams: Vec<Box<dyn Type>>,
+    is_var_args: bool) -> Self
+  {
+    let fn_type = FunctionType {
+      sub_class_data: 0, context: result.get_context().clone(),
+      contained_types: Vec::new()
+    };
+    fn_type
+  }
+
+  pub fn get() {}
+
+  // Return true if the specified type is valid as a return type.
+  pub fn is_valid_return_type(&self, ret_type: &dyn Type) -> bool {
+    !ret_type.is_function_type() && !ret_type.is_label_type() &&
+    !ret_type.is_metadata_type()
+  }
+
+  // Return true if the specified type is valid as an argument type.
+  pub fn is_valid_argument_type(&self, arg_type: &dyn Type) -> bool {
+    arg_type.is_first_class_type()
+  }
+
+  pub fn is_var_arg(&self) -> bool {
+    self.get_subclass_data() != 0
+  }
+
+  pub fn get_return_type(&self) /*-> Box<dyn Type>*/ {
+    //self.contained_types[0]
+    //let mut cp = Vec::new();
+    //cp.clone_from_slice(&self.contained_types);
+  }
+
+  pub fn params(&self) -> &Vec<Box<dyn Type>> {
+    &self.contained_types
+  }
+
+  // Parameter type accessors.
+  pub fn get_param_type(&self, i: usize) -> &Box<dyn Type> {
+    &self.contained_types[i]
+  }
+
+  // Return the number of fixed parameters this function type requires.
+  // This does not consider varargs.
+  pub fn get_num_params(&self) -> usize {
+    self.contained_types.len()
+  }
+
+  pub fn classof(t: &dyn Type) -> bool {
+    t.get_type_id() == TypeID::Function
+  }
+}
+
 impl Type for FunctionType {
   fn get_subclass_data(&self) -> u32 {
     self.sub_class_data
@@ -478,69 +548,6 @@ impl Type for FunctionType {
   }
 }
 
-impl FunctionType {
-  /*
-  pub fn new(result: &dyn Type, params: Vec<Box<dyn Type>>, is_var_args: bool) -> Self {
-    let mut data: u32 = 0;
-    if is_var_args { data = 1; }
-    let fn_type = FunctionType { sub_class_data: data,
-      context: result.get_context().clone(), contained_types: params };
-
-    debug_assert!(fn_type.is_valid_return_type(result), "Invalid return type for functioin.");
-    let params_len = fn_type.contained_types.len();
-    for i in 0.. params_len {
-      debug_assert!(fn_type.is_valid_argument_type(&*fn_type.contained_types[i]),
-        "Not a valid type for function argument.");
-    }
-    fn_type
-  }
-  */
-
-  pub fn get() {}
-
-  // Return true if the specified type is valid as a return type.
-  pub fn is_valid_return_type(&self, ret_type: &dyn Type) -> bool {
-    !ret_type.is_function_type() && !ret_type.is_label_type() &&
-    !ret_type.is_metadata_type()
-  }
-
-  // Return true if the specified type is valid as an argument type.
-  pub fn is_valid_argument_type(&self, arg_type: &dyn Type) -> bool {
-    arg_type.is_first_class_type()
-  }
-
-  pub fn is_var_arg(&self) -> bool {
-    self.get_subclass_data() != 0
-  }
-
-  pub fn get_return_type(&self) /*-> Box<dyn Type>*/ {
-    //self.contained_types[0]
-    //let mut cp = Vec::new();
-    //cp.clone_from_slice(&self.contained_types);
-  }
-
-  pub fn param_begin() {}
-  pub fn param_end() {}
-  pub fn params(&self) -> &Vec<Box<dyn Type>> {
-    &self.contained_types
-  }
-
-  // Parameter type accessors.
-  pub fn get_param_type(&self, i: usize) -> &Box<dyn Type> {
-    &self.contained_types[i]
-  }
-
-  // Return the number of fixed parameters this function type requires.
-  // This does not consider varargs.
-  pub fn get_num_params(&self) -> usize {
-    self.contained_types.len()
-  }
-
-  pub fn classof(t: &dyn Type) -> bool {
-    t.get_type_id() == TypeID::Function
-  }
-}
-
 // A handy container for a FunctionType + Callee-pointer pair, which can
 // be passed araound as a single entity.
 // This assists in replacing the use of PointerType::getElementType() to
@@ -567,10 +574,12 @@ impl FunctionCalee {
 
 // This is the contents of the SubClassData field.
 enum SCDB {
-  HasBody,
-  Packed,
-  IsLiteral,
-  IsSized
+  HasBody = 1,
+  Packed = 2,
+  IsLiteral = 4,
+  IsSized = 8,
+  ContainsScalableVector = 16,
+  NotContainsScalableVector = 32
 }
 
 // Class to represent struct types.
@@ -584,47 +593,6 @@ struct StructType {
   sub_class_data: u32,
   context: BlitzContext,
   contained_types: Vec<Box<dyn Type>>
-}
-
-impl Type for StructType {
-  fn get_subclass_data(&self) -> u32 {
-    self.sub_class_data
-  }
-
-  fn get_context(&self) -> &BlitzContext {
-    &self.context
-  }
-
-  fn get_type_id(&self) -> TypeID {
-    TypeID::Struct
-  }
-
-  fn is_struct_type(&self) -> bool {
-    true
-  }
-
-  // Returns true if this struct contains a scalable vector.
-  fn contains_scalable_vector_type(&self) -> bool {
-    for element in &self.contained_types {
-      if element.get_type_id() == TypeID::ScalableVector {
-        return true;
-      }
-      if element.get_type_id() == TypeID::Struct {
-        if element.contains_scalable_vector_type() {
-          return true;
-        }
-      }
-    }
-    false
-  }
-
-  fn get_scalar_type(&self) -> Box<&dyn Type> {
-    Box::new(self)
-  }
-
-  fn as_any(&self) -> &dyn Any {
-    self
-  }
 }
 
 impl StructType {
@@ -690,6 +658,47 @@ impl StructType {
 
   pub fn classof(t: &dyn Type) -> bool {
     t.get_type_id() == TypeID::Struct
+  }
+}
+
+impl Type for StructType {
+  fn get_subclass_data(&self) -> u32 {
+    self.sub_class_data
+  }
+
+  fn get_context(&self) -> &BlitzContext {
+    &self.context
+  }
+
+  fn get_type_id(&self) -> TypeID {
+    TypeID::Struct
+  }
+
+  fn is_struct_type(&self) -> bool {
+    true
+  }
+
+  // Returns true if this struct contains a scalable vector.
+  fn contains_scalable_vector_type(&self) -> bool {
+    for element in &self.contained_types {
+      if element.get_type_id() == TypeID::ScalableVector {
+        return true;
+      }
+      if element.get_type_id() == TypeID::Struct {
+        if element.contains_scalable_vector_type() {
+          return true;
+        }
+      }
+    }
+    false
+  }
+
+  fn get_scalar_type(&self) -> Box<&dyn Type> {
+    Box::new(self)
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -776,6 +785,8 @@ impl ArrayType {
   }
 }
 
+pub trait VectorType : Type {}
+
 // Class to represent fixed width SIMD vectors
 #[derive(Debug)]
 pub struct FixedVectorType {
@@ -848,8 +859,12 @@ impl FixedVectorType {
   }
 }
 
+impl VectorType for FixedVectorType {
+
+}
+
 #[derive(Debug)]
-struct ScalableVectorType {
+pub struct ScalableVectorType {
   sub_class_data: u32,
   context: BlitzContext,
   contained_type: Box<dyn Type>,
@@ -914,6 +929,10 @@ impl ScalableVectorType {
   pub fn get_num_elements(&self) -> usize {
     self.element_quantity
   }
+}
+
+impl VectorType for ScalableVectorType {
+    
 }
 
 // Class to represent pointers.

@@ -18,7 +18,7 @@ use crate::{
 use super::{
   blits_context::BlitzContext,
   //type_::{self, /*FixedVectorType*/},
-  type_::{IntegerType, Type},
+  type_::{IntegerType, Type, FixedVectorType, ScalableVectorType},
   value::{Value, ValueType},
   instruction::{Instruction, OpCode},
   constant,
@@ -280,15 +280,69 @@ pub struct ConstantFP {
 impl ConstantFP {
   pub fn new() {}
   pub fn get_zero_value_for_negation(&self) {}
-  pub fn get(_c: &BlitzContext, _v: &APFloat) {}
-  pub fn get_nan() {}
+
+  // If t is a vector type, return a Constant with a splat of the given
+  // value. Otherwise return a ConstantFP for the given value.
+  pub fn get_constant(t: Box<dyn Type>, v: &APFloat) -> Option<Box<dyn Constant>> {
+    let c = ConstantFP::get_constant_fp(t.get_context(), v);
+
+    if t.as_any().downcast_ref::<FixedVectorType>().is_some() ||
+      t.as_any().downcast_ref::<ScalableVectorType>().is_some() {
+      // TODO
+    }
+
+    if c.is_none() { return None; }
+    Some(Box::new(c.unwrap()))
+  }
+
+  pub fn get_constant_fp(c: &BlitzContext, v: &APFloat) -> Option<ConstantFP> {
+    let value =
+      c.get_impl().as_ref().unwrap().fp_constants.find(v);
+
+    if value.is_none() { return None; }
+    Some(value.unwrap().clone())
+  }
+
+  pub fn get_nan(t: &Box<dyn Type>, _negative: bool, _pay_load: u64) {
+    let _semantics = t.get_scalar_type().get_flt_semantics();
+    //let nan = APFloat::get_nan()
+  }
+
   pub fn get_q_nan() {}
   pub fn get_s_nan() {}
 
-  pub fn get_zero(_t: &Box<dyn Type>, _negative: bool) {}
+  pub fn get_zero(t: &Box<dyn Type>, negative: bool) -> Option<Box<dyn Constant>> {
+    let semantics = t.get_scalar_type().get_flt_semantics();
+    let neg_zero = APFloat::get_zero(semantics, negative);
+    let c = ConstantFP::get_constant_fp(t.get_context(), &neg_zero);
 
-  pub fn get_negative_zero() {}
-  pub fn get_infinity() {}
+    if t.as_any().downcast_ref::<FixedVectorType>().is_some() ||
+      t.as_any().downcast_ref::<ScalableVectorType>().is_some() {
+      // TODO
+    }
+
+    if c.is_none() { return None; }
+    Some(Box::new(c.unwrap()))
+  }
+
+  pub fn get_negative_zero(t: &Box<dyn Type>) -> Option<Box<dyn Constant>> {
+    ConstantFP::get_zero(t, true)
+  }
+
+  pub fn get_infinity(t: &Box<dyn Type>, negative: bool) -> Option<Box<dyn Constant>> {
+    let semantics = t.get_scalar_type().get_flt_semantics();
+    let c = ConstantFP::get_constant_fp(t.get_context(),
+      &APFloat::get_inf(semantics, negative));
+
+    if t.as_any().downcast_ref::<FixedVectorType>().is_some() ||
+      t.as_any().downcast_ref::<ScalableVectorType>().is_some() {
+      // TODO
+    }
+
+    if c.is_none() { return None; }
+    Some(Box::new(c.unwrap()))
+  }
+
   pub fn is_value_valid_for_type() {}
 
   pub fn get_value_apf(&self) -> APFloat {

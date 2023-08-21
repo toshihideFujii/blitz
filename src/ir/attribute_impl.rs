@@ -3,13 +3,17 @@
 // This file defines various helper methods and classes
 // used by BlitzContextImpl for creating and managing attributes.
 
+use rand::Rng;
+
 //use std::collections::HashMap;
 use crate::{
-  adt::{/*dense_map::DenseMap,*/ string_ref::StringRef, floating_point_mode::FPClassTest},
+  adt::{/*dense_map::DenseMap,*/ string_ref::StringRef,
+    floating_point_mode::FPClassTest, folding_set::FoldingSetNodeID},
   support::{alignment::MaybeAlign,
   code_gen::UWTableKind, mod_ref::MemoryEffects}
 };
-use super::{attributes::{AttrKind, Attribute, AllocFnKind}, type_::Type};
+use super::{attributes::{AttrKind, Attribute, AllocFnKind, AttributeSet,
+  AttrBuilder}, type_::Type, blits_context::BlitzContext};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AttrEntryKind {
@@ -30,8 +34,10 @@ pub struct AttributeImpl {
 }
 
 impl AttributeImpl {
-  pub fn new(kind_id: AttrEntryKind, kind: AttrKind, val: u64, /*v_type: Box<dyn Type>*/) -> Self {
-    AttributeImpl { kind_id: kind_id, kind: kind, val: val, /*v_type: Some(v_type)*/ }
+  pub fn new(kind_id: AttrEntryKind, kind: AttrKind, val: u64,
+  /*v_type: Option<Box<dyn Type>>*/) -> Self
+  {
+    AttributeImpl { kind_id: kind_id, kind: kind, val: val, /*v_type: v_type*/ }
   }
 
   pub fn is_enum_attribute(&self) -> bool {
@@ -80,9 +86,9 @@ impl AttributeImpl {
     StringRef::new()
   }
 
-  pub fn get_value_as_type(&self) -> &Option<Box<dyn Type>> {
+  pub fn get_value_as_type(&self) -> Option<Box<dyn Type>> {
     //&self.v_type
-    &None
+    None
   }
 
   pub fn profile() {}
@@ -114,7 +120,8 @@ impl TypeAttributeImpl {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct AttributeBitSet {
+pub struct AttributeBitSet {
+  // Bitset with a bit for each available attribute AttrKind.
   available_attrs: Vec<u8>
 }
 
@@ -123,8 +130,8 @@ impl AttributeBitSet {
     AttributeBitSet { available_attrs: Vec::new() }
   }
 
-  pub fn has_attribute(&self, kind: AttrKind) -> bool {
-    let kind_val = kind as u8;
+  pub fn has_attribute(&self, kind: &AttrKind) -> bool {
+    let kind_val = kind.clone() as u8;
     if self.available_attrs[(kind_val / 8) as usize] & (1 << (kind_val % 8)) != 0 {
       return true;
     } else {
@@ -132,8 +139,8 @@ impl AttributeBitSet {
     }
   }
 
-  pub fn add_attribute(&mut self, kind: AttrKind) {
-    let kind_val = kind as u8;
+  pub fn add_attribute(&mut self, kind: &AttrKind) {
+    let kind_val = kind.clone() as u8;
     self.available_attrs[(kind_val / 8) as usize] |= 1 << (kind_val % 8);
   }
 }
@@ -142,33 +149,54 @@ impl AttributeBitSet {
 // function, return type, or parameter.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AttributeSetNode {
+  pub id: u64,
   num_attrs: usize,
   available_attrs: AttributeBitSet,
   //string_attrs: DenseMap<String, Attribute>
+  pub attrs: Vec<Attribute>
 }
 
 impl AttributeSetNode {
   pub fn new(attrs: Vec<Attribute>) -> Self {
     let mut available_attrs = AttributeBitSet::new();
+    let attrs_clone = attrs.clone();
     let num_attrs = attrs.len();
     for attr in attrs {
       if attr.is_string_attribute() {
         // TODO
       } else {
-        available_attrs.add_attribute(attr.get_kind_as_enum().clone());
+        available_attrs.add_attribute(&attr.get_kind_as_enum());
       }
     }
-    AttributeSetNode { num_attrs: num_attrs, available_attrs: available_attrs }
+    let mut rng = rand::thread_rng();
+    let id: u64 = rng.gen();
+    AttributeSetNode {
+      id: id, num_attrs: num_attrs,
+      available_attrs: available_attrs, attrs: attrs_clone
+    }
   }
 
-  pub fn get() {}
+  pub fn get_sorted(_c: &BlitzContext, _attrs: &Vec<Attribute>)
+    -> Option<AttributeSetNode>
+  {
+    None
+  }
+
+  pub fn get_by_builder(c: &BlitzContext, b: &AttrBuilder) -> Option<AttributeSetNode> {
+    AttributeSetNode::get_sorted(c, &b.attrs)
+  }
+
+  pub fn get_by_attrs(c: &BlitzContext, attrs: &Vec<Attribute>) -> Option<AttributeSetNode> {
+    // TODO: sort vector
+    AttributeSetNode::get_sorted(c, attrs)
+  }
 
   // Return the number of attributes this contains.
   pub fn get_num_attributes(&self) -> usize {
     self.num_attrs
   }
 
-  pub fn has_attribute(&self, kind: AttrKind) -> bool {
+  pub fn has_attribute(&self, kind: &AttrKind) -> bool {
     self.available_attrs.has_attribute(kind)
   }
 
@@ -294,10 +322,33 @@ pub struct AttributeListImpl {
 }
 
 impl AttributeListImpl {
-  pub fn new() {}
+  pub fn new(attr_sets: &Vec<AttributeSet>) -> Self {
+    debug_assert!(attr_sets.is_empty(), "Pointless AttributeListImpl.");
+
+    // TODO
+    let attr_list = AttributeListImpl {
+      num_attr_sets: attr_sets.len(),
+      available_function_attrs: AttributeBitSet::new(),
+      available_somewhere_attrs: AttributeBitSet::new()
+    };
+
+    //for attr_set in attr_sets {
+      //for attr in attr_set {
+      //}
+    //}
+
+    attr_list
+  }
+
   pub fn has_fn_attribute() {}
   pub fn has_attr_somewhere() {}
-  pub fn profile() {}
+
+  pub fn profile(id: &mut FoldingSetNodeID, attr_sets: &Vec<AttributeSet>) {
+    for attr_set in attr_sets {
+      id.add_attr_set_node_id(attr_set.set_node.as_ref().unwrap());
+    }
+  }
+
   pub fn dump() {}
 
   fn num_trailing_objects(&self) -> usize {

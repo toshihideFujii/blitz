@@ -1,11 +1,14 @@
 #![allow(dead_code)]
 
 use std::{collections::HashSet, hash::Hash};
+use crate::ir::attribute_impl::AttributeSetNode;
+
 use super::small_vector::SmallVector;
 
 // This class is used to gather all the unique data bits of a node.
 // When all the bits are gathered this class is used to produce a 
 // hash value for the node.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FoldingSetNodeID {
   bits: SmallVector<u32>
 }
@@ -56,6 +59,10 @@ impl FoldingSetNodeID {
   // Adds the bit data of another ID to this.
   pub fn add_node_id(&mut self, id: &mut FoldingSetNodeID) {
     self.bits.append(&mut id.bits)
+  }
+
+  pub fn add_attr_set_node_id(&mut self, node: &AttributeSetNode) {
+    self.add_integer_u64(node.id);
   }
 
   pub fn add() {}

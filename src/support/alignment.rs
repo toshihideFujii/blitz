@@ -42,6 +42,10 @@ impl MaybeAlign {
   }
 
   pub fn value_or_one() {}
+
+  pub fn value(&self) -> u64 {
+    1 << self.shift_value
+  }
 }
 
 // Checks that size_in_bytes is a multiple of the alignment.

@@ -2,7 +2,7 @@
 
 use std::ops::*;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub struct SmallVector<T> {
   vec: Vec<T>
 }

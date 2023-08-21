@@ -6,7 +6,7 @@
 
 use std::ops::*;
 
-use super::{floating_point_mode::RoundingMode, ap_int::APInt};
+use super::{floating_point_mode::RoundingMode, ap_int::APInt, string_ref::StringRef};
 
 // Enum that represents what fraction of the LSB truncated bits
 // of an fp number represent.
@@ -15,6 +15,12 @@ enum LostFraction {
   LessThanZero,
   ExactlyHalf,
   MoreThanHalf
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum APFType {
+  IEEEFloat,
+  DoubleAPFloat
 }
 
 // Floating point semantics.
@@ -30,6 +36,7 @@ pub enum Semantics {
   Float8E5M2FNUZ,
   Float8E4M3FN,
   Float8E4M3FNUZ,
+  Float8E4M3B11FNUZ,
   X87DoubleExtended
 }
 
@@ -42,13 +49,15 @@ pub enum CmpResult {
 }
 
 // IEEE-754R 7: Default exception handling.
-enum OpStatus {
-  Ok,
-  InvalidOp,
-  DivByZero,
-  Overflow,
-  Underflow,
-  Inexact
+// Underflow or Overflow are always returned or-ed with Inexact.
+#[derive(Debug, Clone, PartialEq)]
+pub enum OpStatus {
+  Ok = 0x00,
+  InvalidOp = 0x01,
+  DivByZero = 0x02,
+  Overflow = 0x04,
+  Underflow = 0x08,
+  Inexact = 0x10
 }
 
 // Category of internally-represented number.
@@ -58,6 +67,19 @@ pub enum FltCategory {
   Nan,
   Normal,
   Zero
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FltNonfiniteBehavior {
+  IEEE754,
+  NanOnly
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FltNanEncoding {
+  IEEE,
+  AllOnes,
+  NegativeZero
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -71,61 +93,133 @@ pub struct FltSemantics {
   // Number of bits in the significand. This includs the integer bit.
   precision: u32,
   // Number of bits actually used in the semantics.
-  size_in_bits: u32
+  size_in_bits: u32,
+
+  non_finite_behavior: FltNonfiniteBehavior,
+  nan_encoding: FltNanEncoding
 }
 
 impl FltSemantics {
   pub fn new() -> Self {
-    FltSemantics { max_exponent: 0, min_exponent: 0,
-      precision: 0, size_in_bits: 0 }
+    FltSemantics {
+      max_exponent: 0, min_exponent: 0, precision: 0, size_in_bits: 0,
+      non_finite_behavior: FltNonfiniteBehavior::IEEE754,
+      nan_encoding: FltNanEncoding::IEEE
+    }
   }
 
   pub fn ieee_half() -> Self {
-    FltSemantics { max_exponent: 15, min_exponent: -14,
-       precision: 11, size_in_bits: 16 }
+    FltSemantics {
+      max_exponent: 15, min_exponent: -14, precision: 11, size_in_bits: 16,
+      non_finite_behavior: FltNonfiniteBehavior::IEEE754,
+      nan_encoding: FltNanEncoding::IEEE
+    }
   }
 
-  pub fn bloat() -> Self {
-    FltSemantics { max_exponent: 127, min_exponent: -126,
-      precision: 8, size_in_bits: 16 }
+  pub fn bfloat() -> Self {
+    FltSemantics {
+      max_exponent: 127, min_exponent: -126, precision: 8, size_in_bits: 16,
+      non_finite_behavior: FltNonfiniteBehavior::IEEE754,
+      nan_encoding: FltNanEncoding::IEEE
+    }
   }
 
   pub fn ieee_single() -> Self {
-    FltSemantics { max_exponent: 127, min_exponent: -126,
-      precision: 24, size_in_bits: 32 }
+    FltSemantics {
+      max_exponent: 127, min_exponent: -126, precision: 24, size_in_bits: 32,
+      non_finite_behavior: FltNonfiniteBehavior::IEEE754,
+      nan_encoding: FltNanEncoding::IEEE
+    }
   }
 
   pub fn ieee_double() -> Self {
-    FltSemantics { max_exponent: 1023, min_exponent: -1022,
-      precision: 53, size_in_bits: 64 }
+    FltSemantics {
+      max_exponent: 1023, min_exponent: -1022, precision: 53, size_in_bits: 64,
+      non_finite_behavior: FltNonfiniteBehavior::IEEE754,
+      nan_encoding: FltNanEncoding::IEEE
+    }
   }
 
   pub fn ieee_quad() -> Self {
-    FltSemantics { max_exponent: 16383, min_exponent: -16382,
-      precision: 113, size_in_bits: 128 }
+    FltSemantics {
+      max_exponent: 16383, min_exponent: -16382, precision: 113, size_in_bits: 128,
+      non_finite_behavior: FltNonfiniteBehavior::IEEE754,
+      nan_encoding: FltNanEncoding::IEEE
+    }
   }
 
   pub fn float_8e5m2() -> Self {
-    FltSemantics { max_exponent: 15, min_exponent: -14,
-      precision: 3, size_in_bits: 8 }
+    FltSemantics {
+      max_exponent: 15, min_exponent: -14, precision: 3, size_in_bits: 8,
+      non_finite_behavior: FltNonfiniteBehavior::IEEE754,
+      nan_encoding: FltNanEncoding::IEEE
+    }
+  }
+
+  pub fn float_8e5m2_fnuz() -> Self {
+    FltSemantics {
+      max_exponent: 15, min_exponent: -15, precision: 3, size_in_bits: 8,
+      non_finite_behavior: FltNonfiniteBehavior::NanOnly,
+      nan_encoding: FltNanEncoding::NegativeZero
+    }
+  }
+
+  pub fn float_8e4m3_fn() -> Self {
+    FltSemantics {
+      max_exponent: 8, min_exponent: -6, precision: 4, size_in_bits: 8,
+      non_finite_behavior: FltNonfiniteBehavior::NanOnly,
+      nan_encoding: FltNanEncoding::AllOnes
+    }
+  }
+
+  pub fn float_8e4m3_fnuz() -> Self {
+    FltSemantics {
+      max_exponent: 7, min_exponent: -7, precision: 4, size_in_bits: 8,
+      non_finite_behavior: FltNonfiniteBehavior::NanOnly,
+      nan_encoding: FltNanEncoding::NegativeZero
+    }
+  }
+
+  pub fn float_8e4m3b11_fnuz() -> Self {
+    FltSemantics {
+      max_exponent: 4, min_exponent: -10, precision: 4, size_in_bits: 8,
+      non_finite_behavior: FltNonfiniteBehavior::NanOnly,
+      nan_encoding: FltNanEncoding::NegativeZero
+    }
   }
 
   pub fn x87_double_extended() -> Self {
-    FltSemantics { max_exponent: 16383, min_exponent: -16382,
-      precision: 64, size_in_bits: 80 }
+    FltSemantics {
+      max_exponent: 16383, min_exponent: -16382, precision: 64, size_in_bits: 80,
+      non_finite_behavior: FltNonfiniteBehavior::IEEE754,
+      nan_encoding: FltNanEncoding::IEEE
+    }
   }
 
   pub fn bogus() -> Self {
-    FltSemantics { max_exponent: 0, min_exponent: 0,
-      precision: 0, size_in_bits: 0 }
+    FltSemantics {
+      max_exponent: 0, min_exponent: 0, precision: 0, size_in_bits: 0,
+      non_finite_behavior: FltNonfiniteBehavior::IEEE754,
+      nan_encoding: FltNanEncoding::IEEE
+    }
   }
 
   pub fn ppc_double_double() -> Self {
-    FltSemantics { max_exponent: -1, min_exponent: 0,
-      precision: 0, size_in_bits: 128 }
+    FltSemantics {
+      max_exponent: -1, min_exponent: 0, precision: 0, size_in_bits: 128,
+      non_finite_behavior: FltNonfiniteBehavior::IEEE754,
+      nan_encoding: FltNanEncoding::IEEE
+    }
   }
 
-  pub fn is_representable_by() {}
+  // Returns true if any number described by this semantics can be precisely
+  // represented by the specified semantics.
+  // Does not take into acount the value of FltNonFiniteBehavior.
+  pub fn is_representable_by(&self, s: &FltSemantics) -> bool {
+    s.min_exponent <= self.min_exponent &&
+    self.max_exponent <= s.max_exponent &&
+    self.precision <= s.precision
+  }
 } 
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -148,7 +242,7 @@ impl IEEEFloat {
 
   pub fn make_zero(&self, _neg: bool) {}
   pub fn make_inf(&self, _neg: bool) {}
-  pub fn make_nan(&self) {}
+  pub fn make_nan(&self, _snan: bool, _neg: bool, _fill: Option<APInt>) {}
   pub fn make_largest(&self, _neg: bool) {}
   pub fn make_smallest(&self, _neg: bool) {}
   pub fn make_smallest_normalized(&self, _neg: bool) {}
@@ -171,16 +265,17 @@ impl IEEEFloat {
 
   pub fn change_sign(&self) {}
   pub fn convert(&self) {}
-  pub fn convert_to_integer(&self) {}
+  pub fn convert_to_integer(&self, _input: u64, _width: u32, _is_signed: bool,
+    _rm: RoundingMode, _is_exact: bool) {}
 
   pub fn convert_from_apint(&mut self, _input: &APInt, _is_signed: bool, _rm: RoundingMode) {}
 
   pub fn convert_from_sign_extended_integer(&self) {}
   pub fn convert_from_zero_extended_integer(&self) {}
-  pub fn convert_from_string(&self) {}
-  pub fn bitcast_to_apint(&self) {}
-  pub fn convert_to_double(&self) {}
-  pub fn convert_to_float(&self) {}
+  pub fn convert_from_string(&self, _s: StringRef, _rm: RoundingMode) {}
+  pub fn bitcast_to_apint(&self) -> APInt { APInt::new_zero() }
+  pub fn convert_to_double(&self) -> f64 { 0.0 }
+  pub fn convert_to_float(&self) -> f32 { 0.0 }
 
   pub fn compare(&self, _rhs: &IEEEFloat) -> CmpResult {
     CmpResult::Equal
@@ -272,7 +367,7 @@ impl DoubleAPFloat {
 
   pub fn make_zero(&self, _neg: bool) {}
   pub fn make_inf(&self, _neg: bool) {}
-  pub fn make_nan(&self) {}
+  pub fn make_nan(&self, _snan: bool, _neg: bool, _fill: Option<APInt>) {}
   pub fn make_largest(&self, _neg: bool) {}
   pub fn make_smallest(&self, _neg: bool) {}
   pub fn make_smallest_normalized(&self, _neg: bool) {}
@@ -291,6 +386,11 @@ impl DoubleAPFloat {
   pub fn round_to_integral(&self, _rm: RoundingMode) {}
 
   pub fn change_sign(&self) {}
+  pub fn convert_to_integer(&self, _input: u64, _width: u32, _is_signed: bool,
+    _rm: RoundingMode, _is_exact: bool) {}
+  pub fn convert_from_apint(&mut self, _input: &APInt, _is_signed: bool, _rm: RoundingMode) {}
+  pub fn convert_from_string(&self, _s: StringRef, _rm: RoundingMode) {}
+  pub fn bitcast_to_apint(&self) -> APInt { APInt::new_zero() }
   pub fn compare(&self, _rhs: &DoubleAPFloat) -> CmpResult {
     CmpResult::Equal
   }
@@ -306,25 +406,25 @@ impl DoubleAPFloat {
 pub struct APFloat {
   // Sign bit of the number.
   sign: u32,
-  semantics: Semantics,
+  semantics: FltSemantics,
   ieee: IEEEFloat,
   double: DoubleAPFloat
 }
 
 impl APFloat {
-  pub fn new(_semantics: FltSemantics) -> Self {
+  pub fn new(semantics: FltSemantics) -> Self {
     APFloat {
       sign: 0,
-      semantics: Semantics::IEEEDouble,
+      semantics: semantics,
       ieee: IEEEFloat::new(),
       double: DoubleAPFloat::new()
     }
   }
 
-  pub fn new_from_apint(_s: FltSemantics, _apint: &APInt) -> Self {
+  pub fn new_from_apint(s: FltSemantics, _apint: &APInt) -> Self {
     APFloat {
       sign: 0,
-      semantics: Semantics::IEEEDouble,
+      semantics: s,
       ieee: IEEEFloat::new(),
       double: DoubleAPFloat::new()
     }
@@ -336,55 +436,63 @@ impl APFloat {
   }
 
   pub fn make_zero(&self, neg: bool) {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.make_zero(neg);
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      self.double.make_zero(neg);
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      self.double.make_zero(neg);
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn make_inf(&self, neg: bool) {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.make_inf(neg);
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      self.double.make_inf(neg);
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      self.double.make_inf(neg);
+    }
+    panic!("Unexpected semantics.");
   }
 
-  pub fn make_nan(&self) {}
+  pub fn make_nan(&self, snan: bool, neg: bool, fill: Option<APInt>) {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
+      self.ieee.make_nan(snan, neg, fill.clone());
+    }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      self.double.make_nan(snan, neg, fill.clone());
+    }
+    panic!("Unexpected semantics.");
+  }
 
   pub fn make_largest(&self, neg: bool) {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.make_largest(neg);
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      self.double.make_largest(neg);
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      self.double.make_largest(neg);
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn make_smallest(&self, neg: bool) {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.make_smallest(neg);
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      self.double.make_smallest(neg);
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      self.double.make_smallest(neg);
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn make_smallest_normalized(&self, neg: bool) {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.make_smallest_normalized(neg);
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      self.double.make_smallest_normalized(neg);
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics){
+      self.double.make_smallest_normalized(neg);
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn make_quiet(&self) {}
@@ -392,26 +500,27 @@ impl APFloat {
   pub fn compare_absolute_value(&self, rhs: &APFloat) -> CmpResult {
     debug_assert!(self.get_semantics() == rhs.get_semantics(),
       "Should only compare APFloats with the same semantics.");
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       return self.ieee.compare_absolute_value(rhs);
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      return self.double.compare_absolute_value(rhs);
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      return self.double.compare_absolute_value(rhs);
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn needs_cleanup(&self) {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.needs_cleanup();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      self.double.needs_cleanup();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      self.double.needs_cleanup();
+    }
+    panic!("Unexpected semantics.");
   }
 
   // Factory for positive and negative zero.
+  // Param negative true if the number should be neative.
   pub fn get_zero(sem: FltSemantics, negative: bool) -> APFloat {
     let val = APFloat::new(sem);
     val.make_zero(negative);
@@ -425,122 +534,100 @@ impl APFloat {
     val
   }
 
-  pub fn get_nan() {}
-  pub fn get_q_nan() {}
-  pub fn get_s_nan() {}
+  // Factory for NaN values.
+  // Param negative - true if the NaN gernerated should be negative.
+  // Param payload - the unspecified fill bits for creating the NaN, 0 by default.
+  // The value is truncated as necessary.
+  pub fn get_nan(sem: &FltSemantics, negative: bool, payload: u64) -> APFloat {
+    if payload != 0 {
+      let int_payload = APInt::new(64,
+        payload as i64, false);
+      return APFloat::get_q_nan(sem, negative, Some(int_payload));
+    } else {
+      return APFloat::get_q_nan(sem, negative, None);
+    }
+  }
+
+  // Factory for QNaN values.
+  pub fn get_q_nan(sem: &FltSemantics, negative: bool,
+    payload: Option<APInt>) -> APFloat
+  {
+    let val = APFloat::new(sem.clone());
+    val.make_nan(false, negative, payload);
+    val
+  }
+
+  // Factory for SNaN values.
+  pub fn get_s_nan(sem: &FltSemantics, negative: bool,
+    payload: Option<APInt>) -> APFloat
+  {
+    let val = APFloat::new(sem.clone());
+    val.make_nan(true, negative, payload);
+    val
+  }
 
   // Returns the largest finite number in the given semantics.
-  pub fn get_largest(sem: FltSemantics, negative: bool) -> APFloat {
-    let val = APFloat::new(sem);
+  pub fn get_largest(sem: &FltSemantics, negative: bool) -> APFloat {
+    let val = APFloat::new(sem.clone());
     val.make_largest(negative);
     val
   }
 
   // Returns the smallest (by magnitude) finite number in the given semantics.
-  pub fn get_smallest(sem: FltSemantics, negative: bool) -> APFloat {
-    let val = APFloat::new(sem);
+  pub fn get_smallest(sem: &FltSemantics, negative: bool) -> APFloat {
+    let val = APFloat::new(sem.clone());
     val.make_smallest(negative);
     val
   }
 
   // Returns the smallest (by magnitude) normalized finite number in the
   // given semantics.
-  pub fn get_smallest_normalized(sem: FltSemantics, negative: bool) -> APFloat {
-    let val = APFloat::new(sem);
+  pub fn get_smallest_normalized(sem: &FltSemantics, negative: bool) -> APFloat {
+    let val = APFloat::new(sem.clone());
     val.make_smallest_normalized(negative);
     val
   }
 
-  pub fn get_all_ones_value() {}
+  // Returns a float which is bitcasted from an all one value int.
+  // Param semantics - type float semantics.
+  pub fn get_all_ones_value(semantics: &FltSemantics) -> APFloat {
+    APFloat::new_from_apint(semantics.clone(),
+      &APInt::get_all_ones(semantics.size_in_bits))
+  }
+
   pub fn profile() {}
 
   pub fn enum_to_semantics(s: Semantics) -> FltSemantics {
     match s {
-      Semantics::IEEEHalf =>
-        return FltSemantics { max_exponent: 15, min_exponent: -14, precision: 11, size_in_bits: 16 },
-      Semantics::BFloat =>
-        return FltSemantics { max_exponent: 127, min_exponent: -126, precision: 8, size_in_bits: 16 },
-      Semantics::IEEESingle =>
-        return FltSemantics { max_exponent: 127, min_exponent: -126, precision: 24, size_in_bits: 32 },
-      Semantics::IEEEDouble =>
-        return FltSemantics { max_exponent: 1023, min_exponent: -1022, precision: 53, size_in_bits: 64 },
-      Semantics::IEEEQuad =>
-        return FltSemantics { max_exponent: 16383, min_exponent: -16382, precision: 113, size_in_bits: 128 },
-      Semantics::PPCDoubleDouble =>
-        return FltSemantics { max_exponent: -1, min_exponent: 0, precision: 0, size_in_bits: 128 },
-      Semantics::Float8E5M2 =>
-        return FltSemantics { max_exponent: 15, min_exponent: -14, precision: 3, size_in_bits: 8 },
-      Semantics::Float8E5M2FNUZ => // TODO
-        return FltSemantics { max_exponent: 15, min_exponent: -15, precision: 3, size_in_bits: 8 },
-        Semantics::Float8E4M3FN => // TODO
-        return FltSemantics { max_exponent: 8, min_exponent: -6, precision: 4, size_in_bits: 8 },
-        Semantics::Float8E4M3FNUZ => // TODO
-        return FltSemantics { max_exponent: 7, min_exponent: -7, precision: 4, size_in_bits: 8 },
-        Semantics::X87DoubleExtended =>
-        return FltSemantics { max_exponent: 16383, min_exponent: -16382, precision: 64, size_in_bits: 80 },
+      Semantics::IEEEHalf => return FltSemantics::ieee_half(),
+      Semantics::BFloat => return FltSemantics::bfloat(),
+      Semantics::IEEESingle => return FltSemantics::ieee_single(),
+      Semantics::IEEEDouble => return FltSemantics::ieee_double(),
+      Semantics::IEEEQuad => return FltSemantics::ieee_quad(),
+      Semantics::PPCDoubleDouble => return FltSemantics::ppc_double_double(),
+      Semantics::Float8E5M2 => return FltSemantics::float_8e5m2(),
+      Semantics::Float8E5M2FNUZ => return FltSemantics::float_8e5m2_fnuz(),
+      Semantics::Float8E4M3FN => return FltSemantics::float_8e4m3_fn(),
+      Semantics::Float8E4M3FNUZ => return FltSemantics::float_8e4m3_fnuz(),
+      Semantics::Float8E4M3B11FNUZ => return FltSemantics::float_8e4m3b11_fnuz(),
+      Semantics::X87DoubleExtended => return FltSemantics::x87_double_extended(),
     };
   }
 
-  pub fn semantics_to_enum(&self) {}
-
-  pub fn ieee_half() -> FltSemantics {
-    FltSemantics { max_exponent: 15, min_exponent: -14,
-      precision: 11, size_in_bits: 16 }
-  }
-
-  pub fn b_float() -> FltSemantics {
-    FltSemantics { max_exponent: 127, min_exponent: -126,
-      precision: 8, size_in_bits: 16 }
-  }
-
-  pub fn ieee_single() -> FltSemantics {
-    FltSemantics { max_exponent: 127, min_exponent: -126,
-      precision: 24, size_in_bits: 32 }
-  }
-
-  pub fn ieee_double() -> FltSemantics {
-    FltSemantics { max_exponent: 1023, min_exponent: -1022,
-      precision: 53, size_in_bits: 64 }
-  }
-
-  pub fn ieee_quad() -> FltSemantics {
-    FltSemantics { max_exponent: 16383, min_exponent: -16382,
-      precision: 113, size_in_bits: 128 }
-  }
-
-  pub fn ppc_double_double() -> FltSemantics {
-    FltSemantics { max_exponent: -1, min_exponent: 0,
-      precision: 0, size_in_bits: 128 }
-  }
-
-  pub fn float_8e5m2() -> FltSemantics {
-    FltSemantics { max_exponent: 15, min_exponent: -14,
-      precision: 3, size_in_bits: 8 }
-  }
-
-  pub fn float_8e5m2_fnuz() -> FltSemantics {
-    FltSemantics { max_exponent: 15, min_exponent: -15,
-      precision: 3, size_in_bits: 8 }
-  }
-
-  pub fn float_8e4m3_fn() -> FltSemantics {
-    FltSemantics { max_exponent: 8, min_exponent: -6,
-      precision: 4, size_in_bits: 8 }
-  }
-
-  pub fn float_8e4m3_fnuz() -> FltSemantics {
-    FltSemantics { max_exponent: 7, min_exponent: -7,
-      precision: 4, size_in_bits: 8 }
-  }
-
-  pub fn x87_double_extended() -> FltSemantics {
-    FltSemantics { max_exponent: 16383, min_exponent: -16382,
-      precision: 64, size_in_bits: 80 }
-  }
-
-  pub fn bogus() -> FltSemantics {
-    FltSemantics { max_exponent: 0, min_exponent: 0,
-      precision: 0, size_in_bits: 0 }
+  pub fn semantics_to_enum(sem: &FltSemantics) -> Semantics {
+    if *sem == FltSemantics::ieee_half() { return Semantics::IEEEHalf; }
+    if *sem == FltSemantics::bfloat() { return Semantics::BFloat; }
+    if *sem == FltSemantics::ieee_single() { return Semantics::IEEESingle; }
+    if *sem == FltSemantics::ieee_double() { return Semantics::IEEEDouble; }
+    if *sem == FltSemantics::ieee_quad() { return Semantics::IEEEQuad; }
+    if *sem == FltSemantics::ppc_double_double() { return Semantics::PPCDoubleDouble; }
+    if *sem == FltSemantics::float_8e5m2() { return Semantics::Float8E5M2; }
+    if *sem == FltSemantics::float_8e5m2_fnuz() { return Semantics::Float8E5M2FNUZ; }
+    if *sem == FltSemantics::float_8e4m3_fn() { return Semantics::Float8E4M3FN; }
+    if *sem == FltSemantics::float_8e4m3_fnuz() { return Semantics::Float8E4M3FNUZ; }
+    if *sem == FltSemantics::float_8e4m3b11_fnuz() { return Semantics::Float8E4M3B11FNUZ; }
+    if *sem == FltSemantics::x87_double_extended() { return Semantics::X87DoubleExtended; }
+    panic!("Unknown floating semantics.");
   }
 
   pub fn semantics_precision(s: &FltSemantics) -> u32 {
@@ -572,99 +659,99 @@ impl APFloat {
   }
 
   pub fn add_float(&self, rhs: &APFloat, rm: RoundingMode) -> APFloat {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.add_float(&rhs.ieee, rm);
       return self.clone();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
+    }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
       self.double.add_float(&rhs.double, rm);
       return self.clone();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    panic!("Unexpected semantics.");
   }
 
   pub fn subtract_float(&self, rhs: &APFloat, rm: RoundingMode) -> APFloat {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.subtract_float(&rhs.ieee, rm);
       return self.clone();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
+    }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
       self.double.subtract_float(&rhs.double, rm);
       return self.clone();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    panic!("Unexpected semantics.");
   }
 
   pub fn multiply_float(&self, rhs: &APFloat, rm: RoundingMode) -> APFloat {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.multiply_float(&rhs.ieee, rm);
       return self.clone();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
+    }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
       self.double.multiply_float(&rhs.double, rm);
       return self.clone();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    panic!("Unexpected semantics.");
   }
 
   pub fn divide_float(&self, rhs: &APFloat, rm: RoundingMode) -> APFloat {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.divide_float(&rhs.ieee, rm);
       return self.clone();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
+    }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
       self.double.divide_float(&rhs.double, rm);
       return self.clone();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    panic!("Unexpected semantics.");
   }
 
   pub fn reminder(&self, rhs: &APFloat) -> APFloat {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.reminder_float(&rhs.ieee);
       return self.clone();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
+    }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
       self.double.reminder_float(&rhs.double);
       return self.clone();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    panic!("Unexpected semantics.");
   }
 
   pub fn modulo(&self, rhs: &APFloat) -> APFloat {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.modulo_float(&rhs.ieee);
       return self.clone();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
+    }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
       self.double.modulo_float(&rhs.double);
       return self.clone();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    panic!("Unexpected semantics.");
   }
 
   pub fn fuse_multiply_add(&self) {}
 
   pub fn round_to_integral(&self, rm: RoundingMode) {
-    if self.semantics != Semantics::PPCDoubleDouble {
-      self.ieee.round_to_integral(rm);
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      self.double.round_to_integral(rm);
-    } else {
-      panic!("Unexpected semantics!");
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
+      self.ieee.round_to_integral(rm.clone());
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      self.double.round_to_integral(rm.clone());
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn next(&self) {}
 
   pub fn change_sign(&self) {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       self.ieee.change_sign();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      self.double.change_sign();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      self.double.change_sign();
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn clear_sign(&self) {
@@ -679,37 +766,115 @@ impl APFloat {
     }
   }
 
-  pub fn convert(&self) {}
-  pub fn convert_to_integer(&self) {}
-  pub fn convert_from_apint(&mut self, _input: &APInt, _is_signed: bool, _rm: RoundingMode) {}
+  pub fn convert(&self, _to_s: &FltSemantics, _rm: RoundingMode)
+    -> (OpStatus, bool)
+  {
+    (OpStatus::InvalidOp, false)
+  }
+
+  pub fn convert_to_integer(&self, input: u64, width: u32, is_signed: bool,
+    rm: RoundingMode, is_exact: bool)
+  {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
+      return self.ieee.convert_to_integer(input, width, is_signed, rm, is_exact)
+    }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      return self.double.convert_to_integer(input, width, is_signed, rm, is_exact)
+    }
+    panic!("Unexpected semantics.");
+  }
+
+  pub fn convert_from_apint(&mut self, input: &APInt,
+    is_signed: bool, rm: RoundingMode)
+  {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
+      return self.ieee.convert_from_apint(input, is_signed, rm)
+    }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      return self.double.convert_from_apint(input, is_signed, rm)
+    }
+    panic!("Unexpected semantics.");
+  }
+
   pub fn convert_from_sign_extended_integer(&self) {}
   pub fn convert_from_zero_extended_integer(&self) {}
-  pub fn convert_from_string(&self) {}
-  pub fn bitcast_to_apint(&self) -> APInt {
-    // TODO
-    APInt::new_zero()
+
+  pub fn convert_from_string(&self, s: StringRef, rm: RoundingMode) {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
+      return self.ieee.convert_from_string(s, rm)
+    }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      return self.double.convert_from_string(s, rm)
+    }
+    panic!("Unexpected semantics.");
   }
-  pub fn convert_to_double(&self) {}
-  pub fn convert_to_float(&self) {}
+
+  pub fn bitcast_to_apint(&self) -> APInt {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
+      return self.ieee.bitcast_to_apint()
+    }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      return self.double.bitcast_to_apint()
+    }
+    panic!("Unexpected semantics.");
+  }
+
+  // Converts this APFloat to host double value.
+  // The APFloat must be built using semantics, that can be represented by the
+  // host double type without loss of precision.
+  // It can be IEEESingle and shorter semantics, like IEEEhalf.
+  pub fn convert_to_double(&self) -> f64 {
+    if self.semantics == FltSemantics::ieee_double() {
+      return self.get_ieee().convert_to_double();
+    }
+    debug_assert!(self.semantics.is_representable_by(&FltSemantics::ieee_double()),
+      "Float semantics is not representable by IEEEdouble.");
+    let temp = self.clone();
+    let status =
+      temp.convert(&&FltSemantics::ieee_double(), RoundingMode::NearestTiesToEven);
+    debug_assert!(status.0 != OpStatus::Inexact && status.1 == false,
+      "Unexpected imprecision.");
+
+    temp.get_ieee().convert_to_double()
+  }
+
+  // Converts this APFloat to host float value.
+  // The APFloat must be built using semantics, that can be represented by the
+  // host float type without loss of precision.
+  // It can be IEEESingle and shorter semantics, like IEEEhalf.
+  pub fn convert_to_float(&self) -> f32 {
+    if self.semantics == FltSemantics::ieee_single() {
+      return self.get_ieee().convert_to_float();
+    }
+    debug_assert!(self.semantics.is_representable_by(&FltSemantics::ieee_single()),
+      "Float semantics is not representable by IEEEsingle.");
+    let temp = self.clone();
+    let status =
+      temp.convert(&FltSemantics::ieee_single(), RoundingMode::NearestTiesToEven);
+    debug_assert!(status.0 != OpStatus::Inexact && status.1 == false,
+      "Unexpected imprecision.");
+
+    temp.get_ieee().convert_to_float()
+  }
 
   pub fn compare(&self, rhs: &APFloat) -> CmpResult {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       return self.ieee.compare(&rhs.ieee);
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      return self.double.compare(&rhs.double);
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      return self.double.compare(&rhs.double);
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn bitwise_is_equal(&self) -> bool {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       return self.ieee.bitwise_is_equal();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      return self.double.bitwise_is_equal();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      return self.double.bitwise_is_equal();
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn convert_to_hex_string(&self) {}
@@ -748,9 +913,8 @@ impl APFloat {
     self.get_ieee().get_category()
   }
 
-  // TODO
-  pub fn get_semantics(&self) -> FltSemantics {
-    FltSemantics::new()
+  pub fn get_semantics(&self) -> &FltSemantics {
+    &self.semantics
   }
 
   pub fn is_non_zero(&self) -> bool {
@@ -778,47 +942,47 @@ impl APFloat {
   }
 
   pub fn is_smallest(&self) -> bool {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       return self.ieee.is_smallest();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      return self.double.is_smallest();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      return self.double.is_smallest();
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn is_largest(&self) -> bool {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       return self.ieee.is_largest();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      return self.double.is_largest();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      return self.double.is_largest();
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn is_integer(&self) -> bool {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       return self.ieee.is_integer();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      return self.double.is_integer();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      return self.double.is_integer();
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn is_ieee(&self) -> bool {
-    self.semantics != Semantics::PPCDoubleDouble
+    APFloat::uses_layout(APFType::IEEEFloat, &self.semantics)
   }
 
   pub fn is_smallest_normalized(&self) -> bool {
-    if self.semantics != Semantics::PPCDoubleDouble {
+    if APFloat::uses_layout(APFType::IEEEFloat, &self.semantics) {
       return self.ieee.is_smallest_normalized();
-    } else if self.semantics == Semantics::PPCDoubleDouble {
-      return self.double.is_smallest_normalized();
-    } else {
-      panic!("Unexpected semantics!");
     }
+    if APFloat::uses_layout(APFType::DoubleAPFloat, &self.semantics) {
+      return self.double.is_smallest_normalized();
+    }
+    panic!("Unexpected semantics.");
   }
 
   pub fn to_string(&self) {}
@@ -830,6 +994,14 @@ impl APFloat {
   pub fn ilogb(&self) {}
   pub fn scal_bn(&self) {}
   pub fn frexp(&self) {}
+
+  fn uses_layout(t: APFType, s: &FltSemantics) -> bool {
+    if t == APFType::DoubleAPFloat {
+      return s == &FltSemantics::ppc_double_double();
+    } else {
+      return s != &FltSemantics::ppc_double_double();
+    }
+  }
 }
 
 impl Add<APFloat> for APFloat {
