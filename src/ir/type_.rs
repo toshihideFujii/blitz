@@ -46,6 +46,7 @@ pub trait Type: Debug {
   fn set_subclass_data(&mut self, val: u32) {}
   fn dump(&self) {}
   fn get_context(&self) -> &BlitzContext;
+  fn get_context_mut(&mut self) -> &mut BlitzContext;
   fn get_type_id(&self) -> TypeID;
 
   // Return true if this is 'void'.
@@ -301,6 +302,10 @@ impl Type for BasicType {
     &self.context
   }
 
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    &mut self.context
+  }
+
   fn get_subclass_data(&self) -> u32 {
     0
   }
@@ -394,10 +399,6 @@ impl IntegerType {
   fn class_of(t: &dyn Type) -> bool {
     t.get_type_id() == TypeID::Integer
   }
-
-  pub fn get_context_2(&mut self) -> &mut BlitzContext {
-    &mut self.context
-  }
 }
 
 impl Type for IntegerType {
@@ -412,6 +413,10 @@ impl Type for IntegerType {
 
   fn get_context(&self) -> &BlitzContext {
     &self.context
+  }
+
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    &mut self.context
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -529,6 +534,10 @@ impl Type for FunctionType {
 
   fn get_context(&self) -> &BlitzContext {
     &self.context
+  }
+
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    &mut self.context
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -670,6 +679,10 @@ impl Type for StructType {
     &self.context
   }
 
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    &mut self.context
+  }
+
   fn get_type_id(&self) -> TypeID {
     TypeID::Struct
   }
@@ -742,6 +755,10 @@ impl Type for ArrayType {
     &self.context
   }
 
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    &mut self.context
+  }
+
   fn get_type_id(&self) -> TypeID {
     TypeID::Array
   }
@@ -803,6 +820,10 @@ impl Type for FixedVectorType {
 
   fn get_context(&self) -> &BlitzContext {
     &self.context
+  }
+
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    &mut self.context
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -880,6 +901,10 @@ impl Type for ScalableVectorType {
     &self.context
   }
 
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    &mut self.context
+  }
+
   fn get_type_id(&self) -> TypeID {
     TypeID::ScalableVector
   }
@@ -954,6 +979,11 @@ impl Type for PointerType {
 
   fn get_context(&self) -> &BlitzContext {
     &self.context
+  }
+
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    //&mut self.context
+    &mut self.context
   }
 
   fn is_pointer_type(&self) -> bool {

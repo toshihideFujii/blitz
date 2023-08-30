@@ -8,7 +8,7 @@ use crate::{
     dense_map::DenseMap,
     ap_int::APInt,
     ap_float::APFloat,
-    folding_set::{FoldingSet, FoldingSetNodeID},
+    folding_set::FoldingSetNodeID,
     string_map::StringMap, string_ref::StringRef,
   },
   remarks::remark_streamer::RemarkStreamer
@@ -57,7 +57,7 @@ pub struct BlitzContextImpl {
   pub fp_constants: DenseMap<APFloat, ConstantFP>,
   pub attrs_set: HashMap<FoldingSetNodeID, AttributeImpl>, //FoldingSet<AttributeImpl>,
   pub attrs_lists: HashMap<FoldingSetNodeID, AttributeListImpl>, //FoldingSet<AttributeListImpl>,
-  attrs_set_nodes: FoldingSet<AttributeSetNode>,
+  pub attrs_set_nodes: HashMap<FoldingSetNodeID, AttributeSetNode>, //FoldingSet<AttributeSetNode>,
 
   md_string_cache: StringMap<MDString>,
   //values_as_metadata: DenseMap<Value, ValueAsMetadata>,
@@ -128,7 +128,7 @@ impl BlitzContextImpl {
       fp_constants: DenseMap::new(),
       attrs_set: HashMap::new(), //FoldingSet::new(),
       attrs_lists: HashMap::new(), //FoldingSet::new(),
-      attrs_set_nodes: FoldingSet::new(),
+      attrs_set_nodes: HashMap::new(), //FoldingSet::new(),
       md_string_cache: StringMap::new(),
       //metadata_as_values: DenseMap::new(),
       di_type_map: DenseMap::new(),

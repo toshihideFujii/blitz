@@ -66,6 +66,7 @@ pub trait Value {
   
   // All values hold a context through their type.
   fn get_context(&self) -> &BlitzContext;
+  fn get_context_mut(&mut self) -> &mut BlitzContext;
 
   fn has_name(&self) -> bool { false }
   fn get_value_name(&self) {}

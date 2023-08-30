@@ -430,57 +430,64 @@ impl CallBase {
 
   // Adds the attribute to the list of attributes.
   pub fn add_attribute_at_index(&mut self, i: u32, attr: Attribute) {
-    self.attrs = self.attrs.add_attribute_at_index(self.inst.get_context(), i, attr);
+    self.attrs = self.attrs.add_attribute_at_index(
+      self.inst.get_context_mut(), i as usize, attr);
   }
 
   // Adds the attribute to the function.
   pub fn add_fn_attr(&mut self, kind: AttrKind) {
-    self.attrs = self.attrs.add_fn_attribute(self.inst.get_context(), kind);
+    self.attrs = self.attrs.add_fn_attribute_by_kind(self.inst.get_context_mut(), &kind);
   }
 
   // Adds the attribute to the return value.
   pub fn add_ret_attr(&mut self, attr: Attribute) {
-    self.attrs = self.attrs.add_ret_attribute(self.inst.get_context(), attr);
+    self.attrs = self.attrs.add_ret_attribute(self.inst.get_context_mut(), attr);
   }
 
   // Adds the attribute to the indicated argument.
   pub fn add_param_attr(&mut self, arg_no: u32, kind: AttrKind) {
     debug_assert!(arg_no > self.arg_size() as u32, "Out of bounds.");
-    self.attrs = self.attrs.add_param_attribute(self.inst.get_context(), arg_no, kind);
+    self.attrs = self.attrs.add_param_attribute_by_kind(
+      self.inst.get_context_mut(), arg_no as usize, &kind);
   }
 
   // Remove the attribute from the list of attributes.
   pub fn remove_attribute_at_index(&mut self, i: u32, kind: AttrKind) {
-    self.attrs = self.attrs.remove_attribute_at_index(self.inst.get_context(), i, kind);
+    self.attrs = self.attrs.remove_attribute_at_index_by_kind(
+      self.inst.get_context_mut(), i as usize, &kind);
   }
 
   pub fn remove_fn_attrs() {}
 
   // Removes the attribute from the function.
   pub fn remove_fn_attr(&mut self, kind: AttrKind) {
-    self.attrs = self.attrs.remove_fn_attribute(self.inst.get_context(), kind);
+    self.attrs = self.attrs.remove_fn_attribute(self.inst.get_context_mut(), &kind);
   }
 
   // Removes the attribute from the return value.
   pub fn remove_ret_attr(&mut self, kind: AttrKind) {
-    self.attrs = self.attrs.remove_ret_attirbute(self.inst.get_context(), kind);
+    self.attrs = self.attrs.remove_ret_attirbute_by_kind(
+      self.inst.get_context_mut(), &kind);
   }
 
   // Removes the attribute from the given argument.
   pub fn remove_param_attr(&mut self, arg_no: u32, kind: AttrKind) {
-    self.attrs = self.attrs.remove_param_attribute(self.inst.get_context(), arg_no, kind);
+    self.attrs = self.attrs.remove_param_attribute_by_kind(
+      self.inst.get_context_mut(), arg_no as usize, &kind);
   }
 
   pub fn remove_param_attrs() {}
 
   // Adds the dereferenceable attribute to the list of attributes.
   pub fn add_dereferenceable_param_attr(&mut self, i: u32, bytes: u64) {
-    self.attrs = self.attrs.add_dereferenceable_param_attr(self.inst.get_context(), i, bytes);
+    self.attrs = self.attrs.add_dereferenceable_param_attr(
+      self.inst.get_context_mut(), i as usize, bytes);
   }
 
   // Adds the dereferenceable attribute to the list of attributes.
   pub fn add_dereferenceable_ret_attr(&mut self, bytes: u64) {
-    self.attrs = self.attrs.add_dereferenceable_ret_attr(self.inst.get_context(), bytes);
+    self.attrs = self.attrs.add_dereferenceable_ret_attr(
+      self.inst.get_context_mut(), bytes);
   }
 
   // Determine whether the return value has the given attribute.
@@ -490,22 +497,22 @@ impl CallBase {
   pub fn param_has_attr(&self, _arg_no: u32, _kind: AttrKind) -> bool { false }
 
   // Get the attribute of a given kind at a position.
-  pub fn get_attribute_at_index(&self, i: u32, kind: AttrKind) -> Attribute {
+  pub fn get_attribute_at_index(&self, i: usize, kind: &AttrKind) -> Option<Attribute> {
     self.attrs.get_attribute_at_index(i, kind)
   }
 
   // Get the attribute of a given kind for the function.
-  pub fn get_fn_attr(&self, kind: AttrKind) -> Attribute {
+  pub fn get_fn_attr(&self, kind: &AttrKind) -> Attribute {
     let a = self.attrs.get_fn_attr(kind);
-    if a.is_valid() {
-      return a;
+    if a.is_some() || a.as_ref().unwrap().is_valid() {
+      return a.unwrap();
     }
-    a // TODO: get_fn_attr_on_called_function
+    a.unwrap() // TODO: get_fn_attr_on_called_function
   }
 
   // Get the attribute of a given kind from a given arg.
-  pub fn get_param_attr(&self, arg_no: u32, kind: AttrKind) -> Attribute {
-    debug_assert!(arg_no < self.arg_size() as u32, "Out of bounds.");
+  pub fn get_param_attr(&self, arg_no: usize, kind: &AttrKind) -> Option<Attribute> {
+    debug_assert!(arg_no < self.arg_size() as usize, "Out of bounds.");
     self.attrs.get_param_attr(arg_no, kind)
   }
 
@@ -568,16 +575,16 @@ impl CallBase {
   pub fn get_ret_align() {}
 
   // Extract the alignment for a call or parameter.
-  pub fn get_param_align(&self, arg_no: u32) -> MaybeAlign {
+  pub fn get_param_align(&self, arg_no: usize) -> Option<MaybeAlign> {
     self.attrs.get_param_alignment(arg_no)
   }
 
-  pub fn get_param_stack_align(&self, arg_no: u32) -> MaybeAlign {
+  pub fn get_param_stack_align(&self, arg_no: usize) -> Option<MaybeAlign> {
     self.attrs.get_param_stack_alignment(arg_no)
   }
 
   // Extract the byval type for a call or parameter.
-  pub fn get_param_by_val_type(&self, arg_no: u32) -> Option<Box<dyn Type>> {
+  pub fn get_param_by_val_type(&self, arg_no: usize) -> Option<Box<dyn Type>> {
     if self.attrs.get_param_by_val_type(arg_no).is_some() {
       return self.attrs.get_param_by_val_type(arg_no);
     }
@@ -585,7 +592,7 @@ impl CallBase {
   }
 
   // Extract the preallocated type for a call or parameter.
-  pub fn get_param_preallocated_type(&self, arg_no: u32) -> Option<Box<dyn Type>> {
+  pub fn get_param_preallocated_type(&self, arg_no: usize) -> Option<Box<dyn Type>> {
     if self.attrs.get_param_preallocated_type(arg_no).is_some() {
       return self.attrs.get_param_preallocated_type(arg_no);
     }
@@ -593,7 +600,7 @@ impl CallBase {
   }
 
   // Extract the inalloca type for a call or parameter.
-  pub fn get_param_in_alloca_type(&self, arg_no: u32) -> Option<Box<dyn Type>> {
+  pub fn get_param_in_alloca_type(&self, arg_no: usize) -> Option<Box<dyn Type>> {
     if self.attrs.get_param_in_alloca_type(arg_no).is_some() {
       return self.attrs.get_param_in_alloca_type(arg_no);
     }
@@ -601,7 +608,7 @@ impl CallBase {
   }
 
   // Extract the sret type for a call or parameter.
-  pub fn get_param_struct_ret_type(&self, arg_no: u32) -> Option<Box<dyn Type>> {
+  pub fn get_param_struct_ret_type(&self, arg_no: usize) -> Option<Box<dyn Type>> {
     if self.attrs.get_param_struct_ret_type(arg_no).is_some() {
       return self.attrs.get_param_struct_ret_type(arg_no);
     }
@@ -609,7 +616,7 @@ impl CallBase {
   }
 
   // Extract the elementtype type for a parameter.
-  pub fn get_param_element_type(&self, arg_no: u32) -> Option<Box<dyn Type>> {
+  pub fn get_param_element_type(&self, arg_no: usize) -> Option<Box<dyn Type>> {
     self.attrs.get_param_element_type(arg_no)
   }
 
@@ -617,14 +624,14 @@ impl CallBase {
   pub fn get_ret_dereferenceable_bytes(&self) -> u64 { 0 }
 
   // Extract the number of dereferenceable bytes for a call or parameter.
-  pub fn get_param_dereferenceable_bytes(&self, i: u32) -> u64 {
+  pub fn get_param_dereferenceable_bytes(&self, i: usize) -> u64 {
     self.attrs.get_param_dereferenceable_bytes(i)
   }
 
   pub fn get_ret_dereferenceable_or_null_bytes() {}
 
   // Extract the number of dereferenceable_or_null bytes for a call or parameter.
-  pub fn get_param_dereferenceable_or_null_bytes(&self, i: u32) -> u64 {
+  pub fn get_param_dereferenceable_or_null_bytes(&self, i: usize) -> u64 {
     self.attrs.get_param_dereferenceable_or_null_bytes(i)
   }
 
@@ -634,7 +641,7 @@ impl CallBase {
 
   // Determine if the return value is merked with NoAlias attribute,
   pub fn return_does_not_alias(&self) -> bool {
-    self.attrs.has_ret_attr(AttrKind::NoAlias)
+    self.attrs.has_ret_attr(&AttrKind::NoAlias)
   }
 
   pub fn get_returned_arg_operand() {}
@@ -741,7 +748,7 @@ impl CallBase {
 
   // Determine if any call argument is an aggregate passed by value.
   pub fn has_by_val_argument(&self) -> bool {
-    self.attrs.has_attr_somewhere(AttrKind::ByVal)
+    self.attrs.has_attr_somewhere(&AttrKind::ByVal, None)
   }
 
   // Return the number of operand bundles associated with this user.

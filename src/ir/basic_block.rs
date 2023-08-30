@@ -140,6 +140,10 @@ impl Value for BasicBlock {
     self.v_type.get_context()
   }
 
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    self.v_type.get_context_mut()
+  }
+
   fn get_value_id(&self) -> ValueType {
     ValueType::BasicBlockVal
   }

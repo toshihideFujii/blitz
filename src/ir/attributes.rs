@@ -17,7 +17,8 @@ use crate::{
 
 use super::{
   blits_context::BlitzContext,
-  attribute_impl::{AttributeImpl, AttributeSetNode, AttrEntryKind, AttributeListImpl},
+  attribute_impl::{AttributeImpl, AttributeSetNode,
+  AttrEntryKind, AttributeListImpl},
   type_::Type
 };
 
@@ -106,7 +107,7 @@ pub enum AttributeProperty {
 // Functions, function parameters, and return types can have attributes
 // to indicate how they should be treated by optimizations and code generation.
 // This class represents one of those attributes.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Attribute {
   pimpl: Option<AttributeImpl>
 }
@@ -163,7 +164,7 @@ impl Attribute {
     if attr_impl.is_none() {
       let mut kind_id = AttrEntryKind::EnumAttrEntry;
       if is_int_attr { kind_id = AttrEntryKind::IntAttrEntry }
-      let v = AttributeImpl::new(kind_id, kind.clone(), val);
+      let v = AttributeImpl::new(kind_id, kind.clone(), val, None);
       c.get_mut_impl().attrs_set.insert(id, v.clone());
       return Attribute::new(Some(v));
     } else {
@@ -176,7 +177,7 @@ impl Attribute {
   }
 
   // TODO
-  pub fn get_by_type(c: &BlitzContext, kind: AttrKind, _t: Box<dyn Type>) -> Self {
+  pub fn get_by_type(c: &mut BlitzContext, kind: AttrKind, _t: Box<dyn Type>) -> Self {
     debug_assert!(Attribute::is_type_attr_kind(&kind), "Not a type attribute.");
     let mut id = FoldingSetNodeID::new();
     id.add_integer_u32(kind.clone() as u32);
@@ -227,28 +228,24 @@ impl Attribute {
       Attribute::pack_vscale_range_args(min_value, max_value))
   }
 
-  pub fn get_by_by_val_type(context: &BlitzContext, t: Box<dyn Type>) -> Self {
-    Attribute::get_by_type(context, AttrKind::ByVal, t)
+  pub fn get_by_by_val_type(c: &mut BlitzContext, t: Box<dyn Type>) -> Self {
+    Attribute::get_by_type(c, AttrKind::ByVal, t)
   }
 
-  pub fn get_by_struct_ret_type(context: &BlitzContext, t: Box<dyn Type>) -> Self {
-    Attribute::get_by_type(context, AttrKind::StructRet, t)
+  pub fn get_by_struct_ret_type(c: &mut BlitzContext, t: Box<dyn Type>) -> Self {
+    Attribute::get_by_type(c, AttrKind::StructRet, t)
   }
 
-  pub fn get_by_by_ref_type(context: &BlitzContext, t: Box<dyn Type>) -> Self {
-    Attribute::get_by_type(context, AttrKind::ByRef, t)
+  pub fn get_by_by_ref_type(c: &mut BlitzContext, t: Box<dyn Type>) -> Self {
+    Attribute::get_by_type(c, AttrKind::ByRef, t)
   }
 
-  pub fn get_by_preallocated_type(context: &BlitzContext,
-    t: Box<dyn Type>) -> Self
-  {
-    Attribute::get_by_type(context, AttrKind::Preallocated, t)
+  pub fn get_by_preallocated_type(c: &mut BlitzContext, t: Box<dyn Type>) -> Self {
+    Attribute::get_by_type(c, AttrKind::Preallocated, t)
   }
 
-  pub fn get_by_in_alloca_type(context: &BlitzContext,
-    t: Box<dyn Type>) -> Self
-  {
-    Attribute::get_by_type(context, AttrKind::InAlloca, t)
+  pub fn get_by_in_alloca_type(c: &mut BlitzContext, t: Box<dyn Type>) -> Self {
+    Attribute::get_by_type(c, AttrKind::InAlloca, t)
   }
 
   pub fn get_by_uw_table_kind(context: &mut BlitzContext,
@@ -303,7 +300,7 @@ impl Attribute {
   // Return true if the attribute is present.
   pub fn has_attribute(&self, kind: AttrKind) -> bool {
     if self.pimpl.is_some() {
-      return self.pimpl.as_ref().unwrap().has_attribute(kind);
+      return self.pimpl.as_ref().unwrap().has_attribute(kind.clone());
     } else {
       return kind == AttrKind::None;
     }
@@ -476,7 +473,10 @@ impl Attribute {
 
   pub fn get_as_string() {}
   pub fn has_parent_context() {}
-  pub fn profile() {}
+
+  pub fn profile(&self, id: &mut FoldingSetNodeID) {
+    id.add_integer_u64(self.pimpl.as_ref().unwrap().id);
+  }
 
   // Return a raw pointer that uniquely identifies this attribute.
   pub fn get_raw_pointer(&self) -> &Option<AttributeImpl> {
@@ -517,7 +517,7 @@ impl Attribute {
 // This class holds the attributes for a particular argument, parameter,
 // function, or return value.
 // It is an immutable value type that is cheap to copy.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AttributeSet {
   pub set_node: Option<AttributeSetNode>
 }
@@ -527,11 +527,15 @@ impl AttributeSet {
     AttributeSet { set_node: asn }
   }
 
-  pub fn get_by_builder(c: &BlitzContext, b: &AttrBuilder) -> Self {
+  pub fn new_default() -> Self {
+    AttributeSet { set_node: Some(AttributeSetNode::new_default()) }
+  }
+
+  pub fn get_by_builder(c: &mut BlitzContext, b: &AttrBuilder) -> Self {
     AttributeSet::new(AttributeSetNode::get_by_builder(c, b))
   }
 
-  pub fn get_by_attrs(c: &BlitzContext, attrs: &Vec<Attribute>) -> Self {
+  pub fn get_by_attrs(c: &mut BlitzContext, attrs: &Vec<Attribute>) -> Self {
     AttributeSet::new(AttributeSetNode::get_by_attrs(c, attrs))
   }
 
@@ -547,7 +551,7 @@ impl AttributeSet {
 
   // Add attributes to the attribute set.
   // Returns a new set because attribute sets are immutable.
-  pub fn add_attributes(&self, c: &BlitzContext, attrs: AttributeSet) -> AttributeSet {
+  pub fn add_attributes(&self, c: &mut BlitzContext, attrs: AttributeSet) -> Self {
     if !self.has_attributes() {
       return attrs;
     }
@@ -559,7 +563,17 @@ impl AttributeSet {
     AttributeSet::get_by_builder(c, &b)
   }
 
-  pub fn remove_attribute() {}
+  // Remove the specified attribute from this set.
+  // Returns a new set because attribute sets are immutable.
+  pub fn remove_attribute_by_kind(&self, c: &mut BlitzContext, kind: &AttrKind) -> Self {
+    if !self.has_attribute(kind) {
+      return  self.clone();
+    }
+    let mut b = AttrBuilder::new_from_attr_set(c, self);
+    b.remove_attribute_by_kind(kind);
+    AttributeSet::get_by_builder(c, &b)
+  }
+
   pub fn remove_attributes() {}
   pub fn get_num_attributes() {}
 
@@ -710,7 +724,7 @@ impl AttributeSet {
 
 pub enum AttrIndex {
   ReturnIndex = 0,
-  FunctionIndex = !0,
+  FunctionIndex = 1000, //TODO:  !0,
   FirstArgIndex = 1
 }
 
@@ -727,8 +741,12 @@ impl AttributeList {
     AttributeList { pimpl: pimpl }
   }
 
-  pub fn get_impl(c: &mut BlitzContext, attr_sets: Vec<AttributeSet>) -> AttributeList {
-    debug_assert!(attr_sets.is_empty(), "Pointless AttributeListImpl.");
+  pub fn new_default() -> Self {
+    AttributeList { pimpl: Some(AttributeListImpl::new_default()) }
+  }
+
+  fn get_impl(c: &mut BlitzContext, attr_sets: Vec<AttributeSet>) -> AttributeList {
+    debug_assert!(!attr_sets.is_empty(), "Pointless AttributeListImpl.");
     let mut id = FoldingSetNodeID::new();
     AttributeListImpl::profile(&mut id, &attr_sets);
 
@@ -736,205 +754,532 @@ impl AttributeList {
       c.get_impl().as_ref().unwrap().attrs_lists.get(&id);
 
     if attr_list_impl.is_none() {
-      // TODO
-      return AttributeList::new(Some(attr_list_impl.unwrap().clone()))
+      let list = AttributeListImpl::new(&attr_sets);
+      c.get_mut_impl().attrs_lists.insert(id, list.clone());
+      return AttributeList::new(Some(list));
     } else {
       return AttributeList::new(Some(attr_list_impl.unwrap().clone()))
     }
   }
 
-  pub fn add_attribute_at_index(&self, _c: &BlitzContext,
-    _i: u32, _attr: Attribute) -> Self
+  fn set_attributes_at_index(&self, c: &mut BlitzContext, i: usize,
+    attrs: AttributeSet) -> Self
   {
+    let pimpl = self.pimpl.clone();
+    let mut attr_sets = pimpl.unwrap().attr_sets.clone();
+    if i > attr_sets.len() {
+      attr_sets.resize(i, attrs.clone());
+    }
+    attr_sets.insert(i, attrs);
+    AttributeList::get_impl(c, attr_sets)
+  }
+
+  // Add an attribute to the attribute set at the given index.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_attribute_at_index_by_kind(&self, c: &mut BlitzContext,
+    i: usize, kind: &AttrKind) -> Self
+  {
+    let attrs = self.get_attributes(i);
+    if attrs.has_attribute(kind) {
+      return AttributeList::new(self.pimpl.clone());
+    }
+    let mut new_attrs = Vec::new();
+    new_attrs.clone_from(&attrs.set_node.unwrap().attrs);
+    new_attrs.push(Attribute::get_by_int(c, kind.clone(), 0));
+
+    let new_attr_set = AttributeSet::get_by_attrs(c, &new_attrs);
+    self.set_attributes_at_index(c, i, new_attr_set)
+  }
+
+  pub fn add_attribute_at_index_by_string(&self) {}
+
+  // Add an attribute to the attribute set at the given index.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_attribute_at_index(&self, c: &mut BlitzContext,
+    _i: usize, attr: Attribute) -> Self
+  {
+    let mut b = AttrBuilder::new(c);
+    b.add_attribute(attr);
+
     AttributeList::new(None)
   }
 
-  pub fn add_attributes_at_index() {}
+  // Add an attributes to the attribute set at the given index.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_attributes_at_index(&self, c: &mut BlitzContext,
+    i: usize, b: AttrBuilder) -> Self
+  {
+    if !b.has_attributes() { 
+      return AttributeList::new(self.pimpl.clone());
+    }
+    if self.pimpl.is_none() {
+      // TODO
+    }
+    let mut merged = AttrBuilder::new_from_attr_set(c,
+      &self.get_attributes(i));
+    merged.merge(&b);
 
-  pub fn add_fn_attribute(&self, _c: &BlitzContext, _kind: AttrKind) -> Self {
-    AttributeList::new(None)
+    let attrs = AttributeSet::get_by_builder(c, &merged);
+    self.set_attributes_at_index(c, i, attrs)
   }
 
-  pub fn add_fn_attributes() {}
-
-  pub fn add_ret_attribute(&self, _c: &BlitzContext, _attr: Attribute) -> Self {
-    AttributeList::new(None)
+  // Add a function attribute to the list.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_fn_attribute_by_kind(&self, c: &mut BlitzContext, kind: &AttrKind) -> Self {
+    self.add_attribute_at_index_by_kind(c, AttrIndex::FunctionIndex as usize, kind)
   }
 
-  pub fn add_ret_attributes() {}
+  pub fn add_fn_attribute_by_string() {}
+
+  // Add a function attribute to the list.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_fn_attribute(&self, c: &mut BlitzContext, attr: Attribute) -> Self {
+    self.add_attribute_at_index(c, AttrIndex::FunctionIndex as usize, attr)
+  }
+
+  // Add a function attributes to the list.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_fn_attributes(&self, c: &mut BlitzContext, b: AttrBuilder) -> Self {
+    self.add_attributes_at_index(c, AttrIndex::FunctionIndex as usize, b)
+  }
+
+  // Add a return value attribute to the list.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_ret_attribute_by_kind(&self, c: &mut BlitzContext, kind: &AttrKind) -> Self {
+    self.add_attribute_at_index_by_kind(c, AttrIndex::ReturnIndex as usize, kind)
+  }
+
+  // Add a return value attribute to the list.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_ret_attribute(&self, c: &mut BlitzContext, attr: Attribute) -> Self {
+    self.add_attribute_at_index(c, AttrIndex::ReturnIndex as usize, attr)
+  }
+
+  // Add a return value attributes to the list.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_ret_attributes(&self, c: &mut BlitzContext, b: AttrBuilder) -> Self {
+    self.add_attributes_at_index(c, AttrIndex::ReturnIndex as usize, b)
+  }
 
   // Add an argument attribute to the list.
-  pub fn add_param_attribute(&self, _c: &BlitzContext, _arg_no: u32, _kind: AttrKind) -> Self {
-    AttributeList::new(None)
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_param_attribute_by_kind(&self, c: &mut BlitzContext,
+    arg_no: usize, kind: &AttrKind) -> Self
+  {
+    self.add_attribute_at_index_by_kind(c,
+      arg_no + AttrIndex::FirstArgIndex as usize, kind)
   }
 
-  pub fn add_param_attributes() {}
+  pub fn add_param_attribute_by_string() {}
 
-  pub fn remove_attribute_at_index(&self, _c: &BlitzContext, _i: u32, _kind: AttrKind) -> Self {
-    AttributeList::new(None)
+  // Add an attribute to the attribute list at the given arg indices,
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_param_attribute(&self, c: &mut BlitzContext,
+    arg_no: usize, attr: Attribute) -> Self
+  {
+    // TODO
+    self.add_attribute_at_index(c,
+      arg_no + AttrIndex::FirstArgIndex as usize, attr)
   }
 
-  pub fn remove_attributes_at_index() {}
-
-  pub fn remove_fn_attribute(&self, _c: &BlitzContext, _kind: AttrKind) -> Self {
-    AttributeList::new(None)
+  // Add an argument attribute to the list.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_param_attributes(&self, c: &mut BlitzContext,
+    arg_no: usize, b: AttrBuilder) -> Self
+  {
+    self.add_attributes_at_index(c, 
+      arg_no + AttrIndex::FirstArgIndex as usize, b)
   }
 
-  pub fn remove_fn_attributes() {}
-
-  pub fn remove_ret_attirbute(&self, _c: &BlitzContext, _kind: AttrKind) -> Self {
-    AttributeList::new(None)
+  // Remove the specified attribute at the specified index from this
+  // attribute list. Returns a new list because attribute lists are immutable.
+  pub fn remove_attribute_at_index_by_kind(&self, c: &mut BlitzContext,
+    i: usize, kind: &AttrKind) -> Self
+  {
+    let attrs = self.get_attributes(i);
+    let new_attrs = attrs.remove_attribute_by_kind(c, kind);
+    if attrs == new_attrs { 
+      return AttributeList::new(self.pimpl.clone());
+    }
+    self.set_attributes_at_index(c, i, new_attrs)
   }
 
-  pub fn remove_ret_attributes() {}
+  pub fn remove_attribute_at_index_by_string() {}
+
+  // Remove all attributes at the specified index from this attribute list.
+  // Returns a new list because attribute lists are immutable.
+  pub fn remove_attributes_at_index(&self, c: &mut BlitzContext, i: usize) -> Self {
+    if self.pimpl.is_none() { return AttributeList::new(None); }
+    if i > self.get_num_attr_sets() {
+      return AttributeList::new(self.pimpl.clone());
+    }
+    self.set_attributes_at_index(c, i, AttributeSet::new(None))
+  }
+
+  // Remove the specified attribute at the function index from this
+  // attribute list. Returns a new list because attribute lists are immutable.
+  pub fn remove_fn_attribute(&self, c: &mut BlitzContext, kind: &AttrKind) -> Self {
+    self.remove_attribute_at_index_by_kind(c, AttrIndex::FunctionIndex as usize, kind)
+  }
+
+  pub fn remove_fn_attribute_by_string() {}
+
+  // Remove the attributes at the function index from this attribute list.
+  // Returns a new list because attribute lists are immutable.
+  pub fn remove_fn_attributes(&self, c: &mut BlitzContext) -> Self {
+    self.remove_attributes_at_index(c, AttrIndex::FunctionIndex as usize)
+  }
+
+  // Remove the specified attribute at the return value index from this
+  // attribute list. Returns a new list because attribute lists are immutable.
+  pub fn remove_ret_attirbute_by_kind(&self, c: &mut BlitzContext, kind: &AttrKind) -> Self {
+    self.remove_attribute_at_index_by_kind(c, AttrIndex::ReturnIndex as  usize, kind)
+  }
+
+  pub fn remove_ret_attirbute_by_string() {}
+
+  // Remove attributes at the return value index from this attribute list.
+  // Returns a new list because attribute lists are immutable.
+  pub fn remove_ret_attributes(&self, _c: &mut BlitzContext) {}
 
   // Remove the specified attribute at the specified arg index from this
-  // attribute list.
-  pub fn remove_param_attribute(&self, _c: &BlitzContext, _arg_no: u32, _kind: AttrKind) -> Self {
-    AttributeList::new(None)
+  // attribute list. Returns a new list because attribute lists are immutable.
+  pub fn remove_param_attribute_by_kind(&self, c: &mut BlitzContext,
+    arg_no: usize, kind: &AttrKind) -> Self
+  {
+    self.remove_attribute_at_index_by_kind(c,
+      arg_no + AttrIndex::FirstArgIndex as usize, kind)
   }
 
-  pub fn remove_param_attributes() {}
+  pub fn remove_param_attribute_by_string() {}
+
+  // Remove attributes at the specified arg index from this attribute list.
+  // Returns a new list because attribute lists are immutable.  
+  pub fn remove_param_attributes(&self, _c: &mut BlitzContext, _arg_no: usize) {}
+
   pub fn replace_attribute_type_at_index() {}
 
-  pub fn add_dereferenceable_ret_attr(&self, _c: &BlitzContext, _bytes: u64) -> Self {
-    AttributeList::new(None)
+  // Add the dereferenceable attribute to the attribute set at the given index.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_dereferenceable_ret_attr(&self, c: &mut BlitzContext,
+    bytes: u64) -> Self
+  {
+    let mut b = AttrBuilder::new(c);
+    b.add_dereferenceable_attr(bytes);
+    self.add_ret_attributes(c, b)
   }
 
-  pub fn add_dereferenceable_param_attr(&self, _c: &BlitzContext, _i: u32, _bytes: u64) -> Self {
-    AttributeList::new(None)
+  // Add the dereferenceable attribute to the attribute set at the given arg index.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_dereferenceable_param_attr(&self, c: &mut BlitzContext,
+    i: usize, bytes: u64) -> Self
+  {
+    let mut b = AttrBuilder::new(c);
+    b.add_dereferenceable_attr(bytes);
+    self.add_param_attributes(c, i, b)
   }
 
-  pub fn add_dereferenceable_or_null_param_attr() {}
-  pub fn add_alloc_size_param_attr() {}
-
-  pub fn get_attributes(&self, _index: u32) -> AttributeSet {
-    AttributeSet::new(None)
+  // Add the dereferenceable_or_null attribute to the attribute set at the
+  // given arg index. Returns a new list because attribute lists are immutable.
+  pub fn add_dereferenceable_or_null_param_attr(&self, c: &mut BlitzContext,
+    arg_no: usize, bytes: u64) -> Self
+  {
+    let mut b = AttrBuilder::new(c);
+    b.add_dereferenceable_or_null_attr(bytes);
+    self.add_param_attributes(c, arg_no,  b)
   }
 
-  pub fn get_param_attrs(&self, _arg_no: u32) -> AttributeSet {
-    AttributeSet::new(None)
+  // Add the allocsize attribute to the attribute set at the given arg index.
+  // Returns a new list because attribute lists are immutable.
+  pub fn add_alloc_size_param_attr(&self, c: &mut BlitzContext,
+    arg_no: usize, elm_size_arg: usize, num_elms_arg: Option<usize>) -> Self
+  {
+    let mut b = AttrBuilder::new(c);
+    b.add_alloc_size_attr(elm_size_arg, num_elms_arg);
+    self.add_param_attributes(c, arg_no, b)
   }
 
-  pub fn get_ret_attrs() {}
-  pub fn get_fn_attrs() {}
+  // The attributes for the specified index are returned.
+  pub fn get_attributes(&self, index: usize) -> AttributeSet {
+    if self.pimpl.is_none() || index >= self.get_num_attr_sets() {
+      //return AttributeSet::new(None);
+      return AttributeSet::new_default();
+    }
+    let attr_set =
+      self.pimpl.as_ref().unwrap().attr_sets.get(index);
+    debug_assert!(attr_set.is_some(), "Target attr_set is None.");
+    attr_set.unwrap().clone()
+  }
+
+  // The attributes for the argument or parameter at the given index
+  // are returned.
+  pub fn get_param_attrs(&self, arg_no: usize) -> AttributeSet {
+    self.get_attributes(arg_no + AttrIndex::FirstArgIndex as usize)
+  }
+
+  // The attributes for the ret value are returned.
+  pub fn get_ret_attrs(&self) -> AttributeSet {
+    self.get_attributes(AttrIndex::ReturnIndex as usize)
+  }
+
+  // The function attributes are returned.
+  pub fn get_fn_attrs(&self) -> AttributeSet {
+    self.get_attributes(AttrIndex::FunctionIndex as usize)
+  }
 
   // Return true if the attribute exists at the given index.
-  pub fn has_attribute_at_index(&self, _index: u32, _kind: AttrKind) -> bool {
-    false
+  pub fn has_attribute_at_index_by_kind(&self, index: usize, kind: &AttrKind) -> bool {
+    self.get_attributes(index).has_attribute(kind)
+  }
+
+  pub fn has_attribute_at_index_by_string() {}
+
+  // Return true if attribute exists at the given index.
+  pub fn has_attributes_at_index(&self, index: usize) -> bool {
+    self.get_attributes(index).has_attributes()
   }
 
   // Return true if the attribute exists for the given argument.
-  pub fn has_param_attr(&self, arg_no: u32, kind: AttrKind) -> bool {
-    self.has_attribute_at_index(arg_no + AttrIndex::FirstArgIndex as u32, kind)
+  pub fn has_param_attr(&self, arg_no: usize, kind: &AttrKind) -> bool {
+    self.has_attribute_at_index_by_kind(
+      arg_no + AttrIndex::FirstArgIndex as usize, kind)
   }
 
-  pub fn has_param_attrs(&self) -> bool { false }
+  // Return true if attributes exists for the given argument.
+  pub fn has_param_attrs(&self, arg_no: usize) -> bool {
+    self.has_attributes_at_index(arg_no + AttrIndex::FirstArgIndex as usize)
+  }
 
   // Return true if the attribute exists for the return value.
-  pub fn has_ret_attr(&self, _kind: AttrKind) -> bool { false }
+  pub fn has_ret_attr(&self, kind: &AttrKind) -> bool {
+    self.has_attribute_at_index_by_kind(
+      AttrIndex::ReturnIndex as usize, kind)
+  }
 
-  pub fn has_ret_attrs(&self) -> bool { false }
+  // Return true if attributes exist for the return value.
+  pub fn has_ret_attrs(&self) -> bool {
+    self.has_attributes_at_index(AttrIndex::ReturnIndex as usize)
+  }
 
   // Return true if the attribute exists for the function.
-  pub fn has_fn_attr(&self, _kind: AttrKind) -> bool { false }
+  pub fn has_fn_attr(&self, kind: &AttrKind) -> bool {
+    self.pimpl.is_some() && self.pimpl.as_ref().unwrap().has_fn_attribute(kind)
+  }
 
-  pub fn has_fn_attrs(&self) -> bool { false }
-  pub fn has_attr_somewhere(&self, _kind: AttrKind) -> bool { false }
+  // Return true if the attributes exist for the function.
+  pub fn has_fn_attrs(&self) -> bool {
+    self.has_attributes_at_index(AttrIndex::FunctionIndex as usize)
+  }
+
+  // Return true if the specified attribute is set for at least one 
+  // parameter or for the return value.
+  // If index is not None, the index of a parameter with the specified
+  // attribute id provided.
+  pub fn has_attr_somewhere(&self, kind: &AttrKind,
+    index: Option<usize>) -> bool
+  {
+    self.pimpl.is_some() &&
+    self.pimpl.as_ref().unwrap().has_attr_somewhere(kind, index)
+  }
 
   // Return the attribute object that exists at the given idex.
-  pub fn get_attribute_at_index(&self, _index: u32, _kind: AttrKind) -> Attribute {
-    Attribute::new(None)
+  pub fn get_attribute_at_index(&self, index: usize,
+    kind: &AttrKind) -> Option<Attribute>
+  {
+    self.get_attributes(index).get_attribute(kind.clone())
   }
 
   // Return the attribute object that exists at the arg index.
-  pub fn get_param_attr(&self, arg_no:u32, kind: AttrKind) -> Attribute {
+  pub fn get_param_attr(&self, arg_no: usize, kind: &AttrKind) -> Option<Attribute> {
     self.get_attribute_at_index(arg_no, kind)
   }
 
-  pub fn get_fn_attr(&self, _kind: AttrKind) -> Attribute {
-    Attribute::new(None)
+  // Return the attribute object that exists for the function.
+  pub fn get_fn_attr(&self, kind: &AttrKind) -> Option<Attribute> {
+    self.get_attribute_at_index(AttrIndex::FunctionIndex as usize, kind)
   }
 
-  pub fn get_ret_alignment() {}
-
-  pub fn get_param_alignment(&self, _arg_no: u32) -> MaybeAlign {
-    MaybeAlign::new(0)
+  // Return the alignment of the return value.
+  pub fn get_ret_alignment(&self) -> Option<MaybeAlign> {
+    self.get_attributes(AttrIndex::ReturnIndex as usize).get_alignment()
   }
 
-  pub fn get_param_stack_alignment(&self, _arg_no:u32) -> MaybeAlign {
-    MaybeAlign::new(0)
+  // Return the alignment for the specified function parameter.
+  pub fn get_param_alignment(&self, arg_no: usize) -> Option<MaybeAlign> {
+    self.get_attributes(arg_no + AttrIndex::FirstArgIndex as usize).
+      get_alignment()
   }
 
-  pub fn get_param_by_val_type(&self, index: u32) -> Option<Box<dyn Type>> {
-    self.get_attributes(index + AttrIndex::FirstArgIndex as u32).get_by_val_type()
+  // Return the stack alignment for the specified function parameter.
+  pub fn get_param_stack_alignment(&self, arg_no:usize) -> Option<MaybeAlign> {
+    self.get_attributes(arg_no + AttrIndex::FirstArgIndex as usize).
+      get_stack_alignment()
   }
 
-  pub fn get_param_struct_ret_type(&self, index: u32) -> Option<Box<dyn Type>> {
-    self.get_attributes(index + AttrIndex::FirstArgIndex as u32).get_struct_ret_type()
+  // Return the byval type for the specified function parameter.
+  pub fn get_param_by_val_type(&self, index: usize) -> Option<Box<dyn Type>> {
+    self.get_attributes(index + AttrIndex::FirstArgIndex as usize).
+      get_by_val_type()
   }
 
-  pub fn get_param_by_ref_type(&self, index: u32) -> Option<Box<dyn Type>> {
-    self.get_attributes(index + AttrIndex::FirstArgIndex as u32).get_by_ref_type()
+  // Return the sret type for the specified function parameter.
+  pub fn get_param_struct_ret_type(&self, index: usize) -> Option<Box<dyn Type>> {
+    self.get_attributes(index + AttrIndex::FirstArgIndex as usize).
+      get_struct_ret_type()
   }
 
-  pub fn get_param_preallocated_type(&self, index: u32) -> Option<Box<dyn Type>> {
-    self.get_attributes(index + AttrIndex::FirstArgIndex as u32).get_by_ref_type() // TODO
+  // Return the byref type for the specified function parameter.
+  pub fn get_param_by_ref_type(&self, index: usize) -> Option<Box<dyn Type>> {
+    self.get_attributes(index + AttrIndex::FirstArgIndex as usize).
+      get_by_ref_type()
   }
 
-  pub fn get_param_in_alloca_type(&self, index: u32) -> Option<Box<dyn Type>> {
-    self.get_attributes(index + AttrIndex::FirstArgIndex as u32).get_in_alloca_type()
+  // Return the preallocated type for the specified function parameter.
+  pub fn get_param_preallocated_type(&self, index: usize) -> Option<Box<dyn Type>> {
+    self.get_attributes(index + AttrIndex::FirstArgIndex as usize).
+      get_preallocated_type()
   }
 
-  pub fn get_param_element_type(&self, index: u32) -> Option<Box<dyn Type>> {
-    self.get_attributes(index + AttrIndex::FirstArgIndex as u32).get_in_alloca_type() // TODO
+  // Return the inalloca type for the specified function parameter.
+  pub fn get_param_in_alloca_type(&self, index: usize) -> Option<Box<dyn Type>> {
+    self.get_attributes(index + AttrIndex::FirstArgIndex as usize).
+      get_in_alloca_type()
   }
 
-  pub fn get_fn_stack_alignment() {}
-  pub fn get_ret_stack_alignment() {}
-  pub fn get_ret_dereferenceable_bytes() {}
-
-  pub fn get_param_dereferenceable_bytes(&self, _index: u32) -> u64 {
-    0
+  // Return the elementtype type for the specified function parameter.
+  pub fn get_param_element_type(&self, index: usize) -> Option<Box<dyn Type>> {
+    self.get_attributes(index + AttrIndex::FirstArgIndex as usize).
+      get_element_type()
   }
 
-  pub fn get_param_dereferenceable_or_null_bytes(&self, _index: u32) -> u64 {
-    0
+  // Get the stack alignment of the function.
+  pub fn get_fn_stack_alignment(&self) -> Option<MaybeAlign> {
+    self.get_fn_attrs().get_stack_alignment()
   }
 
-  pub fn get_param_no_fp_class(&self, _index: u32) -> FPClassTest {
-    FPClassTest::None
+  // Get the stack alignment of the return type.
+  pub fn get_ret_stack_alignment(&self) -> Option<MaybeAlign> {
+    self.get_ret_attrs().get_stack_alignment()
   }
 
+  // Get the number of dereferenceable bytes (or zero if unknown) of
+  // the return value.
+  pub fn get_ret_dereferenceable_bytes(&self) -> u64 {
+    self.get_ret_attrs().get_dereferenceable_bytes()
+  }
+
+  // Get the number of dereferenceable bytes (or zero if unknown) of
+  // an arg.
+  pub fn get_param_dereferenceable_bytes(&self, index: usize) -> u64 {
+    self.get_param_attrs(index).get_dereferenceable_bytes()
+  }
+
+  // Get the number of dereferenceable_or_null bytes (or zero if unknown)
+  // of the return value.
+  pub fn get_ret_dereferenceable_or_null_bytes(&self) -> u64 {
+    self.get_ret_attrs().get_dereferenceable_or_null_bytes()
+  }
+
+  // Get the number of dereferenceable_or_null bytes (or zero if unknown)
+  // of an arg.
+  pub fn get_param_dereferenceable_or_null_bytes(&self, index: usize) -> u64 {
+    self.get_param_attrs(index).get_dereferenceable_or_null_bytes()
+  }
+
+  // Get the diallowed floating-point classes of the return value.
+  pub fn get_ret_no_fp_class(&self) -> FPClassTest {
+    self.get_ret_attrs().get_no_fp_class()
+  }
+
+  // Get the diallowed floating-point classes of the argument value.
+  pub fn get_param_no_fp_class(&self, arg_no: usize) -> FPClassTest {
+    self.get_param_attrs(arg_no).get_no_fp_class()
+  }
+
+  // Get the unwind table kind requested for the function.
   pub fn get_uw_table_kind(&self) -> UWTableKind {
-    UWTableKind::None
+    self.get_fn_attrs().get_uw_table_kind()
   }
 
-  pub fn get_alloc_kind() {}
+  pub fn get_alloc_kind(&self) -> AllocFnKind {
+    self.get_fn_attrs().get_alloc_kind()
+  }
 
   // Returns memory effects of the function.
   pub fn get_memory_effects(&self) -> MemoryEffects {
-    MemoryEffects::new(0)
+    self.get_fn_attrs().get_memory_effects()
   }
 
   pub fn get_as_string() {}
   pub fn has_parent_context() {}
+
+  pub fn get_num_attr_sets(&self) -> usize {
+    if self.pimpl.is_none() { return 0; }
+    self.pimpl.as_ref().unwrap().num_trailing_objects()
+  }
+
+  // Return a pointer that uniquely identifies this attribute list.
+  pub fn get_raw_pointer(&self) -> &Option<AttributeListImpl> {
+    &self.pimpl
+  }
+
+  // Return true if there are no attributes.
+  pub fn is_empty(&self) -> bool {
+    self.pimpl.is_none()
+  }
+
+  pub fn dump() {}
 }
 
 // This class stores enough information to efficiently remove some
 // attributes from an existing AttrBuilder, AttributeSet ot Attributelist.
-pub struct AttributeMask {}
+#[derive(Debug, Clone)]
+pub struct AttributeMask {
+  attrs: [bool; 100] // TODO: size
+}
 
 impl AttributeMask {
-  pub fn new() {}
-  pub fn add_attribute() {}
-  pub fn contains() {}
+  pub fn new() -> Self {
+    AttributeMask { attrs: [false; 100] }
+  }
+
+  // Add an attribute to the mask.
+  pub fn add_attribute_by_kind(&mut self, val: &AttrKind) -> AttributeMask {
+    let index = val.clone() as usize;
+    self.attrs[index] = true;
+    self.clone()
+  }
+
+  // Add the attribute object to the builder.
+  pub fn add_attribute(&mut self, attr : Attribute) {
+    if attr.is_string_attribute() {
+      // TODO
+    } else {
+      self.add_attribute_by_kind(attr.get_kind_as_enum());
+    }
+  }
+
+  // Return true is the builder has the specified target-dependent attributes.
+  pub fn contains_by_kind(&self, kind : &AttrKind) -> bool {
+    let index = kind.clone() as usize;
+    self.attrs[index]
+  }
+
+  // Return true if the mask contains the specified attribute.
+  pub fn contains(&self, attr : Attribute) -> bool {
+    if attr.is_string_attribute() {
+      return false; // TODO
+    } else {
+      return self.contains_by_kind(attr.get_kind_as_enum());
+    }
+  }
 }
 
 // This class is used in conjunction with the Attribute::get method to
 // create an Attribute object. The object itself is uniquified.
 // The builder's value, however, is not. So this can be a quick way to
 // test for equality, presence of attributes, etc.
+#[derive(Debug)]
 pub struct AttrBuilder {
   c: BlitzContext,
   pub attrs: Vec<Attribute>
@@ -1142,18 +1487,48 @@ impl AttrBuilder {
     self.add_raw_int_attr(&AttrKind::DereferenceableOrNull, bytes)
   }
 
-  pub fn add_alloc_size_attr() {}
-  pub fn add_vscale_range_attr() {}
-
-  pub fn add_type_attr(&mut self, _kind: &AttrKind, _t: Box<dyn Type>) {
-    
+  // This turns one (or two) ints into the form used internally in Attribute.
+  pub fn add_alloc_size_attr(&mut self, elm_size_arg: usize, num_elms_arg: Option<usize>) {
+    let val = AttrBuilder::pack_alloc_size_args(elm_size_arg, num_elms_arg);
+    self.add_alloc_size_attr_from_raw_repr(val)
   }
 
-  pub fn add_by_val_attr() {}
-  pub fn add_struct_ret_attr() {}
-  pub fn add_by_ref_attr() {}
-  pub fn add_preallocated_attr() {}
-  pub fn add_in_alloca_attr() {}
+  // This turns two ints into the form used internally in Attribute.
+  pub fn add_vscale_range_attr(&mut self, min_value: usize, max_value: Option<usize>) {
+    let val = AttrBuilder::pack_alloc_size_args(min_value, max_value);
+    self.add_vscale_range_attr_from_raw_repr(val)
+  }
+
+  // Add a type attribute with the given type.
+  pub fn add_type_attr(&mut self, kind: &AttrKind, t: Box<dyn Type>) {
+    self.add_attribute(Attribute::get_by_type(&mut self.c.clone(),
+      kind.clone(), t))
+  }
+
+  // This turns a byval type into the form used internally in Attribute,
+  pub fn add_by_val_attr(&mut self, t: Box<dyn Type>) {
+    self.add_type_attr(&AttrKind::ByVal, t)
+  }
+
+  // This turns a sret type into the form used internally in Attribute,
+  pub fn add_struct_ret_attr(&mut self, t: Box<dyn Type>) {
+    self.add_type_attr(&AttrKind::StructRet, t)
+  }
+
+  // This turns a byref type into the form used internally in Attribute,
+  pub fn add_by_ref_attr(&mut self, t: Box<dyn Type>) {
+    self.add_type_attr(&AttrKind::ByRef, t)
+  }
+
+  // This turns a preallocated type into the form used internally in Attribute,
+  pub fn add_preallocated_attr(&mut self, t: Box<dyn Type>) {
+    self.add_type_attr(&AttrKind::Preallocated, t)
+  }
+
+  // This turns a inalloca type into the form used internally in Attribute,
+  pub fn add_in_alloca_attr(&mut self, t: Box<dyn Type>) {
+    self.add_type_attr(&AttrKind::InAlloca, t)
+  }
 
   // Add an allocsize attribute, using the representaton returned by
   // Attribute.get_int_value()
@@ -1210,6 +1585,12 @@ impl AttrBuilder {
       self.attrs.push(target);
     }
   }
+
+  fn pack_alloc_size_args(elm_size_arg: usize, num_elms_arg: Option<usize>) -> u64 {
+    //debug_assert!(num_elms_arg.is_none() || num_elms_arg.as_ref() != -1,
+      //"Attempting to pack a reserved value.");
+    (elm_size_arg << 32) as u64 | num_elms_arg.unwrap() as u64
+  }
 }
 
 pub enum AttributeSafetyKind {
@@ -1238,5 +1619,24 @@ mod tests {
     let attr_b = Attribute::get_by_int(&mut c,
       AttrKind::AlwaysInline, 0);
     assert_eq!(attr_a, attr_b);
+  }
+
+  #[test]
+  fn test_add_attributes() {
+    let mut c = BlitzContext::new();
+    let mut b = AttrBuilder::new(&c);
+    b.add_attribute_by_kind(&AttrKind::NoReturn);
+
+    let mut al = AttributeList::new_default();
+    let attrs = AttributeSet::get_by_builder(&mut c, &b);
+    let b2 = AttrBuilder::new_from_attr_set(&c, &attrs);
+    al = al.add_fn_attributes(&mut c, b2);
+    assert_eq!(al.has_fn_attr(&AttrKind::NoReturn), true);
+
+    b.clear();
+    b.add_attribute_by_kind(&AttrKind::SExt);
+    al = al.add_ret_attributes(&mut c, b);
+    assert_eq!(al.has_ret_attr(&AttrKind::SExt), true);
+    assert_eq!(al.has_fn_attr(&AttrKind::NoReturn), true);
   }
 }

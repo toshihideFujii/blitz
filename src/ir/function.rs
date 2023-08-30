@@ -194,8 +194,12 @@ impl Function {
   pub fn add_param_attr(&self) {}
 
   // Adds the attribute to the list of attributes for the given arg.
-  pub fn add_param_attr_by_kind(&self, arg_no:u32, kind: AttrKind) {
-    self.attribute_sets.add_param_attribute(self.get_context(), arg_no, kind);
+  pub fn add_param_attr_by_kind(&mut self, arg_no: usize,
+    kind: &AttrKind) -> AttributeList
+  {
+    let mut c = self.get_context_mut().clone();
+    let attr_sets = &self.attribute_sets;
+    attr_sets.add_param_attribute_by_kind(&mut c, arg_no, kind)
   }
 
   pub fn add_param_attrs(&self) {}
@@ -209,36 +213,37 @@ impl Function {
   pub fn remove_ret_attrs(&self) {}
 
   // Removes the attribute from the list of attributes.
-  pub fn remove_param_attr(&self, arg_no:u32, kind: AttrKind) {
-    self.attribute_sets.remove_param_attribute(self.get_context(), arg_no, kind);
+  pub fn remove_param_attr(&mut self, arg_no: usize, kind: &AttrKind) {
+    let mut c = self.get_context_mut().clone();
+    self.attribute_sets.remove_param_attribute_by_kind(&mut c, arg_no, kind);
   }
 
   pub fn remove_param_attrs() {}
 
   // Return true if the function has the attribute.
-  pub fn has_fn_atribute(&self, kind: AttrKind) -> bool {
+  pub fn has_fn_atribute(&self, kind: &AttrKind) -> bool {
     self.attribute_sets.has_fn_attr(kind)
   }
 
   // Check if an attribute is in the list of attributes for the return value.
-  pub fn has_ret_attribute(&self, kind: AttrKind) -> bool {
+  pub fn has_ret_attribute(&self, kind: &AttrKind) -> bool {
     self.attribute_sets.has_ret_attr(kind)
   }
 
   // Check if an attributes is in the list of attributes.
-  pub fn has_param_attribute(&self, arg_no:u32, kind: AttrKind) -> bool {
+  pub fn has_param_attribute(&self, arg_no: usize, kind: &AttrKind) -> bool {
     self.attribute_sets.has_param_attr(arg_no, kind)
   }
 
   // Gets the attribute from the list of attributes.
-  pub fn get_attribute_at_index(&self, i: u32, kind: AttrKind) -> Attribute {
+  pub fn get_attribute_at_index(&self, i: usize, kind: &AttrKind) -> Option<Attribute> {
     self.attribute_sets.get_attribute_at_index(i, kind)
   }
 
   pub fn get_fn_attribute() {}
 
   // Gets the specified attribute from the list of attributes.
-  pub fn get_param_attribute(&self, arg_no:u32, kind: AttrKind) -> Attribute {
+  pub fn get_param_attribute(&self, arg_no: usize, kind: &AttrKind) -> Option<Attribute> {
     self.attribute_sets.get_param_attr(arg_no, kind)
   }
 
@@ -249,53 +254,53 @@ impl Function {
   pub fn add_dereferenceable_or_null_param_attr() {}
   pub fn get_param_alignment() {}
 
-  pub fn get_param_align(&self, arg_no:u32) -> MaybeAlign {
+  pub fn get_param_align(&self, arg_no: usize) -> Option<MaybeAlign> {
     self.attribute_sets.get_param_alignment(arg_no)
   }
 
-  pub fn get_param_stack_align(&self, arg_no:u32) -> MaybeAlign {
+  pub fn get_param_stack_align(&self, arg_no: usize) -> Option<MaybeAlign> {
     self.attribute_sets.get_param_stack_alignment(arg_no)
   }
 
-  pub fn get_param_by_val_type(&self, arg_no:u32) -> Option<Box<dyn Type>> {
+  pub fn get_param_by_val_type(&self, arg_no: usize) -> Option<Box<dyn Type>> {
     self.attribute_sets.get_param_by_val_type(arg_no)
   }
 
   // Extract the sret type for a parameter.
-  pub fn get_param_struct_ret_type(&self, arg_no:u32) -> Option<Box<dyn Type>> {
+  pub fn get_param_struct_ret_type(&self, arg_no: usize) -> Option<Box<dyn Type>> {
     self.attribute_sets.get_param_struct_ret_type(arg_no)
   }
 
   // Extract the inalloca type for a parameter.
-  pub fn get_param_in_alloca_type(&self, arg_no:u32) -> Option<Box<dyn Type>> {
+  pub fn get_param_in_alloca_type(&self, arg_no: usize) -> Option<Box<dyn Type>> {
     self.attribute_sets.get_param_in_alloca_type(arg_no)
   }
 
   // Extract the byref type for a parameter.
-  pub fn get_param_by_ref_type(&self, arg_no:u32) -> Option<Box<dyn Type>> {
+  pub fn get_param_by_ref_type(&self, arg_no: usize) -> Option<Box<dyn Type>> {
     self.attribute_sets.get_param_by_ref_type(arg_no)
   }
 
   pub fn get_param_preallocated_type() {}
 
   // Extract the number of dereferenceable bytes for a parameter.
-  pub fn get_param_dereferenceable_bytes(&self, arg_no:u32) -> u64 {
+  pub fn get_param_dereferenceable_bytes(&self, arg_no: usize) -> u64 {
     self.attribute_sets.get_param_dereferenceable_bytes(arg_no)
   }
 
   // Extract the number of dereferenceable_or_null bytes for a parameter.
-  pub fn get_param_dereferenceable_or_null_bytes(&self, arg_no:u32) -> u64 {
+  pub fn get_param_dereferenceable_or_null_bytes(&self, arg_no: usize) -> u64 {
     self.attribute_sets.get_param_dereferenceable_or_null_bytes(arg_no)
   }
 
   // Extract the nofpclass attribute for a parameter.
-  pub fn get_param_no_fp_class(&self, arg_no:u32) -> FPClassTest {
+  pub fn get_param_no_fp_class(&self, arg_no: usize) -> FPClassTest {
     self.attribute_sets.get_param_no_fp_class(arg_no)
   }
 
   // Determine if the function is presplit coroutine.
   pub fn is_presplit_coroutine(&self) -> bool {
-    self.has_fn_atribute(AttrKind::PresplitCoroutine)
+    self.has_fn_atribute(&AttrKind::PresplitCoroutine)
   }
 
   pub fn set_presplit_coroutine(&self) {
@@ -374,7 +379,7 @@ impl Function {
 
   // Determine if the function cannot return.
   pub fn does_not_return(&self) -> bool {
-    self.has_fn_atribute(AttrKind::NoReturn)
+    self.has_fn_atribute(&AttrKind::NoReturn)
   }
 
   pub fn set_does_not_return(&self) {
@@ -383,12 +388,12 @@ impl Function {
 
   // Determine if the function should not perform indirect branch tracking.
   pub fn does_no_cf_check(&self) -> bool {
-    self.has_fn_atribute(AttrKind::NoCfCheck)
+    self.has_fn_atribute(&AttrKind::NoCfCheck)
   }
 
   // Determine if the function cannot unwind.
   pub fn does_not_throw(&self) -> bool {
-    self.has_fn_atribute(AttrKind::NoUnwind)
+    self.has_fn_atribute(&AttrKind::NoUnwind)
   }
 
   pub fn set_does_not_throw(&self) {
@@ -397,7 +402,7 @@ impl Function {
 
   // Determine if the call cannot duplicated.
   pub fn cannot_duplicate(&self) -> bool {
-    self.has_fn_atribute(AttrKind::NoDuplicate)
+    self.has_fn_atribute(&AttrKind::NoDuplicate)
   }
 
   pub fn set_cannot_duplicate(&self) {
@@ -406,7 +411,7 @@ impl Function {
 
   // Determine if the call is convergent.
   pub fn is_convergent(&self) -> bool {
-    self.has_fn_atribute(AttrKind::Convergent)
+    self.has_fn_atribute(&AttrKind::Convergent)
   }
 
   pub fn set_convergent(&self) {
@@ -419,7 +424,7 @@ impl Function {
 
   // Determine if the call has sideeffects.
   pub fn is_speculatable(&self) -> bool {
-    self.has_fn_atribute(AttrKind::Speculatable)
+    self.has_fn_atribute(&AttrKind::Speculatable)
   }
 
   pub fn set_speculatable(&self) {
@@ -428,7 +433,7 @@ impl Function {
 
   // Determine if the call might deallocate memory.
   pub fn does_not_free_memory(&self) -> bool {
-    self.only_reads_memory() || self.has_fn_atribute(AttrKind::NoFree)
+    self.only_reads_memory() || self.has_fn_atribute(&AttrKind::NoFree)
   }
 
   pub fn set_does_not_free_memory(&self) {
@@ -437,7 +442,7 @@ impl Function {
 
   // Determine if the call can synchronize with other threads.
   pub fn has_no_sync(&self) -> bool {
-    self.has_fn_atribute(AttrKind::NoSync)
+    self.has_fn_atribute(&AttrKind::NoSync)
   }
 
   pub fn set_no_sync(&self) {
@@ -447,7 +452,7 @@ impl Function {
   // Determine if the function is known not to recurse, directly
   // or indirectly.
   pub fn does_not_recurse(&self) -> bool {
-    self.has_fn_atribute(AttrKind::NoRecurse)
+    self.has_fn_atribute(&AttrKind::NoRecurse)
   }
 
   pub fn set_does_not_recurse(&self) {
@@ -456,8 +461,8 @@ impl Function {
 
   // Determine if the function is required to make forward progress.
   pub fn must_progress(&self) -> bool {
-    self.has_fn_atribute(AttrKind::MustProgress) ||
-    self.has_fn_atribute(AttrKind::WillReturn)
+    self.has_fn_atribute(&AttrKind::MustProgress) ||
+    self.has_fn_atribute(&AttrKind::WillReturn)
   }
 
   pub fn set_must_progress(&self) {
@@ -466,7 +471,7 @@ impl Function {
 
   /// Determine if the function will return.
   pub fn will_return(&self) -> bool {
-    self.has_fn_atribute(AttrKind::WillReturn)
+    self.has_fn_atribute(&AttrKind::WillReturn)
   }
 
   pub fn set_will_return(&self) {
@@ -492,14 +497,14 @@ impl Function {
   // Determine if the function returns a structure through first or
   // second pointer argument.
   pub fn has_struct_ret_attr(&self) -> bool {
-    self.attribute_sets.has_param_attr(0, AttrKind::StructRet) ||
-    self.attribute_sets.has_param_attr(1, AttrKind::StructRet)
+    self.attribute_sets.has_param_attr(0, &AttrKind::StructRet) ||
+    self.attribute_sets.has_param_attr(1, &AttrKind::StructRet)
   }
 
   // Determine if the parameter or return value is marked with no_alias
   // attribute.
   pub fn return_does_not_alias(&self) -> bool {
-    self.attribute_sets.has_ret_attr(AttrKind::NoAlias)
+    self.attribute_sets.has_ret_attr(&AttrKind::NoAlias)
   }
 
   pub fn set_return_does_not_alias(&self) {
@@ -508,17 +513,17 @@ impl Function {
 
   // Do not optimize this function (-O0).
   pub fn has_opt_none(&self) -> bool {
-    self.has_fn_atribute(AttrKind::OptimizeNone)
+    self.has_fn_atribute(&AttrKind::OptimizeNone)
   }
 
   // Optimize this function for minimum size (-Oz).
   pub fn has_min_size(&self) -> bool {
-    self.has_fn_atribute(AttrKind::MinSize)
+    self.has_fn_atribute(&AttrKind::MinSize)
   }
 
   // Optimize this function for size (-Os) or minimum size (-Oz).
   pub fn has_opt_size(&self) -> bool {
-    self.has_fn_atribute(AttrKind::OptimizeForSize) || self.has_min_size()
+    self.has_fn_atribute(&AttrKind::OptimizeForSize) || self.has_min_size()
   }
   
   pub fn get_denormal_mode() {}
@@ -627,6 +632,10 @@ impl Value for Function {
 
   fn get_context(&self) -> &BlitzContext {
     self.v_type.get_context()
+  }
+
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    self.v_type.get_context_mut()
   }
 
   fn get_value_id(&self) -> ValueType {

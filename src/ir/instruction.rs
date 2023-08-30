@@ -493,6 +493,10 @@ impl Value for Instruction {
     self.v_type.as_ref().get_context()
   }
 
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    self.v_type.get_context_mut()
+  }
+
   // Return true if this instruction has any metadata attached to it.
   fn has_metadata(&self) -> bool {
     self.dbg_loc.is_some() || self.has_metadata

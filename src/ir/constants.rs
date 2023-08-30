@@ -204,6 +204,10 @@ impl Value for ConstantInt {
     self.v_type.get_context()
   }
 
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    self.v_type.get_context_mut()
+  }
+
   fn get_value_id(&self) -> ValueType {
     self.v_id.clone()
   }
@@ -390,6 +394,10 @@ impl Value for ConstantFP {
     self.v_type.get_context()
   }
 
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    self.v_type.get_context_mut()
+  }
+
   fn get_value_id(&self) -> ValueType {
     ValueType::ConstantFPVal
   }
@@ -473,6 +481,10 @@ impl Value for ConstantAggregateZero {
 
   fn get_context(&self) -> &BlitzContext {
     self.v_type.get_context()
+  }
+
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    self.v_type.get_context_mut()
   }
 
   fn get_value_id(&self) -> ValueType {

@@ -44,9 +44,9 @@ impl Argument {
       return false;
     }
     let parent = self.get_parent().as_ref().unwrap();
-    if parent.has_param_attribute(self.get_arg_no(), AttrKind::NonNull) &&
+    if parent.has_param_attribute(self.get_arg_no() as usize, &AttrKind::NonNull) &&
       (allow_undef_or_poison ||
-       parent.has_param_attribute(self.get_arg_no(), AttrKind::NoUndef)) {
+       parent.has_param_attribute(self.get_arg_no() as usize, &AttrKind::NoUndef)) {
       return true;
     } else if self.get_dereferenceable_bytes() > 0 &&
       !self.null_pointer_is_defined(self.get_parent(),
@@ -61,7 +61,8 @@ impl Argument {
   pub fn get_dereferenceable_bytes(&self) -> u64 {
     debug_assert!(self.get_type().is_pointer_type(),
       "Only pointers have dereferenceable bytes.");
-    self.get_parent().as_ref().unwrap().get_param_dereferenceable_bytes(self.get_arg_no())
+    self.get_parent().as_ref().unwrap().
+      get_param_dereferenceable_bytes(self.get_arg_no() as usize)
   }
 
   // If this argument has the dereferenceable_or_null attribute, return the
@@ -69,13 +70,15 @@ impl Argument {
   pub fn get_dereferenceable_or_null_bytes(&self) -> u64 {
     debug_assert!(self.get_type().is_pointer_type(),
       "Only pointers have dereferenceable bytes.");
-    self.get_parent().as_ref().unwrap().get_param_dereferenceable_or_null_bytes(self.get_arg_no())
+    self.get_parent().as_ref().unwrap().
+      get_param_dereferenceable_or_null_bytes(self.get_arg_no() as usize)
   }
 
   // If this argument has nofpclass attribute, return the mask representing
   // disallowed floating-point values.
   pub fn get_no_fp_class(&self) -> FPClassTest {
-    self.get_parent().as_ref().unwrap().get_param_no_fp_class(self.get_arg_no())
+    self.get_parent().as_ref().unwrap().
+      get_param_no_fp_class(self.get_arg_no() as usize)
   }
 
   // Return true if this argument has the byval attribute.
@@ -83,7 +86,7 @@ impl Argument {
     if !self.get_type().is_pointer_type() {
       return false;
     }
-    self.has_attribute(AttrKind::ByVal)
+    self.has_attribute(&AttrKind::ByVal)
   }
 
   // Return true if this argument has the byref attribute.
@@ -91,7 +94,7 @@ impl Argument {
     if !self.get_type().is_pointer_type() {
       return false;
     }
-    self.has_attribute(AttrKind::ByRef)
+    self.has_attribute(&AttrKind::ByRef)
   }
 
   // Return true if this argument has the byval, inalloca, or
@@ -103,10 +106,10 @@ impl Argument {
       return false;
     }
     let attrs = self.get_parent().as_ref().unwrap().get_attributes();
-    let arg_no = self.get_arg_no();
-    attrs.has_param_attr(arg_no, AttrKind::ByVal) ||
-    attrs.has_param_attr(arg_no, AttrKind::InAlloca) ||
-    attrs.has_param_attr(arg_no, AttrKind::Preallocated)
+    let arg_no = self.get_arg_no() as usize;
+    attrs.has_param_attr(arg_no, &AttrKind::ByVal) ||
+    attrs.has_param_attr(arg_no, &AttrKind::InAlloca) ||
+    attrs.has_param_attr(arg_no, &AttrKind::Preallocated)
   }
 
   pub fn get_pass_pointee_by_value_copy_size() {}
@@ -120,53 +123,53 @@ impl Argument {
       return false;
     }
     let attrs = self.get_parent().as_ref().unwrap().get_attributes();
-    let arg_no = self.get_arg_no();
-    attrs.has_param_attr(arg_no, AttrKind::ByVal) ||
-    attrs.has_param_attr(arg_no, AttrKind::StructRet) ||
-    attrs.has_param_attr(arg_no, AttrKind::InAlloca) ||
-    attrs.has_param_attr(arg_no, AttrKind::Preallocated) ||
-    attrs.has_param_attr(arg_no, AttrKind::ByRef)
+    let arg_no = self.get_arg_no() as usize;
+    attrs.has_param_attr(arg_no, &AttrKind::ByVal) ||
+    attrs.has_param_attr(arg_no, &AttrKind::StructRet) ||
+    attrs.has_param_attr(arg_no, &AttrKind::InAlloca) ||
+    attrs.has_param_attr(arg_no, &AttrKind::Preallocated) ||
+    attrs.has_param_attr(arg_no, &AttrKind::ByRef)
   }
 
   // If has_pointee_in_memory_value_attr returns true, the in-memory ABI type is returned.
   pub fn get_pointee_in_memory_value_type(&self) -> Option<Box<dyn Type>> {
     let param_attrs = self.get_parent().as_ref().unwrap()
-      .get_attributes().get_param_attrs(self.get_arg_no());
+      .get_attributes().get_param_attrs(self.get_arg_no() as usize);
     Argument::get_memory_param_alloc_type(&param_attrs)
   }
 
   // If this is a byval or inalloca argument, return its alignment.
-  pub fn get_param_align(&self) -> MaybeAlign {
+  pub fn get_param_align(&self) -> Option<MaybeAlign> {
     debug_assert!(self.get_type().is_pointer_type(), "Only pointers have alignments.");
-    self.get_parent().as_ref().unwrap().get_param_align(self.get_arg_no())
+    self.get_parent().as_ref().unwrap().get_param_align(self.get_arg_no() as usize)
   }
 
-  pub fn get_param_stack_align(&self) -> MaybeAlign {
-    self.get_parent().as_ref().unwrap().get_param_stack_align(self.get_arg_no())
+  pub fn get_param_stack_align(&self) -> Option<MaybeAlign> {
+    self.get_parent().as_ref().unwrap().get_param_stack_align(self.get_arg_no() as usize)
   }
 
   // If true is a byval argument, return its type.
   pub fn get_param_by_val_type(&self) -> Option<Box<dyn Type>> {
     debug_assert!(self.get_type().is_pointer_type(), "Only pointers have byval types.");
-    self.get_parent().as_ref().unwrap().get_param_by_val_type(self.get_arg_no())
+    self.get_parent().as_ref().unwrap().get_param_by_val_type(self.get_arg_no() as usize)
   }
 
   // If true is an sret argument, return its type.
   pub fn get_param_struct_ret_type(&self) -> Option<Box<dyn Type>> {
     debug_assert!(self.get_type().is_pointer_type(), "Only pointers have sret types.");
-    self.get_parent().as_ref().unwrap().get_param_struct_ret_type(self.get_arg_no())
+    self.get_parent().as_ref().unwrap().get_param_struct_ret_type(self.get_arg_no() as usize)
   }
 
   // If true is a byref argument, return its type.
   pub fn get_param_by_ref_type(&self) -> Option<Box<dyn Type>> {
     debug_assert!(self.get_type().is_pointer_type(), "Only pointers have byref types.");
-    self.get_parent().as_ref().unwrap().get_param_by_ref_type(self.get_arg_no())
+    self.get_parent().as_ref().unwrap().get_param_by_ref_type(self.get_arg_no() as usize)
   }
 
   // If this is an inalloca argument, return its type.
   pub fn get_param_in_alloca_type(&self) -> Option<Box<dyn Type>> {
     debug_assert!(self.get_type().is_pointer_type(), "Only pointers have inalloca types.");
-    self.get_parent().as_ref().unwrap().get_param_in_alloca_type(self.get_arg_no())
+    self.get_parent().as_ref().unwrap().get_param_in_alloca_type(self.get_arg_no() as usize)
   }
 
   // Return true if this argument has the nest attribute.
@@ -174,7 +177,7 @@ impl Argument {
     if !self.get_type().is_pointer_type() {
       return false;
     }
-    self.has_attribute(AttrKind::Nest)
+    self.has_attribute(&AttrKind::Nest)
   }
 
   // Return true if this argument has the noalias attribute.
@@ -182,7 +185,7 @@ impl Argument {
     if !self.get_type().is_pointer_type() {
       return false;
     }
-    self.has_attribute(AttrKind::NoAlias)
+    self.has_attribute(&AttrKind::NoAlias)
   }
 
   // Return true if this argument has the nocapture attribute.
@@ -190,7 +193,7 @@ impl Argument {
     if !self.get_type().is_pointer_type() {
       return false;
     }
-    self.has_attribute(AttrKind::NoCapture)
+    self.has_attribute(&AttrKind::NoCapture)
   }
 
   // Return true if this argument has the nofree attribute.
@@ -198,22 +201,22 @@ impl Argument {
     if !self.get_type().is_pointer_type() {
       return false;
     }
-    self.has_attribute(AttrKind::NoFree)
+    self.has_attribute(&AttrKind::NoFree)
   }
 
   // Return true if this argument has the sret attribute.
   pub fn has_struct_ret_attr(&self) -> bool {
-    self.has_attribute(AttrKind::StructRet)
+    self.has_attribute(&AttrKind::StructRet)
   }
 
   // Return true if this argument has the inreg attribute.
   pub fn has_in_reg_attr(&self) -> bool {
-    self.has_attribute(AttrKind::InReg)
+    self.has_attribute(&AttrKind::InReg)
   }
 
   // Return true if this argument has the returned attribute.
   pub fn has_returned_attr(&self) -> bool {
-    self.has_attribute(AttrKind::Returned)
+    self.has_attribute(&AttrKind::Returned)
   }
 
   pub fn only_reads_memory() {}
@@ -223,7 +226,7 @@ impl Argument {
     if !self.get_type().is_pointer_type() {
       return false;
     }
-    self.has_attribute(AttrKind::InAlloca)
+    self.has_attribute(&AttrKind::InAlloca)
   }
 
   // Return true if this argument has the preallocated attribute.
@@ -231,40 +234,43 @@ impl Argument {
     if !self.get_type().is_pointer_type() {
       return false;
     }
-    self.has_attribute(AttrKind::Preallocated)
+    self.has_attribute(&AttrKind::Preallocated)
   }
 
   // Return true if this argument has the zext attribute.
   pub fn has_zext_attr(&self) -> bool {
-    self.has_attribute(AttrKind::ZExt)
+    self.has_attribute(&AttrKind::ZExt)
   }
 
   // Return true if this argument has the sext attribute.
   pub fn has_sext_attr(&self) -> bool {
-    self.has_attribute(AttrKind::SExt)
+    self.has_attribute(&AttrKind::SExt)
   }
 
   pub fn add_attrs() {}
   pub fn add_attr() {}
 
-  pub fn add_attr_by_kind(&self, kind: AttrKind) {
-    self.get_parent().as_ref().unwrap().add_param_attr_by_kind(self.get_arg_no(), kind)
+  pub fn add_attr_by_kind(&self, _kind: &AttrKind) {
+    //self.get_parent().as_ref().unwrap().add_param_attr_by_kind(
+      //self.get_arg_no() as usize, kind)
   }
 
   pub fn remove_attrs() {}
 
   // Remove attributes from an argument.
-  pub fn remove_attr(&self, kind: AttrKind) {
-    self.get_parent().as_ref().unwrap().remove_param_attr(self.get_arg_no(), kind)
+  pub fn remove_attr(&mut self, _kind: &AttrKind) {
+    //self.get_parent().as_mut().unwrap().remove_param_attr(self.get_arg_no() as usize, kind)
   }
 
   // Check if an argument has a given attribute.
-  pub fn has_attribute(&self, kind: AttrKind) -> bool {
-    self.get_parent().as_ref().unwrap().has_param_attribute(self.get_arg_no(), kind)
+  pub fn has_attribute(&self, kind: &AttrKind) -> bool {
+    self.get_parent().as_ref().unwrap().
+      has_param_attribute(self.get_arg_no() as usize, kind)
   }
 
-  pub fn get_attribute(&self, kind: AttrKind) -> Attribute {
-    self.get_parent().as_ref().unwrap().get_param_attribute(self.get_arg_no(), kind)
+  pub fn get_attribute(&self, kind: &AttrKind) -> Option<Attribute> {
+    self.get_parent().as_ref().unwrap().
+      get_param_attribute(self.get_arg_no() as usize, kind)
   }
 
   // Method for support type inquiry through isa, cast, and dyn_cast.
@@ -303,6 +309,10 @@ impl Value for Argument {
 
   fn get_context(&self) -> &BlitzContext {
     self.v_type.get_context()
+  }
+
+  fn get_context_mut(&mut self) -> &mut BlitzContext {
+    self.v_type.get_context_mut()
   }
 
   fn get_value_id(&self) -> ValueType {
