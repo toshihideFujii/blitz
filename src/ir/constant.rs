@@ -37,14 +37,14 @@ enum PossibleRelocationsType {
 // Constants are created on demend as needed and never deleted: this clients
 // don't have to warry about the lifetime of the objects.
 #[derive(Debug)]
-pub struct ConstantTemp {
+pub struct ConstantBase {
   v_type: Box<dyn Type>,
   v_id: ValueType,
   use_list: Vec<u64>, // TODO: Use
   num_user_operands: u32
 }
 
-impl ConstantTemp {
+impl ConstantBase {
   
   // Return true if this is the value that would be returned by get_null_value().
   pub fn is_null_value(&self) -> bool {
@@ -250,13 +250,13 @@ impl ConstantTemp {
 
   // For aggregates (struct/array/vector) return the constant that corresponds
   // to the specified element if possible, or null if not.
-  pub fn get_aggregate_element(&self, _elt: u32) -> Option<ConstantTemp> {
+  pub fn get_aggregate_element(&self, _elt: u32) -> Option<ConstantBase> {
     None
   }
 
   // If all elements of the vector constant have the same value,
   // return that value. Otherwise, return None.
-  pub fn get_splat_value(&self, _allow_undefs: bool) -> Option<ConstantTemp> {
+  pub fn get_splat_value(&self, _allow_undefs: bool) -> Option<ConstantBase> {
     None
   }
 }

@@ -3,16 +3,21 @@
 // This file contains the declaration of the Function class,
 // which represents a single function/procedure.
 
-use crate::{adt::{string_ref::StringRef, floating_point_mode::FPClassTest},
-support::{alignment::MaybeAlign, mod_ref::{MemoryEffects, ModRefInfo}, code_gen::UWTableKind}};
+use crate::{
+  adt::{string_ref::StringRef, floating_point_mode::FPClassTest, twine::Twine, dense_set::DenseSet},
+  support::{alignment::MaybeAlign, mod_ref::{MemoryEffects, ModRefInfo},
+  code_gen::UWTableKind}
+};
+
 use super::{
   type_::{FunctionType, Type},
   blits_context::BlitzContext,
   value::{ValueType, Value}, calling_conv::*,
   attributes::{AttributeList, AttrKind, Attribute},
-  symbol_table_list::SymbolTableList, basic_block::BasicBlock,
+  //symbol_table_list::SymbolTableList,
+  basic_block::BasicBlock,
   module::Module, argument::Argument, metadata::MDNode,
-  debug_info_metadata::DISubprogram
+  debug_info_metadata::DISubprogram, global_value::{LinkageTypes, GlobalValue}
 };
 
 #[derive(PartialEq, Clone)]
@@ -47,31 +52,97 @@ impl ProfileCount {
 }
 
 #[derive(Debug)]
+pub enum IntrinsicID {
+  FAdd,
+  FSub,
+  FMul,
+  FDiv,
+  FRem,
+  FPExt,
+  SIToFP,
+  UIToFP,
+  FPToSI,
+  FPToUI,
+  FPTrunc,
+  NotIntrinsic
+}
+
+#[derive(Debug)]
 pub struct Function {
   v_type: FunctionType,
   v_id: ValueType,
   sub_class_data: u32,
   has_metadata: bool,
-  parent: Module,
-  int_id: u32,
+  parent: Option<Module>,
+  int_id: IntrinsicID,
   has_blitz_reserved_name: bool,
-  basic_blocks: SymbolTableList<BasicBlock>,
+  basic_blocks: Vec<BasicBlock>, //SymbolTableList<BasicBlock>,
   arguments: Vec<Argument>,
   attribute_sets: AttributeList
 }
 
 impl Function {
-  pub fn new() {}
+  // If the (optional) Module argument is specified, the function is
+  // automatically inserted into the end of the function list for the Module.
+  pub fn new(t: FunctionType, _linkage: LinkageTypes,
+    _addr_space: usize, _name: Twine, parent_module: Option<Module>) -> Self
+  {
+    let mut func =
+      Function {
+        v_type: t,
+        v_id: ValueType::FunctionVal,
+        sub_class_data: 0,
+        has_metadata: false,
+        parent: parent_module,
+        int_id: IntrinsicID::NotIntrinsic,
+        has_blitz_reserved_name: false,
+        basic_blocks: Vec::new(), //SymbolTableList::new(),
+        arguments: Vec::new(),
+        attribute_sets: AttributeList::new_default()
+      };
+    debug_assert!(FunctionType::is_valid_return_type(func.get_return_type()),
+      "Invalid return type.");
+
+    // We only need a symbol table for a function if the context keeps value names.
+    if !func.get_context().should_discard_value_names() {
+      // TODO
+    }
+
+    // If the function has arguments, mark them as lazily built.
+    if func.v_type.get_num_params() > 0 {
+      func.sub_class_data = 1;
+    }
+
+    if func.parent.is_some() {
+      //func.parent.unwrap().get_function_list().push_back(func);
+    }
+
+    func.has_blitz_reserved_name = func.get_name().starts_with("blitz.");
+
+    //if func.int_id != 0 {
+      // TODO
+    //}
+
+    func
+  }
+
   pub fn get_function(&self) -> &Function {
     self
   }
 
-  pub fn get_parent(&self) -> &Module {
+  pub fn get_parent(&self) -> &Option<Module> {
     &self.parent
   }
 
-  pub fn get_instruction_count(&self) -> u32 {
-    0
+  // Returns the number of non-debug IR instructions in this function.
+  // This is equivalent to the sum of the sizes of each basic block contained
+  // within this function.
+  pub fn get_instruction_count(&self) -> usize {
+    let mut num_instrs = 0;
+    for bb in &self.basic_blocks {
+      num_instrs += bb.instruction_count_without_debug();
+    }
+    num_instrs
   }
   
   // Return the FunctionType for me.
@@ -80,8 +151,8 @@ impl Function {
   }
 
   // Returns the type of the ret val.
-  pub fn get_return_type(&self) /*-> Box<dyn Type>*/ {
-    //self.v_type.get_return_type()
+  pub fn get_return_type(&self) -> &Box<dyn Type> {
+    self.v_type.get_return_type()
   }
 
   // Return true if this function takes a variable number of arguments.
@@ -89,14 +160,14 @@ impl Function {
     self.get_function_type().is_var_arg()
   }
 
-  pub fn is_materializable() {}
-  pub fn set_is_materializable() {}
+  pub fn is_materializable(&self) -> bool { false }
+  pub fn set_is_materializable(&self, _v: bool) {}
 
   // This method returns the ID number of the specified function, or
   // Intrinsic::not_intrinsic if the function is not an intrinsic, or
   // if the pointer is null.
-  pub fn get_intrinsic_id(&self) -> u32 {
-    self.int_id
+  pub fn get_intrinsic_id(&self) -> &IntrinsicID {
+    &self.int_id
   }
 
   // Return true if the function's name starts with "blitz.".
@@ -105,22 +176,37 @@ impl Function {
   }
 
   // Return true if int_id is an intrinsic specific to a certain target.
-  pub fn is_target_intrinsic_id(_int_id: u32) -> bool {
+  pub fn is_target_intrinsic_id(_int_id: &IntrinsicID) -> bool {
     false
   }
 
-  // Return true if this function is an intrinsic and the intrinsic is
-  // specific to a certain target.
+  // Returns true if this function is an intrinsic and the intrinsic is
+  // specific to a certain target. If this is not an intrinsic or a generic
+  // intrinsic, false is returned.
   pub fn is_target_intrinsic(&self) -> bool {
-    Function::is_target_intrinsic_id(self.int_id)
+    Function::is_target_intrinsic_id(&self.int_id)
   }
 
+  // Returns true if the function is one of the "Constrained Floating-Point
+  // Intrinsics". Returns false if not, and returns false when get_intrinsic_id()
+  // returns Intrinsic::_not_intrinsic.
   pub fn is_constrained_fp_intrinsic(&self) -> bool {
-    false
+    match self.get_intrinsic_id() {
+      IntrinsicID::FAdd => return true,
+      IntrinsicID::FSub => return true,
+      IntrinsicID::FMul => return true,
+      IntrinsicID::FDiv => return true,
+      IntrinsicID::FRem => return true,
+      IntrinsicID::FPExt => return true,
+      IntrinsicID::FPToSI => return true,
+      IntrinsicID::FPToUI => return true,
+      IntrinsicID::FPTrunc => return true,
+      _ => return false
+    };
   }
 
-  pub fn lookup_intrinsic_id(_nmae: StringRef) -> u32 {
-    0
+  pub fn lookup_intrinsic_id(_nmae: StringRef) -> IntrinsicID {
+    IntrinsicID::NotIntrinsic
   }
 
   // Recalculate the id for this function if it is an intrinsic defined in
@@ -129,7 +215,7 @@ impl Function {
     let name = self.get_name();
     if !name.starts_with("blitz.") {
       self.has_blitz_reserved_name = false;
-      self.int_id = 0;
+      self.int_id = IntrinsicID::NotIntrinsic;
       return;
     }
     self.has_blitz_reserved_name = true;
@@ -147,7 +233,12 @@ impl Function {
     self.set_value_subclass_data(val);
   }
 
-  pub fn set_entry_count() {}
+  // Set the entry count for this function.
+  // Entry count is the number of times this function was executed based on
+  // pgo data. imports points to a set of GUIDs that needes to be imported
+  // by the function for sample PGO, to enable the same inlines as the profiled
+  // optimized bunary.
+  pub fn set_entry_count(&self, _count: ProfileCount, _imports: Option<DenseSet<GlobalValue>>) {}
 
   // Get the entry count for this function.
   // Entry count is the number of times the function was executed.
@@ -534,7 +625,7 @@ impl Function {
   pub fn steal_argument_list_from() {}
 
   // Get the underlying elements of the Function.
-  pub fn get_basic_block_list(&self) -> &SymbolTableList<BasicBlock> {
+  pub fn get_basic_block_list(&self) -> &Vec<BasicBlock> /*&SymbolTableList<BasicBlock>*/ {
     &self.basic_blocks
   }
 
@@ -543,19 +634,23 @@ impl Function {
   pub fn get_value_symbol_table() {}
 
   pub fn size(&self) -> usize {
-    self.basic_blocks.size()
+    //self.basic_blocks.size()
+    self.basic_blocks.len()
   }
 
   pub fn empty(&self) -> bool {
-    self.basic_blocks.empty()
+    //self.basic_blocks.empty()
+    self.basic_blocks.is_empty()
   }
 
   pub fn front(&self) -> Option<&BasicBlock> {
-    self.basic_blocks.front()
+    //self.basic_blocks.front()
+    self.basic_blocks.first()
   }
 
   pub fn back(&self) -> Option<&BasicBlock> {
-    self.basic_blocks.back()
+    //self.basic_blocks.back()
+    self.basic_blocks.last()
   }
 
   pub fn arg_begin() {}

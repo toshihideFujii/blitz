@@ -76,7 +76,7 @@ impl Module {
   // Returns the number of non-debug IR instructions in the module.
   // This is equivalent to the sum of the IR instruction counts of
   // each function contained in the module.
-  pub fn get_instruction_count(&self) -> u32 {
+  pub fn get_instruction_count(&self) -> usize {
     let mut num_instrs = 0;
     for i in 0..self.function_list.size() {
       let f = self.function_list.get(i).unwrap();

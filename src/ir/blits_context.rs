@@ -99,8 +99,15 @@ impl BlitzContext {
   pub fn get_operand_bundle_tag_id() {}
   pub fn get_or_insert_sync_scope_id() {}
   pub fn get_sync_scope_names() {}
-  pub fn sest_gc() {}
-  pub fn should_discard_value_names() {}
+  pub fn set_gc() {}
+
+  // Return true if the context runtime configuration is set to discard
+  // all value names. When true, only GlobalValue names will be available
+  // in the IR.
+  pub fn should_discard_value_names(&self) -> bool {
+    self.p_impl.as_ref().unwrap().discard_value_names
+  }
+
   pub fn set_discard_value_names() {}
   pub fn is_odr_uniquing_debug_types() {}
   pub fn enable_debug_type_odr_uniquing() {}

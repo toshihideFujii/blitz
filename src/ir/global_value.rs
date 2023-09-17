@@ -3,7 +3,8 @@
 // This file is a common base class of all globally definable objects. 
 // As such, it is subclassed by GlobalVariable, GlobalAlias and by Function.
 
-//use super::module::Module;
+use crate::{ir::type_::Type, adt::twine::Twine};
+use super::{value::ValueType, use_::Use};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LinkageTypes {
@@ -63,6 +64,7 @@ struct SanitizerMetadata {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GlobalValue {
+  //v_type: Box<dyn Type>,
   linkage: LinkageTypes,
   visibility: VisibilityTypes,
   unnamed_addr_val: UnnamedAddr,
@@ -77,7 +79,23 @@ pub struct GlobalValue {
 }
 
 impl GlobalValue {
-  pub fn new() {}
+  pub fn new(_t: Box<dyn Type>, _v_id: ValueType, _ops: Option<Use>,
+    _num_ops: usize, linkage: &LinkageTypes, _name: Twine, _addr_space: usize) -> Self
+  {
+    GlobalValue {
+      //v_type: t,
+      linkage: linkage.clone(),
+      visibility: VisibilityTypes::DefaultVisibility,
+      unnamed_addr_val: UnnamedAddr::None,
+      dll_storage_class: DllStorageClassTypes::DefaultStorageClass,
+      thread_local: ThreadLocalMode::NotThreadLocal,
+      has_blitz_reserved_name: false,
+      is_dso_local: false,
+      has_partition: false,
+      has_sanitizer_metadata: false,
+      sub_class_data: 0
+    }
+  }
 
   // Returns true if the definition of this global may be replaced by
   // a differently optimized variant of the same source level function
@@ -91,6 +109,8 @@ impl GlobalValue {
     }
   }
 
+  // Returns true if the global is a function definition with the nobuiltin
+  // attribute.
   pub fn is_no_builtin_fn_def(&self) -> bool { false }
 
   pub fn get_global_value_sub_class_data(&self) -> u32 {

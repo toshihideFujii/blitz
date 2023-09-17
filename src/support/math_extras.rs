@@ -1,8 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use crate::adt::bit::countl_zero;
-
 // Count number of 0's from the least significant bit to the most
 // stopping at the first 1.
 pub fn count_trailing_zeros(val: u64) -> u32 {
@@ -50,22 +48,26 @@ pub fn is_shifted_mask_64(value: u64) -> bool {
   value != 0 && is_mask_64((value - 1) | value)
 }
 
-// Return true if the argument is a power of 2 > 0
-// (64 bit edition).
+// Return true if the argument is a power of 2 > 0 (32 bit edition).
+pub fn is_power_of_2_32(value: u32) -> bool {
+  value.is_power_of_two()
+}
+
+// Return true if the argument is a power of 2 > 0 (64 bit edition).
 pub fn is_power_of_2_64(value: u64) -> bool {
-  false
+  value.is_power_of_two()
 }
 
 // Return the floor log base 2 of the specified value, -1 if the
 // value is zero (32 bit edition).
 pub fn log2_32(value: u32) -> u32 {
-  31 - countl_zero(value)
+  value.ilog2()
 }
 
 // Return the floor log base 2 of the specified value, -1 if the
 // value is zero (64 bit edition).
 pub fn log2_64(value: u64) -> u32 {
-  63 - countl_zero(value)
+  value.ilog2()
 }
 
 // a and b are either alignments or offsets.

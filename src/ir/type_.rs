@@ -482,9 +482,9 @@ impl FunctionType {
   pub fn get() {}
 
   // Return true if the specified type is valid as a return type.
-  pub fn is_valid_return_type(&self, ret_type: &dyn Type) -> bool {
-    !ret_type.is_function_type() && !ret_type.is_label_type() &&
-    !ret_type.is_metadata_type()
+  pub fn is_valid_return_type(ret_type: &Box<dyn Type>) -> bool {
+    !ret_type.as_ref().is_function_type() && !ret_type.as_ref().is_label_type() &&
+    !ret_type.as_ref().is_metadata_type()
   }
 
   // Return true if the specified type is valid as an argument type.
@@ -496,10 +496,8 @@ impl FunctionType {
     self.get_subclass_data() != 0
   }
 
-  pub fn get_return_type(&self) /*-> Box<dyn Type>*/ {
-    //self.contained_types[0]
-    //let mut cp = Vec::new();
-    //cp.clone_from_slice(&self.contained_types);
+  pub fn get_return_type(&self) -> &Box<dyn Type> {
+    &self.contained_types[0]
   }
 
   pub fn params(&self) -> &Vec<Box<dyn Type>> {

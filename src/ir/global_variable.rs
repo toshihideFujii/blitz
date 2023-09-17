@@ -72,7 +72,7 @@ impl GlobalVariable {
   pub fn has_attributes() {}
 
   // Return the attribute object.
-  pub fn get_attribute(&self, kind: AttrKind) -> Option<Attribute> {
+  pub fn get_attribute(&self, kind: &AttrKind) -> Option<Attribute> {
     self.attrs.get_attribute(kind)
   }
 

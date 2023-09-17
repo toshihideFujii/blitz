@@ -8,6 +8,7 @@ use super::math_extras::{is_power_of_2_64,log2_64, min_align};
 
 // This struct is a compact representation of a valid (non-zero
 // power of two) alignment.
+#[derive(Debug, Clone)]
 pub struct Align {
   shift_value: u8
 }
@@ -16,7 +17,9 @@ impl Align {
   pub fn new(value: u64) -> Self {
     debug_assert!(value > 0, "Value must not be 0.");
     debug_assert!(is_power_of_2_64(value), "Alignment is not a power of 2.");
-    Align { shift_value: log2_64(value) as u8 }
+    let align = Align { shift_value: log2_64(value) as u8 };
+    debug_assert!(align.shift_value < 64, "Broken invariant.");
+    align
   }
 
   pub fn value(&self) -> u64 {
@@ -32,6 +35,7 @@ impl Align {
 
 // This struct is a compact representation of a valid (power of two)
 // or undefined (0) alignment.
+#[derive(Debug, PartialEq)]
 pub struct MaybeAlign {
   shift_value: u8
 }
@@ -45,6 +49,10 @@ impl MaybeAlign {
 
   pub fn value(&self) -> u64 {
     1 << self.shift_value
+  }
+
+  pub fn shift_value(&self) -> u64 {
+    self.shift_value as u64
   }
 }
 

@@ -100,6 +100,10 @@ impl<T> SymbolTableList<T> /*where T: PartialEq */{
   }
 
   pub fn set_sym_tab_object(&self) {}
+
+  fn get_list_owner() {}
+  fn get_list() {}
+  fn get_sym_tab() {}
 }
 /*
 impl<T> Iterator for SymbolTableList<T> {

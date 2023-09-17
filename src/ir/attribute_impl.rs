@@ -107,7 +107,19 @@ impl AttributeImpl {
     None
   }
 
-  pub fn profile() {}
+  pub fn profile(&self, id: &mut FoldingSetNodeID) {
+    if self.is_enum_attribute() {
+      debug_assert!(Attribute::is_enum_attr_kind(&self.kind), "Expected enum attribute.");
+      id.add_integer_u64(self.kind.clone() as u64);
+    } else if self.is_int_attribute() {
+      debug_assert!(Attribute::is_int_attr_kind(&self.kind), "Expected int attribute.");
+      id.add_integer_u64(self.kind.clone() as u64);
+      id.add_integer_u64(self.val);
+    } else if self.is_string_attribute() {
+      // TODO
+    }
+    // TODO
+  }
 }
 
 struct EnumAttributeImpl {}
@@ -231,7 +243,7 @@ impl AttributeSetNode {
 
   pub fn has_attribute(&self, kind: &AttrKind) -> bool {
     for attr in &self.attrs {
-      if attr.has_attribute(kind.clone()) { return true; }
+      if attr.has_attribute(kind) { return true; }
     }
     false
   }
@@ -240,12 +252,13 @@ impl AttributeSetNode {
     self.attrs.len() != 0
   }
 
-  pub fn get_attribute(&self, kind: AttrKind) -> Option<Attribute> {
+  pub fn get_attribute(&self, kind: &AttrKind) -> Option<Attribute> {
     self.find_enum_attribute(kind)
   }
 
   pub fn get_alignment(&self) -> Option<MaybeAlign> {
-    let a = self.find_enum_attribute(AttrKind::Alignment);
+    let a =
+      self.find_enum_attribute(&AttrKind::Alignment);
     if a.is_some() {
       return Some(a.as_ref().unwrap().get_alignment());
     }
@@ -253,7 +266,8 @@ impl AttributeSetNode {
   }
 
   pub fn get_stack_alignment(&self) -> Option<MaybeAlign> {
-    let a = self.find_enum_attribute(AttrKind::StackAlignment);
+    let a =
+      self.find_enum_attribute(&AttrKind::StackAlignment);
     if a.is_some() {
       return Some(a.as_ref().unwrap().get_stack_alignment());
     }
@@ -261,7 +275,8 @@ impl AttributeSetNode {
   }
 
   pub fn get_dereferenceable_bytes(&self) -> u64 {
-    let a = self.find_enum_attribute(AttrKind::Dereferenceable);
+    let a =
+      self.find_enum_attribute(&AttrKind::Dereferenceable);
     if a.is_some() {
       return a.as_ref().unwrap().get_dereferenceable_bytes();
     }
@@ -269,7 +284,8 @@ impl AttributeSetNode {
   }
 
   pub fn get_dereferenceable_or_null_bytes(&self) -> u64 {
-    let a = self.find_enum_attribute(AttrKind::DereferenceableOrNull);
+    let a =
+      self.find_enum_attribute(&AttrKind::DereferenceableOrNull);
     if a.is_some() {
       return a.as_ref().unwrap().get_dereferenceable_or_null_bytes();
     }
@@ -277,7 +293,8 @@ impl AttributeSetNode {
   }
 
   pub fn get_alloc_size_args(&self) -> Option<(u64, u64)> {
-    let a = self.find_enum_attribute(AttrKind::AllocSize);
+    let a =
+      self.find_enum_attribute(&AttrKind::AllocSize);
     if a.is_some() {
       return Some(a.as_ref().unwrap().get_alloc_size_args());
     }
@@ -285,7 +302,8 @@ impl AttributeSetNode {
   }
 
   pub fn get_v_scale_range_min(&self) -> u64 {
-    let a = self.find_enum_attribute(AttrKind::VScaleRange);
+    let a =
+      self.find_enum_attribute(&AttrKind::VScaleRange);
     if a.is_some() {
       return a.as_ref().unwrap().get_vscale_range_min();
     }
@@ -293,7 +311,8 @@ impl AttributeSetNode {
   }
 
   pub fn get_v_scale_range_max(&self) -> Option<u64> {
-    let a = self.find_enum_attribute(AttrKind::VScaleRange);
+    let a =
+      self.find_enum_attribute(&AttrKind::VScaleRange);
     if a.is_some() {
       return Some(a.as_ref().unwrap().get_vscale_range_max());
     }
@@ -301,7 +320,8 @@ impl AttributeSetNode {
   }
 
   pub fn get_uw_table_kind(&self) -> UWTableKind {
-    let a = self.find_enum_attribute(AttrKind::UWTable);
+    let a =
+      self.find_enum_attribute(&AttrKind::UWTable);
     if a.is_some() {
       return a.as_ref().unwrap().get_uw_table_kind();
     }
@@ -309,7 +329,8 @@ impl AttributeSetNode {
   }
 
   pub fn get_alloc_kind(&self) -> AllocFnKind {
-    let a = self.find_enum_attribute(AttrKind::AllocKind);
+    let a =
+      self.find_enum_attribute(&AttrKind::AllocKind);
     if a.is_some() {
       return a.as_ref().unwrap().get_alloc_kind();
     }
@@ -317,7 +338,8 @@ impl AttributeSetNode {
   }
 
   pub fn get_memory_effects(&self) -> MemoryEffects {
-    let a = self.find_enum_attribute(AttrKind::Memory);
+    let a =
+      self.find_enum_attribute(&AttrKind::Memory);
     if a.is_some() {
       return a.as_ref().unwrap().get_memory_effects();
     }
@@ -325,7 +347,8 @@ impl AttributeSetNode {
   }
 
   pub fn get_no_fp_class(&self) -> FPClassTest {
-    let a = self.find_enum_attribute(AttrKind::NoFPClass);
+    let a =
+      self.find_enum_attribute(&AttrKind::NoFPClass);
     if a.is_some() {
       return a.as_ref().unwrap().get_no_fp_class();
     }
@@ -338,9 +361,19 @@ impl AttributeSetNode {
     None
   }
 
-  pub fn profile() {}
+  pub fn profile(&self, id: &mut FoldingSetNodeID) {
+    for attr in &self.attrs {
+      attr.profile(id);
+    }
+  }
 
-  fn find_enum_attribute(&self, _kind: AttrKind) -> Option<Attribute> {
+  fn find_enum_attribute(&self, kind: &AttrKind) -> Option<Attribute> {
+    if !self.has_attribute(kind) { return None; }
+    for attr in &self.attrs {
+      if attr.has_attribute(kind) {
+        return Some(attr.clone());
+      }
+    }
     None
   }
 }
@@ -369,6 +402,7 @@ impl AttributeListImpl {
     // Initialize available_fn_attrs and availabel_somewhere_attrs.
     let attr_set =
       attr_sets.get(AttrIndex::FunctionIndex as usize);
+    println!("bbbbb {:?}", attr_set);
     if attr_set.is_some() {
       let attrs =
         attr_set.unwrap().set_node.as_ref().unwrap().attrs.clone();
@@ -405,7 +439,7 @@ impl AttributeListImpl {
   // attribute of the given kind. 
   pub fn has_fn_attribute(&self, kind: &AttrKind) -> bool {
     for attr in &self.available_fn_attrs {
-      if attr.has_attribute(kind.clone()) { return true; }
+      if attr.has_attribute(kind) { return true; }
     }
     false
   }
@@ -418,12 +452,12 @@ impl AttributeListImpl {
     if index.is_some() {
       let attr =
         self.available_somewhere_attrs.get(index.unwrap());
-      if attr.is_some() && attr.unwrap().has_attribute(kind.clone()) {
+      if attr.is_some() && attr.unwrap().has_attribute(kind) {
         return true;
       }
     }
     for attr in &self.available_somewhere_attrs {
-      if attr.has_attribute(kind.clone()) {
+      if attr.has_attribute(kind) {
         return true;
       }
     }

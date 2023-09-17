@@ -429,7 +429,7 @@ impl CallBase {
   pub fn has_fn_attr(&self, _kind: AttrKind) -> bool { false }
 
   // Adds the attribute to the list of attributes.
-  pub fn add_attribute_at_index(&mut self, i: u32, attr: Attribute) {
+  pub fn add_attribute_at_index(&mut self, i: u32, attr: &Attribute) {
     self.attrs = self.attrs.add_attribute_at_index(
       self.inst.get_context_mut(), i as usize, attr);
   }
@@ -440,7 +440,7 @@ impl CallBase {
   }
 
   // Adds the attribute to the return value.
-  pub fn add_ret_attr(&mut self, attr: Attribute) {
+  pub fn add_ret_attr(&mut self, attr: &Attribute) {
     self.attrs = self.attrs.add_ret_attribute(self.inst.get_context_mut(), attr);
   }
 

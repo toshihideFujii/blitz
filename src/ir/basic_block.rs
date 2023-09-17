@@ -50,7 +50,7 @@ impl BasicBlock {
   }
   
   // Return the module owning the function this basic block belongs to.
-  pub fn get_module(&self) -> &Module {
+  pub fn get_module(&self) -> &Option<Module> {
     self.get_parent().as_ref().unwrap().get_parent()
   }
 
@@ -73,6 +73,7 @@ impl BasicBlock {
   pub fn get_first_insertion_pt() {}
   pub fn get_first_non_phi_or_dbg_or_alloca() {}
   pub fn instructions_without_debug() {}
+  pub fn instruction_count_without_debug(&self) -> usize { 0 }
   pub fn size_without_debug() {}
 
   // Unlink 'this' from the containing function, but not delete it.

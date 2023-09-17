@@ -110,6 +110,7 @@ pub struct BlitzContextImpl {
   bundle_tag_cache: StringMap<u32>,
 
   //gc_names: DenseMap<Function, String>
+  pub discard_value_names: bool,
 }
 
 impl BlitzContextImpl {
@@ -149,7 +150,8 @@ impl BlitzContextImpl {
       custom_md_kind_names: StringMap::new(),
       global_object_sections: DenseMap::new(),
       global_value_partitions: DenseMap::new(),
-      bundle_tag_cache: StringMap::new()
+      bundle_tag_cache: StringMap::new(),
+      discard_value_names: false,
     }
   }
   pub fn get_or_insert_bundle_tag() {}
