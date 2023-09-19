@@ -5,7 +5,7 @@
 use crate::adt::{string_ref::StringRef, twine::Twine};
 use super::{type_::Type, use_::Use,
   blits_context::BlitzContext,
-  metadata::MDNode
+  metadata::{MDNode, Metadata}
 };
 
 // The maximum alignment for instructions.
@@ -57,6 +57,9 @@ pub enum ValueType {
 // Setting the name on the value automatically updates the mmodule's symbol
 // table.
 pub trait Value {
+  // Identifier of this value. Alternative to pointer address.
+  fn get_id(&self) -> u64 { 0 }
+
   fn dump(&self) {}
   fn print(&self) {}
   fn print_as_operand(&self) {}
@@ -133,7 +136,13 @@ pub trait Value {
   fn has_same_subclass_optional_data(&self) {}
   fn has_value_handle(&self) {}
   fn is_used_by_metadata(&self) {}
+
+  // Get the current metadata attachments for the given kind, if any.
+  // These functions require that the value have at most a signle attachment
+  // of the given kind, and return None if such an attachment is missing.
   fn get_metadata_by_id(&self, _kind_id: u32) -> Option<Box<dyn MDNode>> { None }
+  fn get_metadata_by_string(&self, _kind: StringRef) -> Option<Box<dyn Metadata>> { None }
+
   fn get_all_metadata(&self) {}
 
   // Return true if this value has any metadata attached to it.

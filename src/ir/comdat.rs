@@ -3,8 +3,8 @@
 // THis file contains the declarations of the Comdat class, which
 // represents a single COMDAT in Blitz.
 
-use crate::adt::{small_ptr_set::SmallPtrSet, /*string_map::StringMapEntry*/};
-use super::global_object::GlobalObject;
+//use crate::adt::{/*small_ptr_set::SmallPtrSet,*/ /*string_map::StringMapEntry*/};
+//use super::global_object::GlobalObject;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelectionKind {
@@ -19,7 +19,7 @@ pub enum SelectionKind {
 pub struct Comdat {
   sk: SelectionKind,
   //name: StringMapEntry<Box<Comdat>>,
-  users: SmallPtrSet<GlobalObject>
+  //users: SmallPtrSet<GlobalObject>
 }
 
 impl Comdat {
@@ -27,7 +27,7 @@ impl Comdat {
     Comdat {
       sk: SelectionKind::Any,
       //name: StringMapEntry::new(),
-      users: SmallPtrSet::new()
+      //users: SmallPtrSet::new()
     }
   }
 
@@ -41,9 +41,9 @@ impl Comdat {
 
   pub fn get_name(&self) {}
 
-  pub fn get_users(&self) -> &SmallPtrSet<GlobalObject> {
-    &self.users
-  }
+  //pub fn get_users(&self) -> &SmallPtrSet<GlobalObject> {
+    //&self.users
+  //}
 
   pub fn print(&self) {
     // print_blitz_name(self.get_name())
@@ -61,11 +61,11 @@ impl Comdat {
     self.print()
   }
 
-  fn add_user(&mut self, go: GlobalObject) {
-    self.users.insert(go)
-  }
+  //fn add_user(&mut self, go: GlobalObject) {
+    //self.users.insert(go)
+  //}
 
-  fn remove_user(&mut self, go: GlobalObject) {
-    self.users.erase(go)
-  }
+  //fn remove_user(&mut self, go: GlobalObject) {
+    //self.users.erase(go)
+  //}
 }

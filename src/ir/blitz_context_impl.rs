@@ -9,7 +9,7 @@ use crate::{
     ap_int::APInt,
     ap_float::APFloat,
     folding_set::FoldingSetNodeID,
-    string_map::StringMap, string_ref::StringRef,
+    string_map::StringMap, //string_ref::StringRef,
   },
   remarks::remark_streamer::RemarkStreamer
 };
@@ -23,9 +23,9 @@ use super::{
   /*value::Value,*/
   debug_info_metadata::DICompositeType,
   type_::{/*Type,*/TypeID, IntegerType, BasicType},
-  global_object::GlobalObject,
-  global_value::GlobalValue,
-  blits_context::BlitzContext,
+  //global_object::GlobalObject,
+  /*global_value::GlobalValueBase,*/
+  blits_context::BlitzContext, tracking_md_ref::TypedTrackingMDRef,
   //function::Function
 };
 
@@ -103,10 +103,10 @@ pub struct BlitzContextImpl {
   //anon_struct_types: DenseSet<>
 
   custom_md_kind_names: StringMap<u32>,
-  //value_metadata: DenseMap<Value, >
+  //value_metadata: HashMap<u64, MDAttachments>,
 
-  global_object_sections: DenseMap<GlobalObject, StringRef>,
-  global_value_partitions: DenseMap<GlobalValue, StringRef>,
+  //global_object_sections: DenseMap<GlobalObject, StringRef>,
+  //global_value_partitions: DenseMap<GlobalValueBase, StringRef>,
   bundle_tag_cache: StringMap<u32>,
 
   //gc_names: DenseMap<Function, String>
@@ -148,8 +148,9 @@ impl BlitzContextImpl {
       the_none_token: ConstantTokenNone::new(),
       integer_types: DenseMap::new(),
       custom_md_kind_names: StringMap::new(),
-      global_object_sections: DenseMap::new(),
-      global_value_partitions: DenseMap::new(),
+      //value_metadata: HashMap::new(),
+      //global_object_sections: DenseMap::new(),
+      //global_value_partitions: DenseMap::new(),
       bundle_tag_cache: StringMap::new(),
       discard_value_names: false,
     }
@@ -205,4 +206,38 @@ impl BlitzContextImpl {
     self.int_128_type.clone()
   }
 
+}
+
+#[derive(Debug)]
+pub struct Attachment {
+  md_kind: u32,
+  node: TypedTrackingMDRef
+}
+
+#[derive(Debug)]
+pub struct MDAttachments {
+  attachments: Vec<Attachment>
+}
+
+impl MDAttachments {
+  pub fn new() {}
+
+  pub fn empty(&self) -> bool {
+    self.attachments.is_empty()
+  }
+
+  pub fn size(&self) -> usize {
+    self.attachments.len()
+  }
+
+  // Returns the first attachment with the given id or None if no such
+  // attachment exists.
+  pub fn lookup(&self, _id: u32) {}
+
+  pub fn get() {}
+  pub fn get_all() {}
+  pub fn set() {}
+  pub fn insert() {}
+  pub fn erase() {}
+  pub fn remove_if() {}
 }

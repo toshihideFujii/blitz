@@ -3,22 +3,33 @@
 // This file contains the declaration of the Function class,
 // which represents a single function/procedure.
 
+use std::{any::Any, collections::HashSet};
 use crate::{
-  adt::{string_ref::StringRef, floating_point_mode::FPClassTest, twine::Twine, dense_set::DenseSet},
+  adt::{
+    string_ref::StringRef, floating_point_mode::FPClassTest,
+    twine::Twine, /*dense_set::DenseSet*/
+  },
+  ir::{
+    type_::{FunctionType, Type},blits_context::BlitzContext,
+    value::{ValueType, Value}, calling_conv::*,
+    attributes::{AttributeList, AttrKind, Attribute},
+    //symbol_table_list::SymbolTableList,
+    basic_block::BasicBlock,
+    metadata::Metadata,
+    module::Module, argument::Argument, metadata::MDNode,
+    debug_info_metadata::DISubprogram,
+    global_value::{LinkageTypes, /*GlobalValueBase,*/ GlobalValue, GLOBAL_VALUE_SUB_CLASS_DATA_BITS},
+    constant::Constant
+  },
   support::{alignment::MaybeAlign, mod_ref::{MemoryEffects, ModRefInfo},
   code_gen::UWTableKind}
 };
 
-use super::{
-  type_::{FunctionType, Type},
-  blits_context::BlitzContext,
-  value::{ValueType, Value}, calling_conv::*,
-  attributes::{AttributeList, AttrKind, Attribute},
-  //symbol_table_list::SymbolTableList,
-  basic_block::BasicBlock,
-  module::Module, argument::Argument, metadata::MDNode,
-  debug_info_metadata::DISubprogram, global_value::{LinkageTypes, GlobalValue}
-};
+use super::global_object::{GlobalObject, BitKind, GLOBAL_OBJECT_MASK};
+
+enum FnBitKind {
+  IsMaterializableBit = 0
+}
 
 #[derive(PartialEq, Clone)]
 pub enum ProfileCountType {
@@ -160,22 +171,38 @@ impl Function {
     self.get_function_type().is_var_arg()
   }
 
-  pub fn is_materializable(&self) -> bool { false }
-  pub fn set_is_materializable(&self, _v: bool) {}
+  pub fn is_materializable(&self) -> bool {
+    self.get_global_object_sub_class_data() &
+      (1 << FnBitKind::IsMaterializableBit as u32) != 0
+  }
+
+  pub fn set_is_materializable(&mut self, v: bool) {
+    let mask = 1 << FnBitKind::IsMaterializableBit as u32;
+    let mut val = 0; if v { val = mask; }
+    let data = !mask & self.get_global_object_sub_class_data() | val;
+    self.set_global_object_sub_class_data(data);
+  }
 
   // This method returns the ID number of the specified function, or
   // Intrinsic::not_intrinsic if the function is not an intrinsic, or
   // if the pointer is null.
+  // This value is always defined to be zero to allow easy checking for
+  // whether a function is intrinsic or not.
+  // The particular intrinsic functions which correspond to this value
+  // are defined in intrinsics.rs.
   pub fn get_intrinsic_id(&self) -> &IntrinsicID {
     &self.int_id
   }
 
   // Return true if the function's name starts with "blitz.".
+  // It's possible for this function to return true while get_intrinsic_id()
+  // returns NotIntrinsic!
   pub fn is_intrinsic(&self) -> bool {
     self.has_blitz_reserved_name
   }
 
   // Return true if int_id is an intrinsic specific to a certain target.
+  // If it is a generic intrinsic false is returned.
   pub fn is_target_intrinsic_id(_int_id: &IntrinsicID) -> bool {
     false
   }
@@ -238,7 +265,8 @@ impl Function {
   // pgo data. imports points to a set of GUIDs that needes to be imported
   // by the function for sample PGO, to enable the same inlines as the profiled
   // optimized bunary.
-  pub fn set_entry_count(&self, _count: ProfileCount, _imports: Option<DenseSet<GlobalValue>>) {}
+  //pub fn set_entry_count(&self, _count: ProfileCount,
+  //  _imports: Option<DenseSet<GlobalValueBase>>) {}
 
   // Get the entry count for this function.
   // Entry count is the number of times the function was executed.
@@ -252,7 +280,12 @@ impl Function {
     self.get_entry_count(include_synthetic).is_some()
   }
 
-  pub fn get_import_guids() {}
+  // Return the set of GUIDs  that needs to be imported to the function for
+  // sample PGO, to enable the same inlines as the profiled optimized binary.
+  pub fn get_import_guids(&self) -> HashSet<u64> {
+    HashSet::new()
+  }
+
   pub fn set_section_prefix() {}
 
   // The name of the garbage collection algorithm to use during code generation.
@@ -745,5 +778,53 @@ impl Value for Function {
     self.sub_class_data = val;
   }
 
+  fn get_metadata_by_string(&self, _kind: StringRef) -> Option<Box<dyn Metadata>> {
+    if !self.has_metadata() { return None; }
+    None
+  }
+
   fn set_metadata(&mut self, _kind_id: u32, _node: Option<Box<dyn MDNode>>) {}
+}
+
+impl Constant for Function {
+  fn as_any(&self) -> &dyn Any { self }
+}
+
+impl GlobalValue for Function {
+  fn get_global_value_sub_class_data(&self) -> u32 {
+    self.sub_class_data
+  }
+
+  fn set_global_value_sub_class_data(&mut self, v: u32) {
+    debug_assert!(v < (1 << GLOBAL_VALUE_SUB_CLASS_DATA_BITS),
+      "It will not fit.");
+    self.sub_class_data = v;
+  }
+
+  fn is_no_builtin_fn_def(&self) -> bool {
+    if self.empty() {
+      return false;
+    }
+    self.has_fn_atribute(&AttrKind::NoBuiltin)
+  }
+
+  // Functions are definitions if they have a body.
+  fn is_declaration(&self) -> bool {
+    self.empty() && !self.is_materializable()
+  }
+}
+
+impl GlobalObject for Function {
+  fn get_global_object_sub_class_data(&self) -> u32 {
+    let value_data = self.get_global_value_sub_class_data();
+    value_data >> BitKind::GlobalObjectBits as u32
+  }
+
+  fn set_global_object_sub_class_data(&mut self, v: u32) {
+    let old_data = self.get_global_value_sub_class_data();
+    let val = (old_data & GLOBAL_OBJECT_MASK) | (v << BitKind::GlobalObjectBits as u32);
+    self.set_global_value_sub_class_data(val);
+    debug_assert!(self.get_global_object_sub_class_data() == v,
+      "Representation error.");
+  }
 }

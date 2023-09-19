@@ -5,9 +5,9 @@
 
 use super::{value::{Value, ValueType}, global_value::{GlobalValue, LinkageTypes}};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug)]
 pub struct GlobalAlias {
-  gv: GlobalValue
+  gv: Box<dyn GlobalValue>
 }
 
 impl GlobalAlias {
@@ -20,10 +20,11 @@ impl GlobalAlias {
   pub fn get_aliasee() {}
   pub fn get_aliasee_object() {}
 
-  pub fn is_valid_linkage(l: LinkageTypes) -> bool {
-    GlobalValue::is_external_linkage(&l) || GlobalValue::is_local_linkage(&l) ||
-    GlobalValue::is_weak_linkage(&l) || GlobalValue::is_link_once_linkage(&l) ||
-    GlobalValue::is_available_externally_linkage(&l)
+  pub fn is_valid_linkage(_l: LinkageTypes) -> bool {
+    //GlobalValue::is_external_linkage(&l) || GlobalValue::is_local_linkage(&l) ||
+    //GlobalValue::is_weak_linkage(&l) || GlobalValue::is_link_once_linkage(&l) ||
+    //GlobalValue::is_available_externally_linkage(&l)
+    false
   }
 
   pub fn class_of(v: Box<dyn Value>) -> bool {

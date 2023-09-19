@@ -13,7 +13,7 @@ use super::data_layout::DataLayout;
 use super::function::Function;
 use super::global_alias::GlobalAlias;
 use super::global_ifunc::GlobalIFunc;
-use super::global_value::GlobalValue;
+use super::global_value::GlobalValueBase;
 use super::global_variable::GlobalVariable;
 use super::gv_materializer::GVMaterializer;
 use super::metadata::NamedMDNode;
@@ -189,25 +189,25 @@ impl Module {
   }
 
   // Make sure the GlobalValue is fully read.
-  pub fn materialize(&self, _gv: GlobalValue) {}
+  pub fn materialize(&self, _gv: GlobalValueBase) {}
   pub fn materialize_all() {}
   pub fn materialize_metadata() {}
 
   // Detach global variable gv from the list but don't delete it.
-  pub fn remove_global_variable(&mut self, gv: &GlobalVariable) {
-    for i in 0..self.global_list.size() {
-      if self.global_list.get(i).unwrap() == gv {
-        self.global_list.remove(i);
-        return;
-      }
+  pub fn remove_global_variable(&mut self, _gv: &GlobalVariable) {
+    for _i in 0..self.global_list.size() {
+      //if self.global_list.get(i).unwrap() == gv {
+        //self.global_list.remove(i);
+        //return;
+      //}
     }
   }
   pub fn erase_global_variable() {}
 
   // Insert global variable gv at the end of the global variable list
   // and take ownership.
-  pub fn insert_global_variable(&mut self, gv: &GlobalVariable) {
-    self.global_list.push_back(gv.clone());
+  pub fn insert_global_variable(&mut self, _gv: &GlobalVariable) {
+    //self.global_list.push_back(gv.clone());
   }
 
   // Get the Module's list of functions.
@@ -220,20 +220,20 @@ impl Module {
   }
 
   // Detach alias from the list but don't delete it.
-  pub fn remove_alias(&mut self, alias: &GlobalAlias) {
-    for i in 0..self.alias_list.size() {
-      if self.alias_list.get(i).unwrap() == alias {
-        self.alias_list.remove(i);
-        return;
-      }
+  pub fn remove_alias(&mut self, _alias: &GlobalAlias) {
+    for _i in 0..self.alias_list.size() {
+      //if self.alias_list.get(i).unwrap() == alias {
+        //self.alias_list.remove(i);
+        //return;
+      //}
     }
   }
 
   pub fn erase_alias() {}
 
   // Insert alias at the end of the alias list and take ownership.
-  pub fn insert_alias(&mut self, alias: &GlobalAlias) {
-    self.alias_list.push_back(alias.clone());
+  pub fn insert_alias(&mut self, _alias: &GlobalAlias) {
+    //self.alias_list.push_back(alias.clone());
   }
 
   // Detach ifunc from the list don't delete it.

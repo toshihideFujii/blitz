@@ -36,6 +36,95 @@ enum PossibleRelocationsType {
 // the same address.
 // Constants are created on demend as needed and never deleted: this clients
 // don't have to warry about the lifetime of the objects.
+pub trait Constant: Value {
+    
+  // Return true if this is the value that would be returned by get_null_value().
+  fn is_null_value(&self) -> bool { false }
+
+  // Return true if the value is one.
+  fn is_one_value(&self) -> bool { false }
+
+  // Return true if the value is not one value, or, for vectors,
+  // does not contain one value elements.
+  fn is_not_one_value(&self) -> bool {
+    !self.is_one_value()
+  }
+
+  // Return true if this is the value that would be returned by
+  // get_all_ones_value().
+  fn is_all_ones_value(&self) -> bool { false }
+
+  // Return true if the value is what would be returned by
+  // get_zero_value_for_negation().
+  fn is_negative_zero_value(&self) -> bool { false }
+
+  // Return true if the value is negative zero or null value.
+  fn is_zero_value(&self) -> bool { false }
+
+  // Return true if the value is not the smallest signed value, or,
+  // for vectors, does not contain smallest signed value.
+  fn is_not_min_signed_value(&self) -> bool { false }
+
+  // Return true if the value is the smallest signed value.
+  fn is_min_signed_value(&self) -> bool { false }
+
+  // Return true if this is a finite and non-zero floating-point scalar
+  // constant or a fixed width vector constant with all finite and non--zero
+  // elements.
+  fn is_finite_non_zero_fp(&self) -> bool { false }
+
+  // Return true if this is a normal (as opposed to denormal, infinitym nan,
+  // or zero) floating-point scalar constant or a vector constant with all
+  // normal elements.
+  fn is_normal_fp(&self) -> bool { false }
+
+  // Return true if this scalar has an exact multiplicative inverse or this
+  // vector has an exact multiplicative inverse for each element in the vector.
+  fn has_exact_inverse_fp(&self) -> bool { false }
+
+  // Return true if this is a floating-point NaN constant or a vector
+  // floating-point constant with all NaN elements.
+  fn is_nan(&self) -> bool { false }
+
+  // Return true if this constant and a constant 'y' are element-wise equal.
+  fn is_element_wise_equal(&self) -> bool { false }
+  fn contains_undef_or_poison_element(&self) {}
+  fn contains_poison_element(&self) {}
+  fn contains_undef_element(&self) {}
+  fn contains_constant_expression(&self) {}
+  fn is_thread_dependent(&self) {}
+  fn is_dll_import_dependent(&self) {}
+  fn is_constant_used(&self) {}
+  fn needs_relocation(&self) {}
+  fn needs_dynamic_relocation(&self) {}
+  // For aggregates (struct/array/vector) return the constant that corresponds
+  // to the specified element if possible, or null if not.
+  //fn get_aggregate_element(&self, _elt: u32) -> Option<Constant> {
+    //None
+  //}
+  // If all elements of the vector constant have the same value,
+  // return that value. Otherwise, return None.
+  //fn get_splat_value(&self, _allow_undefs: bool) -> Option<Constant> {
+    //None
+  //}
+  fn get_unique_integer(&self) {}
+  fn destroy_constant(&self) {}
+  fn handle_operand_change(&self) {}
+  
+  fn get_integer_value(&self) {}
+  fn remove_dead_constant_users(&self) {}
+  fn has_one_live_uses(&self) {}
+  fn strip_pointer_casts(&self) {}
+  fn replace_undefs_with(&self) {}
+  fn merge_undefs_with(&self) {}
+  fn is_manifest_constant(&self) {}
+  fn get_relocation_info(&self) {}
+  fn has_n_live_uses(&self) {}
+
+  fn as_any(&self) -> &dyn Any;
+}
+
+
 #[derive(Debug)]
 pub struct ConstantBase {
   v_type: Box<dyn Type>,
@@ -259,94 +348,6 @@ impl ConstantBase {
   pub fn get_splat_value(&self, _allow_undefs: bool) -> Option<ConstantBase> {
     None
   }
-}
-
-pub trait Constant: Value {
-    
-  // Return true if this is the value that would be returned by get_null_value().
-  fn is_null_value(&self) -> bool { false }
-
-  // Return true if the value is one.
-  fn is_one_value(&self) -> bool { false }
-
-  // Return true if the value is not one value, or, for vectors,
-  // does not contain one value elements.
-  fn is_not_one_value(&self) -> bool {
-    !self.is_one_value()
-  }
-
-  // Return true if this is the value that would be returned by
-  // get_all_ones_value().
-  fn is_all_ones_value(&self) -> bool { false }
-
-  // Return true if the value is what would be returned by
-  // get_zero_value_for_negation().
-  fn is_negative_zero_value(&self) -> bool { false }
-
-  // Return true if the value is negative zero or null value.
-  fn is_zero_value(&self) -> bool { false }
-
-  // Return true if the value is not the smallest signed value, or,
-  // for vectors, does not contain smallest signed value.
-  fn is_not_min_signed_value(&self) -> bool { false }
-
-  // Return true if the value is the smallest signed value.
-  fn is_min_signed_value(&self) -> bool { false }
-
-  // Return true if this is a finite and non-zero floating-point scalar
-  // constant or a fixed width vector constant with all finite and non--zero
-  // elements.
-  fn is_finite_non_zero_fp(&self) -> bool { false }
-
-  // Return true if this is a normal (as opposed to denormal, infinitym nan,
-  // or zero) floating-point scalar constant or a vector constant with all
-  // normal elements.
-  fn is_normal_fp(&self) -> bool { false }
-
-  // Return true if this scalar has an exact multiplicative inverse or this
-  // vector has an exact multiplicative inverse for each element in the vector.
-  fn has_exact_inverse_fp(&self) -> bool { false }
-
-  // Return true if this is a floating-point NaN constant or a vector
-  // floating-point constant with all NaN elements.
-  fn is_nan(&self) -> bool { false }
-
-  // Return true if this constant and a constant 'y' are element-wise equal.
-  fn is_element_wise_equal(&self) -> bool { false }
-  fn contains_undef_or_poison_element(&self) {}
-  fn contains_poison_element(&self) {}
-  fn contains_undef_element(&self) {}
-  fn contains_constant_expression(&self) {}
-  fn is_thread_dependent(&self) {}
-  fn is_dll_import_dependent(&self) {}
-  fn is_constant_used(&self) {}
-  fn needs_relocation(&self) {}
-  fn needs_dynamic_relocation(&self) {}
-  // For aggregates (struct/array/vector) return the constant that corresponds
-  // to the specified element if possible, or null if not.
-  //fn get_aggregate_element(&self, _elt: u32) -> Option<Constant> {
-    //None
-  //}
-  // If all elements of the vector constant have the same value,
-  // return that value. Otherwise, return None.
-  //fn get_splat_value(&self, _allow_undefs: bool) -> Option<Constant> {
-    //None
-  //}
-  fn get_unique_integer(&self) {}
-  fn destroy_constant(&self) {}
-  fn handle_operand_change(&self) {}
-  
-  fn get_integer_value(&self) {}
-  fn remove_dead_constant_users(&self) {}
-  fn has_one_live_uses(&self) {}
-  fn strip_pointer_casts(&self) {}
-  fn replace_undefs_with(&self) {}
-  fn merge_undefs_with(&self) {}
-  fn is_manifest_constant(&self) {}
-  fn get_relocation_info(&self) {}
-  fn has_n_live_uses(&self) {}
-
-  fn as_any(&self) -> &dyn Any;
 }
 
 pub fn get_null_value(t: &Box<&dyn Type>) -> Box<dyn Constant> {

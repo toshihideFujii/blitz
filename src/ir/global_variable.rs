@@ -1,35 +1,45 @@
 #![allow(dead_code)]
 
-// This file represents the declaration of the GlobalVariable
-// class, which represents a single variable (or constant) in
-// the VM.
+// This file containes the declaration of the GlobalVariable class, 
+// which represents a single variable (or constant) in the VM.
+// Global variables are constant pointers that refer to hunks of space
+// that are allocated by either the VM, or by the linker in a static compiler.
+// A global variable may have an initial value, which is copied into the
+// executables .data area. Global Constants are required to have initializers
 
-use super::{attributes::{AttributeSet, AttrKind, Attribute},
+//use crate::adt::twine::Twine;
+
+use super::{
+  attributes::{AttributeSet, AttrKind, Attribute},
   value::{Value, ValueType}, global_object::GlobalObject,
-  global_value::GlobalValue};
+  //global_value::{GlobalValue, LinkageTypes}, constant::Constant,
+};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug)]
 pub struct GlobalVariable {
-  go: GlobalObject,
-  gv: GlobalValue,
+  go: Box<dyn GlobalObject>,
   attrs: AttributeSet,
   is_constant_global: bool,
   is_externally_initialized_constant: bool
 }
 
 impl GlobalVariable {
-  pub fn new() {}
+  //pub fn new(t: Box<dyn Type>, is_constant: bool,
+    //linkage: LinkageTypes, name: Twine) -> Self
+  //{
+    //GlobalVariable { go: (), attrs: (), is_constant_global: (), is_externally_initialized_constant: () }
+  //}
 
   // Definitions have initializers, declarations don't.
   pub fn has_initializer(&self) -> bool {
-    !self.gv.is_declaration()
+    !self.go.as_ref().is_declaration()
   }
 
   // Whether the global variable has an initializer, and any other
   // instances of the global (this can happen due to weak linkage)
   // are guaranteed to have the same initializer.
   pub fn has_definitive_initializer(&self) -> bool {
-    self.has_initializer() && !self.gv.is_interposable() &&
+    self.has_initializer() && !self.go.is_interposable() &&
     !self.is_externally_initialized()
   }
 
@@ -94,3 +104,10 @@ impl GlobalVariable {
     v.get_value_id() == ValueType::GlobalVariableVal
   }
 }
+
+/*
+impl Value for GlobalVariable {}
+impl Constant for GlobalVariable {}
+impl GlobalValue for GlobalVariable {}
+impl GlobalObject for GlobalVariable {}
+*/
