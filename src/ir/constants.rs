@@ -52,11 +52,11 @@ impl ConstantInt {
   }
 
   pub fn get_true(c: &BlitzContext) -> Option<ConstantInt> {
-    c.get_impl().as_ref().unwrap().get_true_value()
+    c.get_true_value()
   }
 
   pub fn get_false(c: &BlitzContext) -> Option<ConstantInt> {
-    c.get_impl().as_ref().unwrap().get_false_value()
+    c.get_false_value()
   }
 
   pub fn get_bool(c: &BlitzContext, v: bool) -> Option<ConstantInt> {
@@ -70,7 +70,7 @@ impl ConstantInt {
   // Return a ConstantInt with the specified value and an implied Type.
   // The type is the integer type that corresponds to the bit width of the value.
   pub fn get_from_apint(c: &BlitzContext, v: APInt) -> ConstantInt {
-    let slot = c.get_impl().as_ref().unwrap().int_constants.find(&v);
+    let slot = c.int_constants.find(&v);
     if slot.is_none() {
       let i_type = IntegerType::get(c, v.get_bit_width());
       let c_int = ConstantInt::new(i_type, v.clone());
@@ -300,9 +300,7 @@ impl ConstantFP {
   }
 
   pub fn get_constant_fp(c: &BlitzContext, v: &APFloat) -> Option<ConstantFP> {
-    let value =
-      c.get_impl().as_ref().unwrap().fp_constants.find(v);
-
+    let value = c.fp_constants.find(v);
     if value.is_none() { return None; }
     Some(value.unwrap().clone())
   }

@@ -5,7 +5,7 @@
 // and simplified interface.
 
 use crate::adt::{ap_int::APInt, twine::Twine};
-use super::{constants::ConstantInt, blits_context::BlitzContext,
+use super::{constants::ConstantInt, blits_context::blits_context_mut,
   type_::{IntegerType, self}, instruction::Instruction,
   basic_block::BasicBlock, value::Value};
 
@@ -47,7 +47,7 @@ impl OperandBundlesGuard {
 // them into a basic block either at the end of a BasicBlock, or at a specific 
 // iterator location in a block.
 struct IRBuilder {
-  context: BlitzContext
+  //context: BlitzContext
 }
 
 impl IRBuilder {
@@ -86,12 +86,12 @@ impl IRBuilder {
 
   // Get the constant value for i1 true.
   pub fn get_true(&mut self) -> ConstantInt {
-    ConstantInt::get_true(&mut self.context).unwrap()
+    ConstantInt::get_true(blits_context_mut()).unwrap()
   }
 
   // Get the constant value for i1 false.
   pub fn get_false(&mut self) -> ConstantInt {
-    ConstantInt::get_false(&mut self.context).unwrap()
+    ConstantInt::get_false(blits_context_mut()).unwrap()
   }
 
   // Get a constant value representing either true or false.
@@ -126,42 +126,42 @@ impl IRBuilder {
 
   // Get a constant integer value.
   pub fn get_int(&mut self, apint: &APInt) -> ConstantInt {
-    ConstantInt::get_from_apint(&mut self.context.clone(), apint.clone())
+    ConstantInt::get_from_apint(blits_context_mut(), apint.clone())
   }
 
   // Fetch the type representing a single bit.
   pub fn get_int_1_type(&mut self) -> IntegerType {
-    type_::get_int_1_type(&mut self.context)
+    type_::get_int_1_type(blits_context_mut())
   }
 
   // Fetch the type representing an 8-bit integer.
   pub fn get_int_8_type(&mut self) -> IntegerType {
-    type_::get_int_8_type(&mut self.context)
+    type_::get_int_8_type(blits_context_mut())
   }
 
   // Fetch the type representing a 16-bit integer.
   pub fn get_int_16_type(&mut self) -> IntegerType {
-    type_::get_int_16_type(&mut self.context)
+    type_::get_int_16_type(blits_context_mut())
   }
 
   // Fetch the type representing a 32-bit integer.
   pub fn get_int_32_type(&mut self) -> IntegerType {
-    type_::get_int_32_type(&mut self.context)
+    type_::get_int_32_type(blits_context_mut())
   }
 
   // Fetch the type representing a 64-bit integer.
   pub fn get_int_64_type(&mut self) -> IntegerType {
-    type_::get_int_64_type(&mut self.context)
+    type_::get_int_64_type(blits_context_mut())
   }
 
   // Fetch the type representing a 128-bit integer.
   pub fn get_int_128_type(&mut self) -> IntegerType {
-    type_::get_int_128_type(&mut self.context)
+    type_::get_int_128_type(blits_context_mut())
   }
 
   // Fetch the type representing an n-bit integer.
   pub fn get_int_n_type(&self, n: u32) -> IntegerType {
-    type_::get_int_n_type(&mut self.context.clone(), n)
+    type_::get_int_n_type(blits_context_mut(), n)
   }
 
   pub fn get_half_type() {}

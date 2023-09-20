@@ -212,11 +212,10 @@ impl AttributeSetNode {
       attr.profile(&mut id)
     }
 
-    let pa =
-      c.p_impl.as_ref().unwrap().as_ref().attrs_set_nodes.get(&id);
+    let pa = c.attrs_set_nodes.get(&id);
     if pa.is_none() {
       let node = AttributeSetNode::new(sorted_attrs.clone());
-      c.get_mut_impl().attrs_set_nodes.insert(id, node.clone());
+      c.attrs_set_nodes.insert(id, node.clone());
       return Some(node);
     } else {
       return Some(pa.unwrap().clone());

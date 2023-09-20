@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use crate::adt::ap_float::FltSemantics;
 use crate::adt::ap_int::APInt;
 use crate::support::type_size::TypeSize;
-use super::blits_context::BlitzContext;
+use super::blits_context::{BlitzContext, blits_context, blits_context_mut};
 //use super::value::Value;
 
 // Definitions of all of the base types for the Type system.
@@ -219,15 +219,15 @@ impl std::cmp::PartialEq for Type {
 */
 
 pub fn get_void_type(c: &BlitzContext) -> BasicType {
-  c.get_impl().as_ref().unwrap().void_type.clone()
+  c.void_type.clone()
 }
 
 pub fn get_label_type(c: &BlitzContext) -> BasicType {
-  c.get_impl().as_ref().unwrap().label_type.clone()
+  c.label_type.clone()
 }
 
 pub fn get_fp128_type(c: &BlitzContext) -> BasicType {
-  c.get_impl().as_ref().unwrap().fp128_type.clone()
+  c.fp128_type.clone()
 }
 
 pub fn get_half_type() {}
@@ -243,32 +243,32 @@ pub fn get_token_type() {}
 
 pub fn get_int_1_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_1_type().clone()
-  IntegerType::new(c.clone(), 1)
+  IntegerType::new(1)
 }
 
 pub fn get_int_8_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_8_type().clone()
-  IntegerType::new(c.clone(), 8)
+  IntegerType::new(8)
 }
 
 pub fn get_int_16_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_16_type().clone()
-  IntegerType::new(c.clone(), 16)
+  IntegerType::new(16)
 }
 
 pub fn get_int_32_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_32_type().clone()
-  IntegerType::new(c.clone(), 32)
+  IntegerType::new(32)
 }
 
 pub fn get_int_64_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_64_type().clone()
-  IntegerType::new(c.clone(), 64)
+  IntegerType::new(64)
 }
 
 pub fn get_int_128_type(c: &BlitzContext) -> IntegerType {
   //c.get_impl().get_int_128_type().clone()
-  IntegerType::new(c.clone(), 128)
+  IntegerType::new(128)
 }
 
 pub fn get_int_n_type(c: &BlitzContext, n: u32) -> IntegerType {
@@ -283,13 +283,12 @@ enum IntConstants {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BasicType {
-  context: BlitzContext,
   id: TypeID,
 }
 
 impl BasicType {
-  pub fn new(c: BlitzContext, id: TypeID) -> Self {
-    BasicType { context: c, id: id }
+  pub fn new(id: TypeID) -> Self {
+    BasicType { id: id }
   }
 }
 
@@ -299,11 +298,11 @@ impl Type for BasicType {
   }
 
   fn get_context(&self) -> &BlitzContext {
-    &self.context
+    blits_context()
   }
 
   fn get_context_mut(&mut self) -> &mut BlitzContext {
-    &mut self.context
+    blits_context_mut()
   }
 
   fn get_subclass_data(&self) -> u32 {
@@ -324,14 +323,13 @@ impl Type for BasicType {
 // integer types: Int1, Int8, Int16, Int32, Int64.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IntegerType {
-  context: BlitzContext,
   id: TypeID,
   sub_class_data: u32
 }
 
 impl IntegerType {
-  pub fn new(c: BlitzContext, num_bits: u32) -> Self {
-    IntegerType { context: c, id: TypeID::Integer, sub_class_data: num_bits }
+  pub fn new(num_bits: u32) -> Self {
+    IntegerType { id: TypeID::Integer, sub_class_data: num_bits }
   }
 
   // This static method is the primary way of constructing an IntegerType.
@@ -354,10 +352,10 @@ impl IntegerType {
       _ => println!("num_bits: {}", num_bits),
     };
 
-    let entry = c.get_impl().as_ref().unwrap().integer_types.find(&num_bits);
+    let entry = c.integer_types.find(&num_bits);
     if entry.is_none() {
       // TODO
-      let new_entry = IntegerType::new(c.clone(), num_bits);
+      let new_entry = IntegerType::new(num_bits);
       let ret_v = new_entry.clone();
       //c.get_impl().as_ref().unwrap().integer_types.insert(num_bits, new_entry);
       ret_v
@@ -412,11 +410,13 @@ impl Type for IntegerType {
   }
 
   fn get_context(&self) -> &BlitzContext {
-    &self.context
+    //&self.context
+    blits_context()
   }
 
   fn get_context_mut(&mut self) -> &mut BlitzContext {
-    &mut self.context
+    //&mut self.context
+    blits_context_mut()
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -448,7 +448,7 @@ impl Type for IntegerType {
 #[derive(Debug)]
 pub struct FunctionType {
   sub_class_data: u32,
-  context: BlitzContext,
+  //context: BlitzContext,
   contained_types: Vec<Box<dyn Type>>
 }
 
@@ -473,7 +473,7 @@ impl FunctionType {
     is_var_args: bool) -> Self
   {
     let fn_type = FunctionType {
-      sub_class_data: 0, context: result.get_context().clone(),
+      sub_class_data: 0, //context: result.get_context().clone(),
       contained_types: Vec::new()
     };
     fn_type
@@ -531,11 +531,13 @@ impl Type for FunctionType {
   }
 
   fn get_context(&self) -> &BlitzContext {
-    &self.context
+    //&self.context
+    blits_context()
   }
 
   fn get_context_mut(&mut self) -> &mut BlitzContext {
-    &mut self.context
+    //&mut self.context
+    blits_context_mut()
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -806,7 +808,7 @@ pub trait VectorType : Type {}
 #[derive(Debug)]
 pub struct FixedVectorType {
   sub_class_data: u32,
-  context: BlitzContext,
+  //context: BlitzContext,
   contained_type: Box<dyn Type>,
   element_quantity: usize
 }
@@ -817,11 +819,13 @@ impl Type for FixedVectorType {
   }
 
   fn get_context(&self) -> &BlitzContext {
-    &self.context
+    //&self.context
+    blits_context()
   }
 
   fn get_context_mut(&mut self) -> &mut BlitzContext {
-    &mut self.context
+    //&mut self.context
+    blits_context_mut()
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -845,7 +849,7 @@ impl FixedVectorType {
   pub fn new(v_type: Box<dyn Type>) -> Self {
     FixedVectorType {
       sub_class_data: 0,
-      context: v_type.get_context().clone(),
+      //context: v_type.get_context().clone(),
       contained_type: v_type,
       element_quantity: 0
     }

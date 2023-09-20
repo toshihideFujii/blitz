@@ -25,7 +25,7 @@ use crate::{
   code_gen::UWTableKind}
 };
 
-use super::global_object::{GlobalObject, BitKind, GLOBAL_OBJECT_MASK};
+use super::{global_object::{GlobalObject, BitKind, GLOBAL_OBJECT_MASK}, blits_context::blits_context_mut};
 
 enum FnBitKind {
   IsMaterializableBit = 0
@@ -321,9 +321,8 @@ impl Function {
   pub fn add_param_attr_by_kind(&mut self, arg_no: usize,
     kind: &AttrKind) -> AttributeList
   {
-    let mut c = self.get_context_mut().clone();
     let attr_sets = &self.attribute_sets;
-    attr_sets.add_param_attribute_by_kind(&mut c, arg_no, kind)
+    attr_sets.add_param_attribute_by_kind(blits_context_mut(), arg_no, kind)
   }
 
   pub fn add_param_attrs(&self) {}
@@ -338,8 +337,7 @@ impl Function {
 
   // Removes the attribute from the list of attributes.
   pub fn remove_param_attr(&mut self, arg_no: usize, kind: &AttrKind) {
-    let mut c = self.get_context_mut().clone();
-    self.attribute_sets.remove_param_attribute_by_kind(&mut c, arg_no, kind);
+    self.attribute_sets.remove_param_attribute_by_kind(blits_context_mut(), arg_no, kind);
   }
 
   pub fn remove_param_attrs() {}

@@ -331,15 +331,15 @@ pub trait MDNode : Debug {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MDNodeBase {
-  context: BlitzContext,
+  //context: BlitzContext,
   id: MetadataKind,
   storage: StorageType,
   header: Header
 }
 
 impl MDNodeBase {
-  pub fn new(context: BlitzContext, id: MetadataKind, storage: StorageType) -> Self {
-    MDNodeBase { context: context, id: id, storage: storage, header: Header::new() }
+  pub fn new(id: MetadataKind, storage: StorageType) -> Self {
+    MDNodeBase { id: id, storage: storage, header: Header::new() }
   }
 }
 
@@ -441,9 +441,9 @@ pub struct MDTuple {
 }
 
 impl MDTuple {
-  pub fn new(c: BlitzContext, storage: StorageType, hash: u32) -> Self {
+  pub fn new(storage: StorageType, hash: u32) -> Self {
     MDTuple {
-      node: MDNodeBase::new(c, MetadataKind::MDTupleKind, storage),
+      node: MDNodeBase::new(MetadataKind::MDTupleKind, storage),
       sub_class_data: hash
     }
   }
@@ -454,10 +454,10 @@ impl MDTuple {
 
   pub fn recalculate_hash(&self) {}
 
-  pub fn get_impl(c: BlitzContext, _mds: Vec<Box<dyn Metadata>>,
+  pub fn get_impl(_c: BlitzContext, _mds: Vec<Box<dyn Metadata>>,
     storage: StorageType, _should_create: bool) -> MDTuple
   {
-    MDTuple::new(c, storage, 0)
+    MDTuple::new(storage, 0)
   }
 
   // Get the hash, if any.

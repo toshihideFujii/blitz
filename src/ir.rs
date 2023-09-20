@@ -7,7 +7,6 @@ pub mod attributes;
 pub mod auto_upgrade;
 pub mod basic_block;
 pub mod blits_context;
-pub mod blitz_context_impl;
 pub mod blitz_remark_streamer;
 pub mod calling_conv;
 pub mod cfg;

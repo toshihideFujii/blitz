@@ -20,6 +20,8 @@ use crate::{
   },
 };
 
+use super::blits_context::blits_context_mut;
+
 #[derive(Debug, Clone)]
 pub enum AllocFnKind {
   Unknown = 0,
@@ -157,13 +159,12 @@ impl Attribute {
       debug_assert!(val == 0, "Value must be zero for enum attributes.");
     }
 
-    let attr_impl =
-      c.get_impl().as_ref().unwrap().attrs_set.get(&id);
+    let attr_impl = c.attrs_set.get(&id);
     if attr_impl.is_none() {
       let mut kind_id = AttrEntryKind::EnumAttrEntry;
       if is_int_attr { kind_id = AttrEntryKind::IntAttrEntry }
       let v = AttributeImpl::new(kind_id, kind.clone(), val, None);
-      c.get_mut_impl().attrs_set.insert(id, v.clone());
+      c.attrs_set.insert(id, v.clone());
       return Attribute::new(Some(v));
     } else {
       return Attribute::new(Some(attr_impl.unwrap().clone()));
@@ -181,8 +182,7 @@ impl Attribute {
     id.add_integer_u32(kind.clone() as u32);
     // id.add(t)
 
-    let attr_impl =
-      c.get_impl().as_ref().unwrap().attrs_set.get(&id);
+    let attr_impl = c.attrs_set.get(&id);
     if attr_impl.is_none() {
       return Attribute::new(Some(attr_impl.unwrap().clone()));
     } else {
@@ -476,7 +476,7 @@ impl Attribute {
     debug_assert!(self.is_valid(), "Invalid attribute doesn't refer to any context.");
     let mut id = FoldingSetNodeID::new();
     self.pimpl.as_ref().unwrap().profile(&mut id);
-    c.p_impl.as_ref().unwrap().attrs_set.get(&id) == self.pimpl.as_ref()
+    c.attrs_set.get(&id) == self.pimpl.as_ref()
   }
 
   pub fn profile(&self, id: &mut FoldingSetNodeID) {
@@ -770,12 +770,10 @@ impl AttributeList {
     let mut id = FoldingSetNodeID::new();
     AttributeListImpl::profile(&mut id, &attr_sets);
 
-    let attr_list_impl =
-      c.get_impl().as_ref().unwrap().attrs_lists.get(&id);
-
+    let attr_list_impl = c.attrs_lists.get(&id);
     if attr_list_impl.is_none() {
       let list = AttributeListImpl::new(&attr_sets);
-      c.get_mut_impl().attrs_lists.insert(id, list.clone());
+      c.attrs_lists.insert(id, list.clone());
       return AttributeList::new(Some(list));
     } else {
       return AttributeList::new(Some(attr_list_impl.unwrap().clone()))
@@ -1373,18 +1371,17 @@ impl AttributeMask {
 // test for equality, presence of attributes, etc.
 #[derive(Debug, Clone)]
 pub struct AttrBuilder {
-  c: BlitzContext,
+  //c: BlitzContext,
   pub attrs: Vec<Attribute>
 }
 
 impl AttrBuilder {
-  pub fn new(c: &BlitzContext) -> Self {
-    AttrBuilder { c: c.clone(), attrs: Vec::new() }
+  pub fn new(_c: &BlitzContext) -> Self {
+    AttrBuilder { attrs: Vec::new() }
   }
 
-  pub fn new_from_attr_set(c: &BlitzContext, attrs: &AttributeSet) -> Self {
+  pub fn new_from_attr_set(_c: &BlitzContext, attrs: &AttributeSet) -> Self {
     AttrBuilder {
-      c: c.clone(),
       attrs: attrs.set_node.as_ref().unwrap().attrs.clone()
     }
   }
@@ -1395,8 +1392,8 @@ impl AttrBuilder {
 
   // Add an attribute to the builder.
   pub fn add_attribute_by_kind(&mut self, kind: &AttrKind) {
-    let mut c = self.c.clone();
-    let target = Attribute::get_by_int(&mut c, kind.clone(), 0);
+    let target =
+      Attribute::get_by_int(blits_context_mut(), kind.clone(), 0);
     self.add_attribute_impl(kind, &target)
   }
 
@@ -1570,7 +1567,7 @@ impl AttrBuilder {
 
   // Add integer attribute with raw value (packed/encoded if necessary).
   pub fn add_raw_int_attr(&mut self, kind: &AttrKind, value: u64) {
-    self.add_attribute(&Attribute::get_by_int(&mut self.c.clone(),
+    self.add_attribute(&Attribute::get_by_int(blits_context_mut(),
       kind.clone(), value))
   }
 
@@ -1619,7 +1616,7 @@ impl AttrBuilder {
 
   // Add a type attribute with the given type.
   pub fn add_type_attr(&mut self, kind: &AttrKind, t: Box<dyn Type>) {
-    self.add_attribute(&Attribute::get_by_type(&mut self.c.clone(),
+    self.add_attribute(&Attribute::get_by_type(blits_context_mut(),
       kind.clone(), t))
   }
 

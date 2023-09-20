@@ -85,10 +85,10 @@ struct DINode {
 }
 
 impl DINode {
-  pub fn new(c: BlitzContext, id: MetadataKind, storage: StorageType, tag: u32) -> Self
+  pub fn new(_c: BlitzContext, id: MetadataKind, storage: StorageType, tag: u32) -> Self
   {
     DINode {
-      node: MDNodeBase::new(c, id, storage),
+      node: MDNodeBase::new(id, storage),
       sub_class_data_16: tag
     }
   }
@@ -254,9 +254,9 @@ struct DIAssignID {
 }
 
 impl DIAssignID {
-  pub fn new(c: BlitzContext, storage: StorageType) -> Self {
+  pub fn new(_c: BlitzContext, storage: StorageType) -> Self {
     DIAssignID {
-      node: MDNodeBase::new(c, MetadataKind::DIAssignIDKind, storage)
+      node: MDNodeBase::new(MetadataKind::DIAssignIDKind, storage)
     }
   }
 
@@ -1332,11 +1332,11 @@ pub struct DILocation {
 }
 
 impl DILocation {
-  pub fn new(c: BlitzContext, storage: StorageType, line: u32,
+  pub fn new(_c: BlitzContext, storage: StorageType, line: u32,
     column: u32, implicit_code: bool) -> Self
   {
     DILocation {
-      node: Box::new(MDNodeBase::new(c, MetadataKind::DILocationKind, storage)),
+      node: Box::new(MDNodeBase::new(MetadataKind::DILocationKind, storage)),
       sub_class_data_1: implicit_code,
       sub_class_data_16: column,
       sub_class_data_32: line
