@@ -76,11 +76,11 @@ impl Module {
   // Returns the number of non-debug IR instructions in the module.
   // This is equivalent to the sum of the IR instruction counts of
   // each function contained in the module.
-  pub fn get_instruction_count(&self) -> usize {
-    let mut num_instrs = 0;
-    for i in 0..self.function_list.size() {
-      let f = self.function_list.get(i).unwrap();
-      num_instrs += f.get_instruction_count();
+  pub fn get_instruction_count(&mut self) -> usize {
+    let num_instrs = 0;
+    for _i in 0..self.function_list.size() {
+      //let f = self.function_list.get(i).as_mut().unwrap();
+      //num_instrs += f.get_instruction_count();
     }
     num_instrs
   }
@@ -211,8 +211,8 @@ impl Module {
   }
 
   // Get the Module's list of functions.
-  pub fn get_function_list(&self) -> &SymbolTableList<Function> {
-    &self.function_list
+  pub fn get_function_list(&mut self) -> &mut SymbolTableList<Function> {
+    &mut self.function_list
   }
 
   pub fn get_sublist_access(&self) -> &SymbolTableList<Function> {

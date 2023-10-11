@@ -6,7 +6,7 @@
 
 use crate::adt::{ap_int::APInt, twine::Twine};
 use super::{constants::ConstantInt, blits_context::blits_context_mut,
-  type_::{IntegerType, self}, instruction::Instruction,
+  type_::{IntegerType, self}, instruction::InstructionBase,
   basic_block::BasicBlock, value::Value};
 
 // This provides the default implementation of the IRBuilder
@@ -15,7 +15,7 @@ use super::{constants::ConstantInt, blits_context::blits_context_mut,
 struct IRBuilderDefaultInserter {}
 impl IRBuilderDefaultInserter {
   pub fn new() {}
-  pub fn insert_helper(&self, i: Instruction, name: Twine, bb: Option<BasicBlock>) {
+  pub fn insert_helper(&self, i: InstructionBase, name: Twine, bb: Option<BasicBlock>) {
     if bb.is_some() {
       i.insert_into(bb.unwrap());
     }

@@ -3,13 +3,14 @@
 // This file contains the declaration of the Instruction class,
 // which is the base class for all of the instructions.
 
+use std::{any::Any, fmt::Debug};
 use crate::adt::{string_ref::StringRef, twine::Twine};
 use super::{
   basic_block::BasicBlock,
-  blits_context::{BlitzContext, MDKind},
+  blits_context::MDKind,
   debug_loc::DebugLoc, function::Function,
   value::{Value, ValueType}, 
-  type_::Type, metadata::MDNode, use_::Use
+  type_::Type, metadata::MDNode, use_::Use,
 };
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -185,8 +186,39 @@ pub enum OtherOps {
   Freeze = 67
 }
 
+pub trait Instruction: Debug {
+  fn get_parent(&self) -> &Option<BasicBlock> { &None }
+
+  // Returns a member of one of the enums like Instruction::Add.
+  fn get_op_code(&self) -> OpCode { OpCode::Unknown }
+
+  fn is_terminator(&self) -> bool { false }
+
+  fn is_exceptional_terminator(&self) -> bool { false }
+
+  // Return true if this instruction has an AtomicOrdering of unordered
+  // or higher.
+  fn is_atomic(&self) -> bool { false }
+
+  // Return the number of successors that this instruction has.
+  // The instruction must be a terminator.
+  fn get_num_successors(&self) -> usize { 0 }
+
+  // Return the specified successor. This instruction must be a terminator.
+  fn get_successor(&self, _index: u32) -> Option<&BasicBlock> { None }
+
+  // Return true if the instruction is a blitz.lifetime.start or
+  // blitz.lifetime.end marker.
+  fn is_lifetime_start_or_end(&self) -> bool { false }
+
+  // Return true if the instruction is a variety of EH-block.
+  fn is_eh_pad(&self) -> bool { false }
+
+  fn as_any(&self) -> &dyn Any;
+}
+
 #[derive(Debug)]
-pub struct Instruction {
+pub struct InstructionBase {
   v_type: Box<dyn Type>,
   has_metadata: bool,
   parent: Option<BasicBlock>,
@@ -194,18 +226,18 @@ pub struct Instruction {
   order: u32
 }
 
-impl Instruction {
+impl InstructionBase {
   pub fn new_ib(v_type: Box<dyn Type>, _i_type: u32, _ops: Option<Use>,
-    _num_ops: u32, _insert_before: Option<Box<Instruction>>) -> Self
+    _num_ops: u32, _insert_before: Option<Box<InstructionBase>>) -> Self
   {
-    Instruction { v_type: v_type, has_metadata: false, parent: None,
+    InstructionBase { v_type: v_type, has_metadata: false, parent: None,
       dbg_loc: None, order: 0 }
   }
 
   pub fn new_ie(v_type: Box<dyn Type>, _i_type: u32, _ops: Option<Use>,
     _num_ops: u32, _insert_at_end: Option<BasicBlock>) -> Self
   {
-    Instruction { v_type: v_type, has_metadata: false, parent: None,
+    InstructionBase { v_type: v_type, has_metadata: false, parent: None,
       dbg_loc: None, order: 0 }
   }
 
@@ -238,37 +270,37 @@ impl Instruction {
   pub fn comes_before() {}
   pub fn get_insertion_poiint_after_def() {}
 
-  // Returns a member of one of the enums like Instruction::Add.
+  // Returns a member of one of the enums like InstructionBase::Add.
   pub fn get_op_code(&self) -> OpCode { OpCode::Unknown }
 
   pub fn get_opcode_name() {}
 
   pub fn is_terminator(&self) -> bool {
-    Instruction::is_terminator_static(self.get_op_code())
+    InstructionBase::is_terminator_static(self.get_op_code())
   }
 
   pub fn is_unary_op(&self) -> bool {
-    Instruction::is_unary_op_static(self.get_op_code())
+    InstructionBase::is_unary_op_static(self.get_op_code())
   }
 
   pub fn is_binary_op(&self) -> bool {
-    Instruction::is_binary_op_static(&self.get_op_code())
+    InstructionBase::is_binary_op_static(&self.get_op_code())
   }
 
   pub fn is_int_div_rem(&self) -> bool {
-    Instruction::is_int_div_rem_static(self.get_op_code())
+    InstructionBase::is_int_div_rem_static(self.get_op_code())
   }
 
   pub fn is_shift(&self) -> bool {
-    Instruction::is_shift_static(self.get_op_code())
+    InstructionBase::is_shift_static(self.get_op_code())
   }
 
   pub fn is_cast(&self) -> bool {
-    Instruction::is_cast_static(self.get_op_code())
+    InstructionBase::is_cast_static(self.get_op_code())
   }
 
   pub fn is_funclet_pad(&self) -> bool {
-    Instruction::is_funclet_pad_static(self.get_op_code())
+    InstructionBase::is_funclet_pad_static(self.get_op_code())
   }
 
   pub fn is_exceptional_terminator() {}
@@ -283,7 +315,7 @@ impl Instruction {
   }
 
   pub fn is_bitwise_logic_op(&self) -> bool {
-    Instruction::is_bitwise_logic_op_static(self.get_op_code())
+    InstructionBase::is_bitwise_logic_op_static(self.get_op_code())
   }
 
   pub fn is_terminator_static(opcode: OpCode) -> bool {
@@ -435,7 +467,6 @@ impl Instruction {
   pub fn may_write_to_memory() {}
   pub fn may_read_from_memory() {}
   pub fn may_read_or_write_memory() {}
-  pub fn is_atomic(&self) -> bool { false }
   pub fn has_atomic_load() {}
   pub fn has_atomic_store() {}
   pub fn is_volatile() {}
@@ -444,8 +475,6 @@ impl Instruction {
   pub fn may_have_side_effects() {}
   pub fn is_safe_to_remove() {}
   pub fn will_return() {}
-  pub fn is_eh_pad() {}
-  pub fn is_lifetime_start_or_end() {}
   pub fn is_launder_or_strip_invariant_group() {}
   pub fn is_debug_or_pseudo_inst() {}
   pub fn get_next_non_debug_instruction() {}
@@ -480,21 +509,13 @@ impl Instruction {
 
 }
 
-impl Value for Instruction {
+impl Value for InstructionBase {
   fn get_value_id(&self) -> ValueType {
     ValueType::InstructionVal
   }
 
   fn get_type(&self) -> &dyn Type {
     self.v_type.as_ref()
-  }
-
-  fn get_context(&self) -> &BlitzContext {
-    self.v_type.as_ref().get_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    self.v_type.get_context_mut()
   }
 
   // Return true if this instruction has any metadata attached to it.
@@ -523,62 +544,10 @@ impl Value for Instruction {
   }
 
   fn set_name(&self, _name: Twine) {}
-}
 
-struct ICmpInst {}
-impl ICmpInst {
-  pub fn new() {}
-  pub fn get_signed_predicate() {}
-  pub fn get_unsigned_predicate() {}
-  pub fn is_equality() {}
-  pub fn is_commutative() {}
-  pub fn is_relational() {}
-  pub fn is_gt() {}
-  pub fn is_lt() {}
-  pub fn is_ge() {}
-  pub fn is_le() {}
-  pub fn predicates() {}
-  pub fn swap_operands() {}
-  pub fn compare() {}
-  pub fn class_of() {}
-}
-
-struct FCmpInst {}
-impl FCmpInst {
-  pub fn new() {}
-}
-
-struct SelectInst {}
-impl SelectInst {
-  pub fn new() {}
-  pub fn get_condition() {}
-  pub fn get_true_value() {}
-  pub fn get_false_value() {}
-  pub fn set_condition() {}
-  pub fn set_true_value() {}
-  pub fn set_false_value() {}
-  pub fn swap_values() {}
-  pub fn are_invalid_operands() {}
-  pub fn get_opcode() {}
-  pub fn class_of() {}
-}
-
-struct VAArgInst {}
-impl VAArgInst {
-  pub fn new() {}
-  pub fn get_pointer_operand() {}
-  pub fn get_pointer_operand_index() {}
-  pub fn class_of() {}
-}
-
-struct ExtractElementInst {}
-impl ExtractElementInst {
-  pub fn new() {}
-  pub fn is_valid_operands() {}
-  pub fn get_vector_operand() {}
-  pub fn get_index_operand() {}
-  pub fn get_vector_operand_type() {}
-  pub fn class_of() {}
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
 }
 
 struct InsertElementInst {}
@@ -587,36 +556,6 @@ impl InsertElementInst {
   pub fn is_valid_operands() {}
   pub fn get_type() {}
   pub fn class_of() {}
-}
-
-struct ShuffleVectorInst {}
-impl ShuffleVectorInst {
-  pub fn new() {}
-}
-
-struct ExtractValueInst {}
-impl ExtractValueInst {
-  pub fn new() {}
-}
-
-struct InsertValueInst {}
-impl InsertValueInst {
-  pub fn new() {}
-}
-
-struct PhiNode {}
-impl PhiNode {
-  pub fn new() {}
-}
-
-struct LandingPadInst {}
-impl LandingPadInst {
-  pub fn new() {}
-}
-
-struct ReturnInst {}
-impl ReturnInst {
-  pub fn new() {}
 }
 
 struct BranchInst {}

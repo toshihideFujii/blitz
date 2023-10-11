@@ -2,10 +2,11 @@
 
 // This file declares the Argument class.
 
+use std::any::Any;
 use crate::{support::alignment::MaybeAlign,
   adt::floating_point_mode::FPClassTest};
 use super::{
-  blits_context::BlitzContext, function::Function,
+  function::Function,
   value::{Value, ValueType},
   type_::Type, attributes::{AttrKind, Attribute, AttributeSet}
 };
@@ -307,15 +308,11 @@ impl Value for Argument {
     self.v_type.as_ref()
   }
 
-  fn get_context(&self) -> &BlitzContext {
-    self.v_type.get_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    self.v_type.get_context_mut()
-  }
-
   fn get_value_id(&self) -> ValueType {
     ValueType::ArgumentVal
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }

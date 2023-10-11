@@ -6,11 +6,12 @@
 use std::{any::Any, collections::HashSet};
 use crate::{
   adt::{
-    string_ref::StringRef, floating_point_mode::FPClassTest,
-    twine::Twine, /*dense_set::DenseSet*/
+    string_ref::StringRef, floating_point_mode::{FPClassTest, parse_denormal_fp_attribute, DenormalMode},
+    twine::Twine, ap_float::FltSemantics, /*dense_set::DenseSet*/
   },
   ir::{
-    type_::{FunctionType, Type},blits_context::BlitzContext,
+    type_::{FunctionType, Type},
+    blits_context::{blits_context, blits_context_mut},
     value::{ValueType, Value}, calling_conv::*,
     attributes::{AttributeList, AttrKind, Attribute},
     //symbol_table_list::SymbolTableList,
@@ -18,14 +19,14 @@ use crate::{
     metadata::Metadata,
     module::Module, argument::Argument, metadata::MDNode,
     debug_info_metadata::DISubprogram,
-    global_value::{LinkageTypes, /*GlobalValueBase,*/ GlobalValue, GLOBAL_VALUE_SUB_CLASS_DATA_BITS},
+    global_value::{IntrinsicID, LinkageTypes, /*GlobalValueBase,*/ GlobalValue, GLOBAL_VALUE_SUB_CLASS_DATA_BITS},
     constant::Constant
   },
   support::{alignment::MaybeAlign, mod_ref::{MemoryEffects, ModRefInfo},
   code_gen::UWTableKind}
 };
 
-use super::{global_object::{GlobalObject, BitKind, GLOBAL_OBJECT_MASK}, blits_context::blits_context_mut};
+use super::{global_object::{GlobalObject, BitKind, GLOBAL_OBJECT_MASK}, attributes::{AttrBuilder, AttributeMask}};
 
 enum FnBitKind {
   IsMaterializableBit = 0
@@ -60,22 +61,6 @@ impl ProfileCount {
   pub fn is_synthetic(&self) -> bool {
     self.pct == ProfileCountType::Sunthetic
   }
-}
-
-#[derive(Debug)]
-pub enum IntrinsicID {
-  FAdd,
-  FSub,
-  FMul,
-  FDiv,
-  FRem,
-  FPExt,
-  SIToFP,
-  UIToFP,
-  FPToSI,
-  FPToUI,
-  FPTrunc,
-  NotIntrinsic
 }
 
 #[derive(Debug)]
@@ -115,7 +100,7 @@ impl Function {
       "Invalid return type.");
 
     // We only need a symbol table for a function if the context keeps value names.
-    if !func.get_context().should_discard_value_names() {
+    if !blits_context().should_discard_value_names() {
       // TODO
     }
 
@@ -141,17 +126,17 @@ impl Function {
     self
   }
 
-  pub fn get_parent(&self) -> &Option<Module> {
-    &self.parent
+  pub fn get_parent(&mut self) -> &mut Option<Module> {
+    &mut self.parent
   }
 
   // Returns the number of non-debug IR instructions in this function.
   // This is equivalent to the sum of the sizes of each basic block contained
   // within this function.
-  pub fn get_instruction_count(&self) -> usize {
+  pub fn get_instruction_count(&mut self) -> usize {
     let mut num_instrs = 0;
-    for bb in &self.basic_blocks {
-      num_instrs += bb.instruction_count_without_debug();
+    for bb in &mut self.basic_blocks {
+      num_instrs += bb.instructions_without_debug(true).len();
     }
     num_instrs
   }
@@ -293,9 +278,21 @@ impl Function {
     self.get_subclass_data_from_value() & (1 << 14) != 0
   }
 
-  pub fn get_gc() {}
-  pub fn set_gc(&self) {}
-  pub fn clear_gc() {}
+  pub fn get_gc(&self) -> String {
+    debug_assert!(self.has_gc(), "Function has no collector.");
+    blits_context().get_gc(self)
+  }
+
+  pub fn set_gc(&mut self, name: String) {
+    self.set_value_subclass_data_bit(14, !name.is_empty());
+    blits_context_mut().set_gc(&self, name.clone());
+  }
+
+  pub fn clear_gc(&mut self) {
+    if !self.has_gc() { return; }
+    blits_context_mut().delete_gc(self);
+    self.set_value_subclass_data_bit(14, false);
+  }
 
   // Return the attribute list for this function.
   pub fn get_attributes(&self) -> &AttributeList {
@@ -307,40 +304,115 @@ impl Function {
     self.attribute_sets = attrs;
   }
   
-  pub fn add_attribute_at_index(&self) {}
+  // Adds the attribute to the list of attributes.
+  pub fn add_attribute_at_index(&mut self, i: usize, attr: &Attribute) {
+    self.attribute_sets =
+      self.attribute_sets.add_attribute_at_index(blits_context_mut(), i, attr);
+  }
 
   // Add function attributes to this function.
-  pub fn add_fn_attr(&self, _kind: AttrKind) {}
+  pub fn add_fn_attr_by_kind(&mut self, kind: &AttrKind) {
+    self.attribute_sets =
+      self.attribute_sets.add_fn_attribute_by_kind(blits_context_mut(), kind);
+  }
 
-  pub fn add_fn_attrs(&self) {}
-  pub fn add_ret_attr(&self, _kind: AttrKind) {}
-  pub fn add_ret_attrs(&self) {}
-  pub fn add_param_attr(&self) {}
+  // Add function attributes to this function.
+  pub fn add_fn_attr_by_string(&self) {}
+
+  // Add function attributes to this function.
+  pub fn add_fn_attr(&mut self, attr: &Attribute) {
+    self.attribute_sets =
+      self.attribute_sets.add_fn_attribute(blits_context_mut(), attr);
+  }
+
+  // Add function attributes to this function.
+  pub fn add_fn_attrs(&mut self, b: &AttrBuilder) {
+    self.attribute_sets =
+      self.attribute_sets.add_fn_attributes(blits_context_mut(), b);
+  }
+
+  // Add return value attributes to this function.
+  pub fn add_ret_attr_by_kind(&mut self, kind: &AttrKind) {
+    self.attribute_sets =
+      self.attribute_sets.add_ret_attribute_by_kind(blits_context_mut(), kind);
+  }
+
+  // Add return value attributes to this function.
+  pub fn add_ret_attr(&mut self, attr: &Attribute) {
+    self.attribute_sets =
+      self.attribute_sets.add_ret_attribute(blits_context_mut(), attr);
+  }
+
+  // Add return value attributes to this function.
+  pub fn add_ret_attrs(&mut self, b: &AttrBuilder) {
+    self.attribute_sets =
+      self.attribute_sets.add_ret_attributes(blits_context_mut(), b);
+  }
 
   // Adds the attribute to the list of attributes for the given arg.
-  pub fn add_param_attr_by_kind(&mut self, arg_no: usize,
-    kind: &AttrKind) -> AttributeList
-  {
-    let attr_sets = &self.attribute_sets;
-    attr_sets.add_param_attribute_by_kind(blits_context_mut(), arg_no, kind)
+  pub fn add_param_attr_by_kind(&mut self, arg_no: usize, kind: &AttrKind) {
+    self.attribute_sets = self.attribute_sets.add_param_attribute_by_kind(
+      blits_context_mut(), arg_no, kind);
   }
 
-  pub fn add_param_attrs(&self) {}
-  pub fn remove_attribute_at_index(&self) {}
+  // Adds the attribute to the list of attributes for the given arg.
+  pub fn add_param_attr(&mut self, arg_no: usize, attr: &Attribute) {
+    self.attribute_sets = self.attribute_sets.add_param_attribute(
+      blits_context_mut(), vec![arg_no], attr);
+  }
 
-  // Remove function attributes from this function.
-  pub fn remove_fn_attr(&self, _kind: AttrKind) {}
-
-  pub fn remove_fn_attrs(&self) {}
-  pub fn remove_ret_attr(&self) {}
-  pub fn remove_ret_attrs(&self) {}
+  // Adds the attribute to the list of attributes for the given arg.
+  pub fn add_param_attrs(&mut self, arg_no: usize, b: &AttrBuilder) {
+    self.attribute_sets = self.attribute_sets.add_param_attributes(
+      blits_context_mut(), arg_no, b);
+  }
 
   // Removes the attribute from the list of attributes.
-  pub fn remove_param_attr(&mut self, arg_no: usize, kind: &AttrKind) {
-    self.attribute_sets.remove_param_attribute_by_kind(blits_context_mut(), arg_no, kind);
+  pub fn remove_attribute_at_index_by_kind(&mut self, i: usize, kind: &AttrKind) {
+    self.attribute_sets = self.attribute_sets.remove_attribute_at_index_by_kind(
+      blits_context_mut(), i, kind);
   }
 
-  pub fn remove_param_attrs() {}
+  // Remove function attributes from this function.
+  pub fn remove_fn_attr_by_kind(&mut self, kind: &AttrKind) {
+    self.attribute_sets = self.attribute_sets.remove_fn_attribute(
+      blits_context_mut(), kind);
+  }
+
+  pub fn remove_fn_attr_by_string(&self) {}
+
+  pub fn remove_fn_attrs(&mut self, mask: &AttributeMask) {
+    self.attribute_sets = self.attribute_sets.remove_fn_attributes_by_mask(
+      blits_context_mut(), mask);
+  }
+
+  // Removes the attribute from the return value list of attributes.
+  pub fn remove_ret_attr_by_kind(&mut self, kind: &AttrKind) {
+    self.attribute_sets = self.attribute_sets.remove_ret_attirbute_by_kind(
+      blits_context_mut(), kind);
+  }
+
+  pub fn remove_ret_attr_by_string(&self) {}
+
+  // Removes the attribute from the return value list of attributes.
+  pub fn remove_ret_attrs(&mut self, mask: &AttributeMask) {
+    self.attribute_sets = self.attribute_sets.remove_ret_attributes(
+      blits_context_mut(), mask);
+  }
+
+  // Removes the attribute from the list of attributes.
+  pub fn remove_param_attr_by_kind(&mut self, arg_no: usize, kind: &AttrKind) {
+    self.attribute_sets.remove_param_attribute_by_kind(
+      blits_context_mut(), arg_no, kind);
+  }
+
+  pub fn remove_param_attr_by_string(&self) {}
+
+  // Removes the attribute from the list of attributes.
+  pub fn remove_param_attrs(&mut self, arg_no: usize, mask: &AttributeMask) {
+    self.attribute_sets = self.attribute_sets.remove_param_attributes(
+      blits_context_mut(), arg_no, mask);
+  }
 
   // Return true if the function has the attribute.
   pub fn has_fn_atribute(&self, kind: &AttrKind) -> bool {
@@ -362,19 +434,47 @@ impl Function {
     self.attribute_sets.get_attribute_at_index(i, kind)
   }
 
-  pub fn get_fn_attribute() {}
+  // Return the attribute for the given attribute kind.
+  pub fn get_fn_attr_by_kind(&self, kind: &AttrKind) -> Option<Attribute> {
+    self.attribute_sets.get_fn_attr_by_kind(kind)
+  }
+
+  // Return the attribute for the given attribute kind.
+  pub fn get_fn_attr_by_string(&self, _kind: StringRef) -> Option<Attribute> {
+    None
+  }
+
+  pub fn get_fn_attr_as_parsed_integer(&self) {}
 
   // Gets the specified attribute from the list of attributes.
   pub fn get_param_attribute(&self, arg_no: usize, kind: &AttrKind) -> Option<Attribute> {
     self.attribute_sets.get_param_attr(arg_no, kind)
   }
 
-  pub fn remove_param_undef_implying_attrs() {}
-  pub fn get_fn_stack_align() {}
-  pub fn has_stack_protector_fn_attr() {}
-  pub fn add_dereferenceable_param_attr() {}
-  pub fn add_dereferenceable_or_null_param_attr() {}
-  pub fn get_param_alignment() {}
+  // Return the stack alignment for the function.
+  pub fn get_fn_stack_align(&self) -> Option<MaybeAlign> {
+    self.attribute_sets.get_fn_stack_alignment()
+  }
+
+  // Returns true if the function has ssp, sspstrong, or sspreq fn attrs.
+  pub fn has_stack_protector_fn_attr(&self) -> bool {
+    self.has_fn_atribute(&AttrKind::StackProtect) ||
+    self.has_fn_atribute(&AttrKind::StackProtectReq) ||
+    self.has_fn_atribute(&AttrKind::StackProtectStrong)
+  }
+
+  // Adds the dereferenceable attribute to the list of attributes for the given arg.
+  pub fn add_dereferenceable_param_attr(&mut self, arg_no: usize, bytes: u64) {
+    self.attribute_sets = self.attribute_sets.add_dereferenceable_param_attr(
+      blits_context_mut(), arg_no, bytes);
+  }
+
+  // Adds the dereferenceable_or_null attribute to the list of attributes
+  // for the given arg.
+  pub fn add_dereferenceable_or_null_param_attr(&mut self, arg_no: usize, bytes: u64) {
+    self.attribute_sets = self.attribute_sets.add_dereferenceable_or_null_param_attr(
+      blits_context_mut(), arg_no, bytes);
+  }
 
   pub fn get_param_align(&self, arg_no: usize) -> Option<MaybeAlign> {
     self.attribute_sets.get_param_alignment(arg_no)
@@ -384,6 +484,7 @@ impl Function {
     self.attribute_sets.get_param_stack_alignment(arg_no)
   }
 
+  // Extract the byval type for a parameter.
   pub fn get_param_by_val_type(&self, arg_no: usize) -> Option<Box<dyn Type>> {
     self.attribute_sets.get_param_by_val_type(arg_no)
   }
@@ -403,7 +504,10 @@ impl Function {
     self.attribute_sets.get_param_by_ref_type(arg_no)
   }
 
-  pub fn get_param_preallocated_type() {}
+  // Extract the preallocated type for a parameter.
+  pub fn get_param_preallocated_type(&self, arg_no: usize) -> Option<Box<dyn Type>> {
+    self.attribute_sets.get_param_preallocated_type(arg_no)
+  }
 
   // Extract the number of dereferenceable bytes for a parameter.
   pub fn get_param_dereferenceable_bytes(&self, arg_no: usize) -> u64 {
@@ -425,12 +529,12 @@ impl Function {
     self.has_fn_atribute(&AttrKind::PresplitCoroutine)
   }
 
-  pub fn set_presplit_coroutine(&self) {
-    self.add_fn_attr(AttrKind::PresplitCoroutine)
+  pub fn set_presplit_coroutine(&mut self) {
+    self.add_fn_attr_by_kind(&AttrKind::PresplitCoroutine)
   }
 
-  pub fn set_splitted_coroutine(&self) {
-    self.remove_fn_attr(AttrKind::PresplitCoroutine)
+  pub fn set_splitted_coroutine(&mut self) {
+    self.remove_fn_attr_by_kind(&AttrKind::PresplitCoroutine)
   }
 
   pub fn get_memory_effects(&self) -> MemoryEffects {
@@ -504,8 +608,8 @@ impl Function {
     self.has_fn_atribute(&AttrKind::NoReturn)
   }
 
-  pub fn set_does_not_return(&self) {
-    self.add_fn_attr(AttrKind::NoReturn)
+  pub fn set_does_not_return(&mut self) {
+    self.add_fn_attr_by_kind(&AttrKind::NoReturn)
   }
 
   // Determine if the function should not perform indirect branch tracking.
@@ -518,8 +622,8 @@ impl Function {
     self.has_fn_atribute(&AttrKind::NoUnwind)
   }
 
-  pub fn set_does_not_throw(&self) {
-    self.add_fn_attr(AttrKind::NoUnwind)
+  pub fn set_does_not_throw(&mut self) {
+    self.add_fn_attr_by_kind(&AttrKind::NoUnwind)
   }
 
   // Determine if the call cannot duplicated.
@@ -527,8 +631,8 @@ impl Function {
     self.has_fn_atribute(&AttrKind::NoDuplicate)
   }
 
-  pub fn set_cannot_duplicate(&self) {
-    self.add_fn_attr(AttrKind::NoDuplicate)
+  pub fn set_cannot_duplicate(&mut self) {
+    self.add_fn_attr_by_kind(&AttrKind::NoDuplicate)
   }
 
   // Determine if the call is convergent.
@@ -536,12 +640,12 @@ impl Function {
     self.has_fn_atribute(&AttrKind::Convergent)
   }
 
-  pub fn set_convergent(&self) {
-    self.add_fn_attr(AttrKind::Convergent)
+  pub fn set_convergent(&mut self) {
+    self.add_fn_attr_by_kind(&AttrKind::Convergent)
   }
 
-  pub fn set_not_convergent(&self) {
-    self.remove_fn_attr(AttrKind::Convergent)
+  pub fn set_not_convergent(&mut self) {
+    self.remove_fn_attr_by_kind(&AttrKind::Convergent)
   }
 
   // Determine if the call has sideeffects.
@@ -549,8 +653,8 @@ impl Function {
     self.has_fn_atribute(&AttrKind::Speculatable)
   }
 
-  pub fn set_speculatable(&self) {
-    self.add_fn_attr(AttrKind::Speculatable)
+  pub fn set_speculatable(&mut self) {
+    self.add_fn_attr_by_kind(&AttrKind::Speculatable)
   }
 
   // Determine if the call might deallocate memory.
@@ -558,8 +662,8 @@ impl Function {
     self.only_reads_memory() || self.has_fn_atribute(&AttrKind::NoFree)
   }
 
-  pub fn set_does_not_free_memory(&self) {
-    self.add_fn_attr(AttrKind::NoFree)
+  pub fn set_does_not_free_memory(&mut self) {
+    self.add_fn_attr_by_kind(&AttrKind::NoFree)
   }
 
   // Determine if the call can synchronize with other threads.
@@ -567,8 +671,8 @@ impl Function {
     self.has_fn_atribute(&AttrKind::NoSync)
   }
 
-  pub fn set_no_sync(&self) {
-    self.add_fn_attr(AttrKind::NoSync)
+  pub fn set_no_sync(&mut self) {
+    self.add_fn_attr_by_kind(&AttrKind::NoSync)
   }
 
   // Determine if the function is known not to recurse, directly
@@ -577,8 +681,8 @@ impl Function {
     self.has_fn_atribute(&AttrKind::NoRecurse)
   }
 
-  pub fn set_does_not_recurse(&self) {
-    self.add_fn_attr(AttrKind::NoRecurse)
+  pub fn set_does_not_recurse(&mut self) {
+    self.add_fn_attr_by_kind(&AttrKind::NoRecurse)
   }
 
   // Determine if the function is required to make forward progress.
@@ -587,8 +691,8 @@ impl Function {
     self.has_fn_atribute(&AttrKind::WillReturn)
   }
 
-  pub fn set_must_progress(&self) {
-    self.add_fn_attr(AttrKind::MustProgress)
+  pub fn set_must_progress(&mut self) {
+    self.add_fn_attr_by_kind(&AttrKind::MustProgress)
   }
 
   /// Determine if the function will return.
@@ -596,8 +700,8 @@ impl Function {
     self.has_fn_atribute(&AttrKind::WillReturn)
   }
 
-  pub fn set_will_return(&self) {
-    self.add_fn_attr(AttrKind::WillReturn)
+  pub fn set_will_return(&mut self) {
+    self.add_fn_attr_by_kind(&AttrKind::WillReturn)
   }
 
   // Get what kind of unwind table entry to generate for this function.
@@ -629,8 +733,8 @@ impl Function {
     self.attribute_sets.has_ret_attr(&AttrKind::NoAlias)
   }
 
-  pub fn set_return_does_not_alias(&self) {
-    self.add_ret_attr(AttrKind::NoAlias)
+  pub fn set_return_does_not_alias(&mut self) {
+    self.add_ret_attr_by_kind(&AttrKind::NoAlias)
   }
 
   // Do not optimize this function (-O0).
@@ -648,12 +752,78 @@ impl Function {
     self.has_fn_atribute(&AttrKind::OptimizeForSize) || self.has_min_size()
   }
   
-  pub fn get_denormal_mode() {}
-  pub fn copy_attributes_from() {}
-  pub fn delete_body() {}
-  pub fn remove_from_parent() {}
-  pub fn earse_from_parent() {}
-  pub fn steal_argument_list_from() {}
+  // Returns the denormal handling type for the default rounding mode
+  // of the function.
+  pub fn get_denormal_mode(&self, fp_type: &FltSemantics) -> DenormalMode {
+    if fp_type == &FltSemantics::ieee_single() {
+      let mode = self.get_denormal_mode_f32_raw();
+      if mode.is_valid() { return mode; }
+    }
+    self.get_denormal_mode_raw()
+  }
+
+  // Return the representational value 0f "denormal-fp-math". Code interested in
+  // the semantics of the function should use get_denormal_mode() instead.
+  fn get_denormal_mode_raw(&self) -> DenormalMode {
+    let attr = self.get_fn_attr_by_string(
+      StringRef::new_from_string("denormal-fp-math"));
+    if attr.is_some() {
+      let val = attr.unwrap().get_value_as_string();
+      return parse_denormal_fp_attribute(val);
+    }
+    DenormalMode::get_invalid()
+  }
+
+  // Return the representational value 0f "denormal-fp-math-f32". Code interested
+  // in the semantics of the function should use get_denormal_mode() instead.
+  fn get_denormal_mode_f32_raw(&self) -> DenormalMode {
+    let attr = self.get_fn_attr_by_string(
+      StringRef::new_from_string("denormal-fp-math-f32"));
+    if attr.is_some() && attr.as_ref().unwrap().is_valid() {
+      let val = attr.unwrap().get_value_as_string();
+      return parse_denormal_fp_attribute(val);
+    }
+    DenormalMode::get_invalid()
+  }
+
+  // Copt all additional attributes (those not needed to create a function) from
+  // the Function src to this one.
+  pub fn copy_attributes_from(&mut self, src: &Function) {
+    // TODO
+    if src.has_gc() {
+      self.set_gc(src.get_gc());
+    } else {
+      self.clear_gc();
+    }
+  }
+
+  // This method delets the body of the function, and converts the linkage to external.
+  pub fn delete_body(&self) {}
+
+  // This method unlinks 'self' from the containing module, but does not delete it.
+  pub fn remove_from_parent(&mut self) {
+    let parent = self.get_parent();
+    if parent.is_some() {
+      // TODO: Set index for myself to remove.
+      //parent.as_mut().unwrap().get_function_list().remove(0);
+    }
+  }
+
+  // This method unlinks 'self' from the containing module and deletes it.
+  pub fn earse_from_parent(&mut self) {
+    let parent = self.get_parent();
+    if parent.is_some() {
+      // TODO: Set index for myself to erase.
+      //parent.as_mut().unwrap().get_function_list().erase(0);
+    }
+  }
+
+  // Drop this function's arguments and splice in the ones from src.
+  // Requires that self has no function body.
+  pub fn steal_argument_list_from(&self, _src: &Function) {
+    debug_assert!(self.is_declaration(), "Expected no references to current arguments.");
+    // TODO
+  }
 
   // Get the underlying elements of the Function.
   pub fn get_basic_block_list(&self) -> &Vec<BasicBlock> /*&SymbolTableList<BasicBlock>*/ {
@@ -661,31 +831,34 @@ impl Function {
   }
 
   pub fn get_sublist_access() {}
-  pub fn get_entry_block() {}
-  pub fn get_value_symbol_table() {}
+
+  pub fn get_entry_block(&self) -> Option<&BasicBlock> {
+    self.front()
+  }
 
   pub fn size(&self) -> usize {
-    //self.basic_blocks.size()
     self.basic_blocks.len()
   }
 
   pub fn empty(&self) -> bool {
-    //self.basic_blocks.empty()
     self.basic_blocks.is_empty()
   }
 
   pub fn front(&self) -> Option<&BasicBlock> {
-    //self.basic_blocks.front()
     self.basic_blocks.first()
   }
 
   pub fn back(&self) -> Option<&BasicBlock> {
-    //self.basic_blocks.back()
     self.basic_blocks.last()
   }
 
-  pub fn arg_begin() {}
-  pub fn arg_end() {}
+  pub fn arg_begin(&self) -> Option<&Argument> {
+    self.arguments.first()
+  }
+
+  pub fn arg_end(&self) -> Option<&Argument> {
+    self.arguments.last()
+  }
 
   pub fn get_arg(&self, i: usize) -> Option<&Argument> {
     self.arguments.get(i)
@@ -749,19 +922,39 @@ impl Function {
 
   pub fn is_debug_info_for_profiling() {}
   pub fn null_pointer_is_defined() {}
+
+  fn set_value_subclass_data_bit(&mut self, bit: u32, on: bool) {
+    debug_assert!(bit < 16, "SubclassData contains only 16 bits.");
+    if on {
+      self.set_value_subclass_data(
+        self.get_subclass_data_from_value() | (1 << bit));
+    } else {
+      self.set_value_subclass_data(
+        self.get_subclass_data_from_value() & !(1 << bit));
+    }
+  }
+
+  pub fn has_lazy_arguments(&self) -> bool {
+    self.get_subclass_data_from_value() & (1 << 0) != 0
+  }
+
+  fn check_lazy_arguments(&self) {
+    if self.has_lazy_arguments() {
+      self.build_lazy_arguments();
+    }
+  }
+
+  fn build_lazy_arguments(&self) {}
+
+  fn clear_arguments(&mut self) {
+    self.arguments.clear();
+  }
+
 }
 
 impl Value for Function {
   fn get_type(&self) -> &dyn Type {
     &self.v_type
-  }
-
-  fn get_context(&self) -> &BlitzContext {
-    self.v_type.get_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    self.v_type.get_context_mut()
   }
 
   fn get_value_id(&self) -> ValueType {
@@ -778,14 +971,19 @@ impl Value for Function {
 
   fn get_metadata_by_string(&self, _kind: StringRef) -> Option<Box<dyn Metadata>> {
     if !self.has_metadata() { return None; }
+    //let info = blits_context_mut().value_metadata.
     None
   }
 
   fn set_metadata(&mut self, _kind_id: u32, _node: Option<Box<dyn MDNode>>) {}
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
 }
 
 impl Constant for Function {
-  fn as_any(&self) -> &dyn Any { self }
+  //fn as_any(&self) -> &dyn Any { self }
 }
 
 impl GlobalValue for Function {

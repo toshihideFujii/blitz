@@ -7,20 +7,22 @@ use crate::{
 };
 
 use super::{
-  instruction::{Instruction,
-  UnaryOps, BinaryOps}, value::Value, attributes::{AttributeList,
-  AttrKind, Attribute}, use_::Use, type_::FunctionType, basic_block::BasicBlock
+  instruction::{InstructionBase,
+  UnaryOps, BinaryOps, Instruction}, value::Value, attributes::{AttributeList,
+  AttrKind, Attribute}, use_::Use, type_::FunctionType,
+  basic_block::BasicBlock, blits_context::blits_context_mut
 };
 
+/*
 pub struct UnaryInstruction {
-  pub inst: Instruction
+  pub inst: InstructionBase
 }
 
 impl UnaryInstruction {
   pub fn new(v_type: Box<dyn Type>, i_type: u32, _v: Box<dyn Value>,
-    ib: Option<Box<Instruction>>) -> Self
+    ib: Option<Box<InstructionBase>>) -> Self
   {
-    UnaryInstruction { inst: Instruction::new_ib(v_type, i_type, None,
+    UnaryInstruction { inst: InstructionBase::new_ib(v_type, i_type, None,
       1, ib) }
   }
 
@@ -32,7 +34,7 @@ impl UnaryInstruction {
   pub fn set_operand(&self, _v: Option<Box<dyn Value>>) {}
   pub fn get_num_operands(&self) -> usize { 0 }
 
-  pub fn class_of(i: &Instruction) -> bool {
+  pub fn class_of(i: &InstructionBase) -> bool {
     i.is_unary_op() ||
     i.get_op_code() == OpCode::Alloca ||
     i.get_op_code() == OpCode::Load ||
@@ -42,42 +44,46 @@ impl UnaryInstruction {
     i.get_op_code() <= OpCode::AddrSpaceCast
   }
 }
+*/
+pub trait UnaryInstruction: Instruction {
+  fn get_operand(&self, _i: u32) -> Option<&Box<dyn Value>> { None }
+}
 
 struct UnaryOperator {
-  uinst: UnaryInstruction
+  uinst: Option<Box<dyn UnaryInstruction>>
 }
 
 impl UnaryOperator {
-  pub fn new(i_type: UnaryOps, s: Box<dyn Value>, v_type: Box<dyn Type>,
-    _name: Twine, ib: Option<Box<Instruction>>) -> Self
+  pub fn new(_i_type: UnaryOps, _s: Box<dyn Value>, _v_type: Box<dyn Type>,
+    _name: Twine, _ib: Option<Box<InstructionBase>>) -> Self
   {
-    UnaryOperator { uinst: UnaryInstruction::new(v_type, i_type as u32, s, ib) }
+    UnaryOperator { uinst: None, /*UnaryInstruction::new(v_type, i_type as u32, s, ib)*/ }
   }
 
   pub fn create_with_copied_flag() {}
   pub fn create_f_neg_fmf() {}
 
   pub fn get_op_code(&self) -> Option<UnaryOps> {
-    if self.uinst.get_op_code() == OpCode::FNeg {
+    if self.uinst.as_ref().unwrap().get_op_code() == OpCode::FNeg {
       return Some(UnaryOps::FNeg);
     }
     None
   }
 
-  pub fn class_of(i: &Instruction) -> bool {
+  pub fn class_of(i: &InstructionBase) -> bool {
     i.is_unary_op()
   }
 }
 
 struct BinaryOperator {
-  inst: Instruction
+  inst: InstructionBase
 }
 
 impl BinaryOperator {
   pub fn new(i_type: BinaryOps, _s1: Box<dyn Value>, _s2: Box<dyn Value>,
-    v_type: Box<dyn Type>, _name: Twine, ib: Option<Box<Instruction>>) -> Self
+    v_type: Box<dyn Type>, _name: Twine, ib: Option<Box<InstructionBase>>) -> Self
   {
-    BinaryOperator { inst: Instruction::new_ib(v_type, i_type as u32, None,
+    BinaryOperator { inst: InstructionBase::new_ib(v_type, i_type as u32, None,
       0, ib) }
   }
 
@@ -142,21 +148,21 @@ impl BinaryOperator {
 
   pub fn swap_operands() {}
 
-  pub fn class_of(i: &Instruction) -> bool {
+  pub fn class_of(i: &InstructionBase) -> bool {
     i.is_binary_op()
   }
 }
 
 // This is the base class for all instructions that perform data casts.
 struct CastInst {
-  uinst: UnaryInstruction
+  uinst: Option<Box<dyn UnaryInstruction>>
 }
 
 impl CastInst {
-  pub fn new(v_type: Box<dyn Type>, i_type: u32, s: Box<dyn Value>,
-    _name: Twine, ib: Option<Box<Instruction>>) -> Self
+  pub fn new(_v_type: Box<dyn Type>, _i_type: u32, _s: Box<dyn Value>,
+    _name: Twine, _ib: Option<Box<InstructionBase>>) -> Self
   {
-    CastInst { uinst: UnaryInstruction::new(v_type, i_type, s, ib) }
+    CastInst { uinst: None /*UnaryInstruction::new(v_type, i_type, s, ib)*/ }
   }
 
   pub fn create_zext_or_bit_cast() {}
@@ -178,108 +184,157 @@ impl CastInst {
   pub fn get_dest_type() {}
   pub fn cast_is_valid() {}
 
-  pub fn class_of(i: &Instruction) -> bool {
+  pub fn class_of(i: &InstructionBase) -> bool {
     i.is_cast()
   }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Predicate {
-  FcmpFalse = 0,
-  FcmpOeq = 1,
-  FcmpOgt = 2,
-  FcmpOge = 3,
-  FcmpOlt = 4,
-  FcmpOle = 5,
-  FcmpOne = 6,
-  FcmpOrd = 7,
-  FcmpUno = 8,
-  FcmpUeq = 9,
-  FcmpUgt = 10,
-  FcmpUge = 11,
-  FcmpUlt = 12,
-  FcmpUle = 13,
-  FcmpUne = 14,
-  FcmpTrue = 15,
-  IcmpEq = 32,
-  IcmpNe = 33,
-  IcmpUgt = 34,
-  IcmpUge = 35,
-  IcmpUlt = 36,
-  IcmpUle = 37,
-  IcmpSgt = 38,
-  IcmpSge = 39,
-  IcmpSlt = 40,
-  IcmpSle = 41
+  FCmpFalse = 0,
+  FCmpOeq = 1,
+  FCmpOgt = 2,
+  FCmpOge = 3,
+  FCmpOlt = 4,
+  FCmpOle = 5,
+  FCmpOne = 6,
+  FCmpOrd = 7,
+  FCmpUno = 8,
+  FCmpUeq = 9,
+  FCmpUgt = 10,
+  FCmpUge = 11,
+  FCmpUlt = 12,
+  FCmpUle = 13,
+  FCmpUne = 14,
+  FCmpTrue = 15,
+  ICmpEq = 32,
+  ICmpNe = 33,
+  ICmpUgt = 34,
+  ICmpUge = 35,
+  ICmpUlt = 36,
+  ICmpUle = 37,
+  ICmpSgt = 38,
+  ICmpSge = 39,
+  ICmpSlt = 40,
+  ICmpSle = 41
 }
 
 // This class is the base class for the comparison instructions.
 // Abstract base class of comparison instructions.
-pub struct CmpInst {
-  inst: Instruction
-}
-
-impl CmpInst {
-  pub fn new() {}
-  pub fn fcmp_predicates() {}
-  pub fn icmp_predicates() {}
-  pub fn get_op_code() {}
+pub trait CmpInst: Instruction {
+  fn fcmp_predicates(&self) {}
+  fn icmp_predicates(&self) {}
 
   // Return the predicaate for this instruction.
-  pub fn get_predicate(&self) -> Predicate {
-    Predicate::FcmpFalse
-  }
+  fn get_predicate(&self) -> &Predicate;
 
   // Set the predicate for this instruction to the specified type.
-  pub fn set_predicate(_p: Predicate) {}
+  fn set_predicate(&mut self, _p: Predicate) {}
 
-  pub fn is_fp_predicate(p: Predicate) -> bool {
-    Predicate::FcmpFalse <= p && p <= Predicate::FcmpTrue
+  fn is_fp_predicate(&self) -> bool {
+    &Predicate::FCmpFalse <= self.get_predicate() &&
+      self.get_predicate() <= &Predicate::FCmpTrue
   }
 
-  pub fn is_int_predicate(p: Predicate) -> bool {
-    Predicate::IcmpEq <= p && p <= Predicate::IcmpSle
+  fn is_int_predicate(&self) -> bool {
+    &Predicate::ICmpEq <= self.get_predicate() &&
+      self.get_predicate() <= &Predicate::ICmpSle
   }
 
-  pub fn get_predicate_name(&self) -> StringRef {
+  fn get_predicate_name(&self) -> StringRef {
     StringRef::new()
   }
 
-  pub fn get_inverse_predicate() {}
-  pub fn get_ordered_predicate() {}
-  pub fn get_unordered_predicate() {}
-  pub fn get_swapped_predicate() {}
-  pub fn is_strict_predicate() {}
-  pub fn is_non_strict_predicate() {}
-  pub fn get_strict_predicate() {}
-  pub fn get_non_strict_predicate() {}
-  pub fn get_flipped_strictness_predicate() {}
-  pub fn swap_operands() {}
-  pub fn is_commutative() {}
+  fn get_inverse_predicate(&self) {}
+  fn get_ordered_predicate(&self) {}
+  fn get_unordered_predicate(&self) {}
+
+  // Returns the predicate that would be the result of exchanging the
+  // two operands of the CmpInst instruction without changing the result
+  // produced.
+  // Ex: EQ->EQ, SLE->SGE, ULT->UGT, OEQ->OEQ, etc.
+  fn get_swapped_predicate(&self) -> &Predicate;
+
+  fn is_strict_predicate(&self) {}
+  fn is_non_strict_predicate(&self) {}
+  fn get_strict_predicate(&self) {}
+  fn get_non_strict_predicate(&self) {}
+  fn get_flipped_strictness_predicate(&self) {}
+  fn swap_operands(&self) {}
+
+  // Determine if this CmpInst is commutative.
+  fn is_commutative(&self) -> bool {
+    self.is_equality()
+  }
 
   // Determine if this is an equals/not equals predicate.
-  pub fn is_equality(_p: Predicate) -> bool { false }
+  fn is_equality(&self) -> bool;
 
   // Return true if the predicate is relational (not EQ or NE).
-  pub fn is_relational(p: Predicate) -> bool {
-    !CmpInst::is_equality(p)
+  fn is_relational(&self) -> bool {
+    !self.is_equality()
   }
 
-  pub fn is_signed() {}
-  pub fn is_unsigned() {}
-  pub fn get_signed_predicate() {}
-  pub fn get_unsigned_predicate() {}
-  pub fn get_flipped_signedness_predicate() {}
+  // Return true if the comparison is signed, false otherwise.
+  // Determine if this instruction is using a signed comparison.
+  fn is_signed(&self) -> bool {
+    match *self.get_predicate() {
+      Predicate::ICmpSlt => return true,
+      Predicate::ICmpSle => return true,
+      Predicate::ICmpSgt => return true,
+      Predicate::ICmpSge => return true,
+      _ => return false
+    }
+  }
+
+  // Return true if the comparison is unsigned, false otherwise.
+  // Determine if this instruction is using an unsigned comparison.
+  fn is_unsigned(&self) -> bool {
+    match *self.get_predicate() {
+      Predicate::ICmpUlt => return true,
+      Predicate::ICmpUle => return true,
+      Predicate::ICmpUgt => return true,
+      Predicate::ICmpUge => return true,
+      _ => return false
+    }
+  }
+
+  // Returns the signed version of the predicate for this instruction (which
+  // has to be an unsigned predicate).
+  // Ex: EQ->EQ, SLE->SLE, UGT->SGT, etc.
+  fn get_signed_predicate(&self) -> &Predicate {
+    debug_assert!(self.is_unsigned(), "Call only with unsigned predicates.");
+    let p = *self.get_predicate();
+    match p {
+      Predicate::ICmpUlt => return &Predicate::ICmpSlt,
+      Predicate::ICmpUle => return &Predicate::ICmpSle,
+      Predicate::ICmpUgt => return &Predicate::ICmpSgt,
+      Predicate::ICmpUge => return &Predicate::ICmpSge,
+      _ => panic!("Unknown predicate.")
+    }
+  }
+
+  // Returns the unsigned version of the predicate for this instruction (which
+  // has to be an signed predicate).
+  fn get_unsigned_predicate(&self) -> &Predicate {
+    debug_assert!(self.is_signed(), "Call only with signed predicates.");
+    let p = *self.get_predicate();
+    match p {
+      Predicate::ICmpSlt => return &Predicate::ICmpUlt,
+      Predicate::ICmpSle => return &Predicate::ICmpUle,
+      Predicate::ICmpSgt => return &Predicate::ICmpUgt,
+      Predicate::ICmpSge => return &Predicate::ICmpUge,
+      _ => panic!("Unknown predicate.")
+    }
+  }
+
+  fn get_flipped_signedness_predicate(&self) {}
 
   // Determine if the predicate is true when compareing a value with itself.
-  pub fn is_true_when_equal(_p: Predicate) -> bool { false }
+  fn is_true_when_equal(_p: Predicate) -> bool { false }
 
   // Determine if the predicate is false when compareing a value with itself.
-  pub fn is_false_when_equal(_p: Predicate) -> bool { false }
-
-  pub fn class_of(i: Instruction) -> bool {
-    i.get_op_code() == OpCode::ICmp || i.get_op_code() == OpCode::FCmp
-  }
+  fn is_false_when_equal(_p: Predicate) -> bool { false }
 }
 
 // A container for an operand bundle being viewed as a set of values rather
@@ -310,16 +365,16 @@ impl<InputT> OperandBundleDefType<InputT> {
 // Base class for all callable instructions (InvokeInst and CallInst) holds
 // everything related to calling a function.
 pub struct CallBase {
-  pub inst: Instruction,
+  pub inst: InstructionBase,
   attrs: AttributeList,
   ft: FunctionType
 }
 
 impl CallBase {
   pub fn new_ib(v_type: Box<dyn Type>, i_type: u32, ops: Option<Use>, num_ops: u32,
-    ib: Option<Box<Instruction>>, attrs: AttributeList, ft: FunctionType) -> Self {
+    ib: Option<Box<InstructionBase>>, attrs: AttributeList, ft: FunctionType) -> Self {
     CallBase {
-      inst: Instruction::new_ib(v_type, i_type, ops, num_ops, ib),
+      inst: InstructionBase::new_ib(v_type, i_type, ops, num_ops, ib),
       attrs: attrs,
       ft: ft
     }
@@ -328,7 +383,7 @@ impl CallBase {
   pub fn new_ie(v_type: Box<dyn Type>, i_type: u32, ops: Option<Use>, _num_ops: u32,
     ie: Option<BasicBlock>, attrs: AttributeList, ft: FunctionType) -> Self {
     CallBase {
-      inst: Instruction::new_ie(v_type, i_type, ops, 0, ie),
+      inst: InstructionBase::new_ie(v_type, i_type, ops, 0, ie),
       attrs: attrs,
       ft: ft
     }
@@ -431,49 +486,49 @@ impl CallBase {
   // Adds the attribute to the list of attributes.
   pub fn add_attribute_at_index(&mut self, i: u32, attr: &Attribute) {
     self.attrs = self.attrs.add_attribute_at_index(
-      self.inst.get_context_mut(), i as usize, attr);
+      blits_context_mut(), i as usize, attr);
   }
 
   // Adds the attribute to the function.
   pub fn add_fn_attr(&mut self, kind: AttrKind) {
-    self.attrs = self.attrs.add_fn_attribute_by_kind(self.inst.get_context_mut(), &kind);
+    self.attrs = self.attrs.add_fn_attribute_by_kind(blits_context_mut(), &kind);
   }
 
   // Adds the attribute to the return value.
   pub fn add_ret_attr(&mut self, attr: &Attribute) {
-    self.attrs = self.attrs.add_ret_attribute(self.inst.get_context_mut(), attr);
+    self.attrs = self.attrs.add_ret_attribute(blits_context_mut(), attr);
   }
 
   // Adds the attribute to the indicated argument.
   pub fn add_param_attr(&mut self, arg_no: u32, kind: AttrKind) {
     debug_assert!(arg_no > self.arg_size() as u32, "Out of bounds.");
     self.attrs = self.attrs.add_param_attribute_by_kind(
-      self.inst.get_context_mut(), arg_no as usize, &kind);
+      blits_context_mut(), arg_no as usize, &kind);
   }
 
   // Remove the attribute from the list of attributes.
   pub fn remove_attribute_at_index(&mut self, i: u32, kind: AttrKind) {
     self.attrs = self.attrs.remove_attribute_at_index_by_kind(
-      self.inst.get_context_mut(), i as usize, &kind);
+      blits_context_mut(), i as usize, &kind);
   }
 
   pub fn remove_fn_attrs() {}
 
   // Removes the attribute from the function.
   pub fn remove_fn_attr(&mut self, kind: AttrKind) {
-    self.attrs = self.attrs.remove_fn_attribute(self.inst.get_context_mut(), &kind);
+    self.attrs = self.attrs.remove_fn_attribute(blits_context_mut(), &kind);
   }
 
   // Removes the attribute from the return value.
   pub fn remove_ret_attr(&mut self, kind: AttrKind) {
     self.attrs = self.attrs.remove_ret_attirbute_by_kind(
-      self.inst.get_context_mut(), &kind);
+      blits_context_mut(), &kind);
   }
 
   // Removes the attribute from the given argument.
   pub fn remove_param_attr(&mut self, arg_no: u32, kind: AttrKind) {
     self.attrs = self.attrs.remove_param_attribute_by_kind(
-      self.inst.get_context_mut(), arg_no as usize, &kind);
+      blits_context_mut(), arg_no as usize, &kind);
   }
 
   pub fn remove_param_attrs() {}
@@ -481,13 +536,13 @@ impl CallBase {
   // Adds the dereferenceable attribute to the list of attributes.
   pub fn add_dereferenceable_param_attr(&mut self, i: u32, bytes: u64) {
     self.attrs = self.attrs.add_dereferenceable_param_attr(
-      self.inst.get_context_mut(), i as usize, bytes);
+      blits_context_mut(), i as usize, bytes);
   }
 
   // Adds the dereferenceable attribute to the list of attributes.
   pub fn add_dereferenceable_ret_attr(&mut self, bytes: u64) {
     self.attrs = self.attrs.add_dereferenceable_ret_attr(
-      self.inst.get_context_mut(), bytes);
+      blits_context_mut(), bytes);
   }
 
   // Determine whether the return value has the given attribute.
@@ -503,7 +558,7 @@ impl CallBase {
 
   // Get the attribute of a given kind for the function.
   pub fn get_fn_attr(&self, kind: &AttrKind) -> Attribute {
-    let a = self.attrs.get_fn_attr(kind);
+    let a = self.attrs.get_fn_attr_by_kind(kind);
     if a.is_some() || a.as_ref().unwrap().is_valid() {
       return a.unwrap();
     }

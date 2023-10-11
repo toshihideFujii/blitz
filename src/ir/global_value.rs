@@ -7,7 +7,6 @@ use std::fmt::Debug;
 use std::any::Any;
 use crate::{
   ir::{
-    blits_context::BlitzContext,
     constant::Constant,
     metadata::MDNode,
     type_::Type,
@@ -16,6 +15,26 @@ use crate::{
   },
   adt::twine::Twine
 };
+
+#[derive(Debug, Clone)]
+pub enum IntrinsicID {
+  FAdd,
+  FSub,
+  FMul,
+  FDiv,
+  FRem,
+  FPExt,
+  SIToFP,
+  UIToFP,
+  FPToSI,
+  FPToUI,
+  FPTrunc,
+
+  LifetimeStart,
+  LifetimeEnd,
+
+  NotIntrinsic
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LinkageTypes {
@@ -344,14 +363,6 @@ impl Value for GlobalValueBase {
     self.v_type.as_ref()
   }
 
-  fn get_context(&self) -> &BlitzContext {
-    self.v_type.get_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    self.v_type.get_context_mut()
-  }
-
   fn get_value_id(&self) -> ValueType {
     ValueType::GlobalVariableVal
   }
@@ -365,12 +376,16 @@ impl Value for GlobalValueBase {
   }
 
   fn set_metadata(&mut self, _kind_id: u32, _node: Option<Box<dyn MDNode>>) {}
-}
 
-impl Constant for GlobalValueBase {
   fn as_any(&self) -> &dyn Any {
     self
   }
+}
+
+impl Constant for GlobalValueBase {
+  //fn as_any(&self) -> &dyn Any {
+    //self
+  //}
 }
 
 impl GlobalValue for GlobalValueBase {

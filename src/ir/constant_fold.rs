@@ -5,9 +5,9 @@
 // interface in analysis/constnt_folding.rs should be preferred.
 
 use crate::{ir::{
-  instruction::Instruction,
+  instruction::InstructionBase,
   constants::{ConstantExpr, ConstantInt},
-  type_::Type,constant, constant::Constant, instruction::OpCode
+  type_::Type,constant, constant::Constant, instruction::OpCode, blits_context::blits_context
 }, adt::{ap_float::APFloat, ap_int::APInt, floating_point_mode::RoundingMode}};
 
 
@@ -42,7 +42,7 @@ pub fn constant_fold_unary_instruction() {}
 pub fn constant_fold_binary_instruction(opcode: &OpCode,
   c1: &Box<dyn Constant>, c2: &Box<dyn Constant>) -> Option<Box<dyn Constant>>
 {
-    debug_assert!(Instruction::is_binary_op_static(opcode),
+    debug_assert!(InstructionBase::is_binary_op_static(opcode),
       "Non-binary instruction detected.");
 
     let identity =
@@ -145,7 +145,7 @@ pub fn constant_fold_binary_instruction(opcode: &OpCode,
       };
     } else if c1.as_any().downcast_ref::<ConstantInt>().is_some() {
       // If c1 is a ConstantInt and c2 is not, swap the operands.
-      if Instruction::is_commutative_static(opcode) {
+      if InstructionBase::is_commutative_static(opcode) {
         return ConstantExpr::get(opcode.clone(), c2, c1,
           0, None);
       }
@@ -157,15 +157,15 @@ pub fn constant_fold_binary_instruction(opcode: &OpCode,
       let c2v = ci2.unwrap().get_value().clone();
       match opcode {
         OpCode::Add => return Some(Box::new(ConstantInt::get_from_apint(
-          c1.get_context(), c1v + c2v))),
+          blits_context(), c1v + c2v))),
         OpCode::Sub => return Some(Box::new(ConstantInt::get_from_apint(
-          c1.get_context(), c1v - c2v))),
+          blits_context(), c1v - c2v))),
         OpCode::Mul => return Some(Box::new(ConstantInt::get_from_apint(
-          c1.get_context(), c1v * c2v))),
+          blits_context(), c1v * c2v))),
         OpCode::UDiv => {
           debug_assert!(!ci2.unwrap().is_zero(), "Div by zero handled above.");
           return Some(Box::new(ConstantInt::get_from_apint(
-            c1.get_context(), c1v / c2v)))
+            blits_context(), c1v / c2v)))
         }
         OpCode::SDiv => {
           debug_assert!(!ci2.unwrap().is_zero(), "Div by zero handled above.");
@@ -173,12 +173,12 @@ pub fn constant_fold_binary_instruction(opcode: &OpCode,
             // TODO
           }
           return Some(Box::new(ConstantInt::get_from_apint(
-            c1.get_context(), c1v / c2v)))
+            blits_context(), c1v / c2v)))
         }
         OpCode::URem => {
           debug_assert!(!ci2.unwrap().is_zero(), "Div by zero handled above.");
           return Some(Box::new(ConstantInt::get_from_apint(
-            c1.get_context(), c1v % c2v)))
+            blits_context(), c1v % c2v)))
         }
         OpCode::SRem => {
           debug_assert!(!ci2.unwrap().is_zero(), "Div by zero handled above.");
@@ -186,14 +186,14 @@ pub fn constant_fold_binary_instruction(opcode: &OpCode,
             // TODO
           }
           return Some(Box::new(ConstantInt::get_from_apint(
-            c1.get_context(), c1v % c2v)))
+            blits_context(), c1v % c2v)))
         }
         OpCode::And => return Some(Box::new(ConstantInt::get_from_apint(
-          c1.get_context(), c1v & c2v))),
+          blits_context(), c1v & c2v))),
         OpCode::Or => return Some(Box::new(ConstantInt::get_from_apint(
-          c1.get_context(), c1v | c2v))),
+          blits_context(), c1v | c2v))),
         OpCode::Xor => return Some(Box::new(ConstantInt::get_from_apint(
-          c1.get_context(), c1v ^ c2v))),
+          blits_context(), c1v ^ c2v))),
         OpCode::Shl => {
 
         }

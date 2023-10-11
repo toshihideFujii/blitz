@@ -4,9 +4,6 @@
 // Blitz, such as the global type and constant uniquing tables.
 
 //use std::collections::HashSet;
-use crate::adt::string_ref::StringRef;
-//use super::{blitz_context_impl::BlitzContextImpl, /*constants::ConstantExpr,*/ /*type_::IntegerType*/};
-
 use std::collections::HashMap;
 
 use crate::{
@@ -16,28 +13,37 @@ use crate::{
     ap_int::APInt,
     ap_float::APFloat,
     folding_set::FoldingSetNodeID,
-    string_map::StringMap, //string_ref::StringRef,
+    string_map::StringMap, string_ref::StringRef,
+  },
+  ir::{
+    //module::Module,
+    diagnostic_handler::DiagnositicHandler,
+    blitz_remark_streamer::BlitzRemarkStreamer,
+    constants::{ConstantInt, ConstantFP, ConstantTokenNone},
+    attribute_impl::{AttributeImpl, AttributeListImpl, AttributeSetNode},
+    metadata::{MDString, /*ValueAsMetadata, Metadata, MetadataAsValue, MDNode*/},
+    value::Value,
+    debug_info_metadata::DICompositeType,
+    type_::{/*Type,*/TypeID, IntegerType, BasicType},
+    //global_object::GlobalObject,
+    /*global_value::GlobalValueBase,*/
+    tracking_md_ref::TypedTrackingMDRef,
+    //function::Function
   },
   remarks::remark_streamer::RemarkStreamer
 };
-use super::{
-  //module::Module,
-  diagnostic_handler::DiagnositicHandler,
-  blitz_remark_streamer::BlitzRemarkStreamer,
-  constants::{ConstantInt, ConstantFP, ConstantTokenNone},
-  attribute_impl::{AttributeImpl, AttributeListImpl, AttributeSetNode},
-  metadata::{MDString, /*ValueAsMetadata, Metadata, MetadataAsValue, MDNode*/},
-  /*value::Value,*/
-  debug_info_metadata::DICompositeType,
-  type_::{/*Type,*/TypeID, IntegerType, BasicType},
-  //global_object::GlobalObject,
-  /*global_value::GlobalValueBase,*/
-  tracking_md_ref::TypedTrackingMDRef,
-  //function::Function
-};
 
-enum SyncScope {
+use super::function::Function;
+
+// Known synchronization scope IDs, which always have the same value.
+// All synchronization scope IDs that Blitz has special knowledge of
+// are listed here. Additionally, this scheme always Blitz to efficiently
+// check for specific synchronization scope ID without comparing strings.
+#[derive(Debug)]
+pub enum SyncScopeID {
+  // Synchronized with respect to signal handlers executing in the same thread.
   SingleThread,
+  // Synchronized with respect to all concurrently executing threads.
   System
 }
 
@@ -179,7 +185,7 @@ pub struct BlitzContext {
   //anon_struct_types: DenseSet<>
 
   custom_md_kind_names: StringMap<u32>,
-  //value_metadata: HashMap<u64, MDAttachments>,
+  pub value_metadata: HashMap<Box<dyn Value>, MDAttachments>,
 
   //global_object_sections: DenseMap<GlobalObject, StringRef>,
   //global_value_partitions: DenseMap<GlobalValueBase, StringRef>,
@@ -224,7 +230,7 @@ impl BlitzContext {
       the_none_token: ConstantTokenNone::new(),
       integer_types: DenseMap::new(),
       custom_md_kind_names: StringMap::new(),
-      //value_metadata: HashMap::new(),
+      value_metadata: HashMap::new(),
       //global_object_sections: DenseMap::new(),
       //global_value_partitions: DenseMap::new(),
       bundle_tag_cache: StringMap::new(),
@@ -245,7 +251,17 @@ impl BlitzContext {
   pub fn get_operand_bundle_tag_id() {}
   pub fn get_or_insert_sync_scope_id() {}
   pub fn get_sync_scope_names() {}
-  pub fn set_gc() {}
+
+  // Define the GC for a function.
+  pub fn set_gc(&mut self, _func: &Function, _name: String) {}
+
+  // Return the GC for a function.
+  pub fn get_gc(&self, _func: &Function) -> String {
+    return String::new()
+  }
+
+  // Remove the GC for a function.
+  pub fn delete_gc(&mut self, _func: &Function) {}
 
   // Return true if the context runtime configuration is set to discard
   // all value names. When true, only GlobalValue names will be available

@@ -2,8 +2,8 @@
 
 // This file contains the declaration of the Constant class.
 
-use std::any::Any;
-use crate::adt::ap_int::APInt;
+//use std::any::Any;
+use crate::{adt::ap_int::APInt, ir::blits_context::blits_context};
 use super::{
   type_::{Type, TypeID, FixedVectorType, IntegerType, /*TypeID, IntegerType,*/ /*IntegerType*/},
   constants::{ConstantFP, ConstantAggregateZero,
@@ -121,7 +121,7 @@ pub trait Constant: Value {
   fn get_relocation_info(&self) {}
   fn has_n_live_uses(&self) {}
 
-  fn as_any(&self) -> &dyn Any;
+  //fn as_any(&self) -> &dyn Any;
 }
 
 
@@ -366,7 +366,7 @@ pub fn get_null_value(t: &Box<&dyn Type>) -> Box<dyn Constant> {
 pub fn get_all_ones_value(t: &Box<&dyn Type>) -> Box<dyn Constant> {
   if t.as_any().downcast_ref::<IntegerType>().is_some() {
     let int_t = t.as_any().downcast_ref::<IntegerType>().unwrap();
-    return Box::new(ConstantInt::get_from_apint(int_t.get_context(),
+    return Box::new(ConstantInt::get_from_apint(blits_context(),
       APInt::get_all_ones(int_t.get_bit_width())));
   }
 

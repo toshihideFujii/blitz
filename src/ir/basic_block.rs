@@ -6,9 +6,12 @@ use crate::adt::twine::Twine;
 
 use super::{
   function::Function,
-  symbol_table_list::SymbolTableList,
+  //symbol_table_list::SymbolTableList,
   instruction::Instruction,
-  value::{Value, ValueType}, type_::Type, blits_context::BlitzContext, module::Module
+  value::{Value, ValueType},
+  type_::Type, blits_context::BlitzContext,
+  module::Module, instructions::{PhiNode, LoadInst, StoreInst, LandingPadInst},
+  intrinsic_inst::PseudoProbeInst, //intrinsic_inst::DbgInfoIntrinsic
 };
 
 // This represents a single basic block in Blitz.
@@ -17,7 +20,7 @@ use super::{
 #[derive(Debug)]
 pub struct BasicBlock {
   v_type: Box<dyn Type>,
-  inst_list: SymbolTableList<Instruction>,
+  inst_list: Vec<Box<dyn Instruction>>, //SymbolTableList<Instruction>,
   parent: Option<Function>
 }
 
@@ -30,7 +33,7 @@ impl BasicBlock {
   {
     let bb = BasicBlock {
       v_type: Box::new(super::type_::get_label_type(c)),
-      inst_list: SymbolTableList::new(),
+      inst_list: Vec::new(),
       parent: None
     };
     if new_parent.is_some() {
@@ -51,35 +54,110 @@ impl BasicBlock {
   
   // Return the module owning the function this basic block belongs to.
   pub fn get_module(&self) -> &Option<Module> {
-    self.get_parent().as_ref().unwrap().get_parent()
+    //&self.get_parent().as_ref().unwrap().get_parent()
+    &None
   }
 
   // Returns the terminator instruction if the block is well formed or
   // null if the block is not well formed.
-  pub fn get_terminator(&self) -> Option<&Instruction> {
-    if self.inst_list.empty() ||
-       self.inst_list.back().as_ref().unwrap().is_terminator(){
+  pub fn get_terminator(&self) -> Option<&Box<dyn Instruction>> {
+    if self.inst_list.is_empty() ||
+       !self.inst_list.last().unwrap().is_terminator(){
       return None;
     }
-    self.inst_list.back()
+    self.inst_list.last()
   }
 
   pub fn get_terminating_deoptimize_call() {}
   pub fn get_post_dominating_deoptimize_call() {}
   pub fn get_terminating_must_tail_call() {}
-  pub fn get_first_non_phi() {}
-  pub fn get_first_non_phi_or_dbg() {}
-  pub fn get_first_non_phi_or_dbg_or_lifetime() {}
+
+  // Returns a pointer the first instruction in this block that is not a
+  // PhiNode instruction.
+  pub fn get_first_non_phi(&self)-> Option<&Box<dyn Instruction>> {
+    for i in &self.inst_list {
+      if i.as_any().downcast_ref::<PhiNode>().is_some() {
+        return Some(i);
+      }
+    }
+    None
+  }
+
+  // Returns a pointer to the first instruction in this block that is not a
+  // PhiNode or a debug intrinsic, or any pseudo operation if skip_pseudo_op
+  // is true.
+  pub fn get_first_non_phi_or_dbg(&self, skip_pseudo_op: bool)
+    -> Option<&Box<dyn Instruction>>
+  {
+    for i in &self.inst_list {
+      if i.as_any().downcast_ref::<PhiNode>().is_some() /*||
+        i.as_any().downcast_ref::<DbgInfoIntrinsic>().is_some()*/ {
+        continue;
+      }
+      if skip_pseudo_op && i.as_any().downcast_ref::<PseudoProbeInst>().is_some() {
+        continue;
+      }
+      return Some(i);
+    }
+    None
+  }
+
+  // Returns a pointer to the first instruction in this block that is not a
+  // PhiNode, a debug intrinsic, or a lifetimme intrinsic, or any pseudo operation
+  // if skip_pseudo_op is true.
+  pub fn get_first_non_phi_or_dbg_or_lifetime(&self, skip_pseudo_op: bool)
+    -> Option<&Box<dyn Instruction>>
+  {
+    for i in &self.inst_list {
+      if i.as_any().downcast_ref::<PhiNode>().is_some() /*||
+        i.as_any().downcast_ref::<DbgInfoIntrinsic>().is_some()*/ {
+        continue;
+      }
+      if i.is_lifetime_start_or_end() {
+        continue;
+      }
+      if skip_pseudo_op && i.as_any().downcast_ref::<PseudoProbeInst>().is_some() {
+        continue;
+      }
+      return Some(i);
+    }
+    None
+  }
+
   pub fn get_first_insertion_pt() {}
   pub fn get_first_non_phi_or_dbg_or_alloca() {}
-  pub fn instructions_without_debug() {}
-  pub fn instruction_count_without_debug(&self) -> usize { 0 }
-  pub fn size_without_debug() {}
+
+  // Returns the first potential AsynchEH faulty instruction.
+  // Currently it checks for loads/stores (which may dereference a null pointer)
+  // and calls/invokes (which may propagate exceptions).
+  pub fn get_first_may_fault_inst(&self) -> Option<&Box<dyn Instruction>> {
+    for i in &self.inst_list {
+      if i.as_any().downcast_ref::<LoadInst>().is_some() || 
+      i.as_any().downcast_ref::<StoreInst>().is_some() { // TODO: or Callbase
+        return Some(i);
+      }
+    }
+    None
+  }
+
+  // Return a const iterator range over the instructions in the block, skipping
+  // any debug instructions. Skip any pseudo operations as well if skip_pseudo_op
+  // is true.
+  pub fn instructions_without_debug(&mut self, skip_pseudo_op: bool)
+    -> &Vec<Box<dyn Instruction>>
+  {
+    self.inst_list.retain(|i| // TODO: DbgInfoIntrinsic
+      !skip_pseudo_op && i.as_any().downcast_ref::<PseudoProbeInst>().is_some());
+    &self.inst_list
+  }
+
+  // Return the size of the basic block ignoring debug instructions.
+  pub fn size_without_debug(&mut self) -> usize {
+    self.instructions_without_debug(true).len()
+  }
 
   // Unlink 'this' from the containing function, but not delete it.
   pub fn remove_from_parent(&mut self) {
-    // TODO: How to get index ?
-    //self.get_parent().as_mut().unwrap().get_basic_block_list().remove(0);
   }
 
   pub fn earse_from_parent() {}
@@ -97,13 +175,24 @@ impl BasicBlock {
   pub fn end() {}
   pub fn rbegin() {}
   pub fn rend() {}
-  pub fn size() {}
-  pub fn empty() {}
-  pub fn front() {}
-  pub fn back() {}
+
+  pub fn size(&self) -> usize {
+    self.inst_list.len()
+  }
+
+  pub fn empty(&self) -> bool {
+    self.inst_list.is_empty()
+  }
+
+  pub fn front(&self) -> Option<&Box<dyn Instruction>> {
+    self.inst_list.first()
+  }
+
+  pub fn back(&self) -> Option<&Box<dyn Instruction>> {
+    self.inst_list.last()
+  }
+
   pub fn phis() {}
-  pub fn get_inst_list() {}
-  pub fn get_sublist_access() {}
   pub fn get_value_symbol_table() {}
   pub fn drop_all_references() {}
   pub fn remove_predecessor() {}
@@ -113,11 +202,51 @@ impl BasicBlock {
   pub fn has_address_taken() {}
   pub fn replace_phi_uses_with() {}
   pub fn replace_successors_phi_uses_with() {}
-  pub fn is_ehpad() {}
-  pub fn is_landing_pad() {}
-  pub fn get_landing_pad_inst() {}
-  pub fn is_legal_to_hoist_into() {}
-  pub fn is_entry_block() {}
+
+  // Return true if this basic block is an exception handling block.
+  pub fn is_eh_pad(&self) -> bool {
+    self.get_first_non_phi().unwrap().is_eh_pad()
+  }
+
+  // Return true if this basic block is a landing pad.
+  // Being a 'landing pad' means that the basic block is the destination
+  // of the 'unwind' edge of an invoke instruction.
+  pub fn is_landing_pad(&self) -> bool {
+    let inst = self.get_first_non_phi();
+    if inst.unwrap().as_any().downcast_ref::<LandingPadInst>().is_some() {
+      return true;
+    }
+    false
+  }
+
+  // Return the landingpad instruction associated with the landingpad.
+  pub fn get_landing_pad_inst(&self) -> Option<&LandingPadInst> {
+    let inst = self.get_first_non_phi();
+    inst.unwrap().as_any().downcast_ref::<LandingPadInst>()
+  }
+
+  // Return true if it is legal to hoist instructions into this block.
+  pub fn is_legal_to_hoist_into(&self) -> bool {
+    // No terminator means the block is under construction.
+    let term = self.get_terminator();
+    if term.is_none() { return true; }
+
+    // If the block has no successors, there can be no instructions to hoist.
+    debug_assert!(term.unwrap().get_num_successors() > 0);
+
+    // Instructions should not be hoisted across exception handling boundaries.
+    !term.unwrap().is_exceptional_terminator()
+  }
+
+  // Return true if this is the entry block of the containing function.
+  // This method can only be used on blocks that have a parent function.
+  pub fn is_entry_block(&self) -> bool {
+    let f = self.get_parent();
+    debug_assert!(f.is_some(), "Block must have a parent function to use this API.");
+    //self == f.unwrap().get_entry_block()
+    self.equal(f.as_ref().unwrap().get_entry_block().unwrap())
+  }
+
   pub fn get_irr_loop_header_weight() {}
   pub fn is_instr_order_valid() {}
   pub fn invalidate_orders() {}
@@ -129,6 +258,21 @@ impl BasicBlock {
   fn adjust_block_address_ref_count() {}
   fn set_value_subclass_data() {}
   fn skip_debug_intrinsics() {}
+
+  fn get_inst_list(&self) -> &Vec<Box<dyn Instruction>> {
+    &self.inst_list
+  }
+
+  fn equal(&self, rhs: &BasicBlock) -> bool {
+    if self.v_type.get_type_id() != rhs.v_type.get_type_id() {
+      return false;
+    }
+    if self.inst_list.len() != rhs.inst_list.len() {
+      return false;
+    }
+    // TODO: Add more equality checking.
+    true
+  }
 }
 
 
@@ -137,15 +281,11 @@ impl Value for BasicBlock {
     self.v_type.as_ref()
   }
 
-  fn get_context(&self) -> &BlitzContext {
-    self.v_type.get_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    self.v_type.get_context_mut()
-  }
-
   fn get_value_id(&self) -> ValueType {
     ValueType::BasicBlockVal
+  }
+
+  fn as_any(&self) -> &dyn std::any::Any {
+    self
   }
 }

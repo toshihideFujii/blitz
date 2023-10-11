@@ -16,11 +16,11 @@ use crate::{
   //ir::constants_context::ConstantExprKeyType
 };
 use super::{
-  blits_context::BlitzContext,
+  blits_context::{BlitzContext, blits_context},
   //type_::{self, /*FixedVectorType*/},
   type_::{IntegerType, Type, FixedVectorType, ScalableVectorType},
   value::{Value, ValueType},
-  instruction::{Instruction, OpCode},
+  instruction::{InstructionBase, OpCode},
   constant,
   constant::Constant,
   constant_fold,
@@ -83,7 +83,7 @@ impl ConstantInt {
   // Return a ConstantInt with the specified integer value for the specified type.
   pub fn get(t: &IntegerType, v: i64, is_signed: bool) -> ConstantInt {
     let val = APInt::new(t.get_bit_width(), v, is_signed);
-    ConstantInt::get_from_apint(t.get_context(), val)
+    ConstantInt::get_from_apint(blits_context(), val)
   }
 
   // Return a ConstantInt with the specified value for the specified type.
@@ -200,14 +200,6 @@ impl Value for ConstantInt {
     &self.v_type
   }
 
-  fn get_context(&self) -> &BlitzContext {
-    self.v_type.get_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    self.v_type.get_context_mut()
-  }
-
   fn get_value_id(&self) -> ValueType {
     self.v_id.clone()
   }
@@ -246,6 +238,10 @@ impl Value for ConstantInt {
   fn add_use(&mut self, _u: Use) {
     //self.use_list.push(u);
   }
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
 }
 
 impl Constant for ConstantInt {
@@ -269,9 +265,9 @@ impl Constant for ConstantInt {
     //Box::new(ConstantInt::get(&self.v_type, 0, false))
   //}
 
-  fn as_any(&self) -> &dyn Any {
-    self
-  }
+  //fn as_any(&self) -> &dyn Any {
+    //self
+  //}
 }
 
 // Floating point values [float, double].
@@ -288,7 +284,7 @@ impl ConstantFP {
   // If t is a vector type, return a Constant with a splat of the given
   // value. Otherwise return a ConstantFP for the given value.
   pub fn get_constant(t: Box<dyn Type>, v: &APFloat) -> Option<Box<dyn Constant>> {
-    let c = ConstantFP::get_constant_fp(t.get_context(), v);
+    let c = ConstantFP::get_constant_fp(blits_context(), v);
 
     if t.as_any().downcast_ref::<FixedVectorType>().is_some() ||
       t.as_any().downcast_ref::<ScalableVectorType>().is_some() {
@@ -316,7 +312,7 @@ impl ConstantFP {
   pub fn get_zero(t: &Box<dyn Type>, negative: bool) -> Option<Box<dyn Constant>> {
     let semantics = t.get_scalar_type().get_flt_semantics();
     let neg_zero = APFloat::get_zero(semantics, negative);
-    let c = ConstantFP::get_constant_fp(t.get_context(), &neg_zero);
+    let c = ConstantFP::get_constant_fp(blits_context(), &neg_zero);
 
     if t.as_any().downcast_ref::<FixedVectorType>().is_some() ||
       t.as_any().downcast_ref::<ScalableVectorType>().is_some() {
@@ -333,7 +329,7 @@ impl ConstantFP {
 
   pub fn get_infinity(t: &Box<dyn Type>, negative: bool) -> Option<Box<dyn Constant>> {
     let semantics = t.get_scalar_type().get_flt_semantics();
-    let c = ConstantFP::get_constant_fp(t.get_context(),
+    let c = ConstantFP::get_constant_fp(blits_context(),
       &APFloat::get_inf(semantics, negative));
 
     if t.as_any().downcast_ref::<FixedVectorType>().is_some() ||
@@ -388,16 +384,12 @@ impl Value for ConstantFP {
     &self.v_type//.as_ref()
   }
 
-  fn get_context(&self) -> &BlitzContext {
-    self.v_type.get_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    self.v_type.get_context_mut()
-  }
-
   fn get_value_id(&self) -> ValueType {
     ValueType::ConstantFPVal
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -447,12 +439,13 @@ impl Constant for ConstantFP {
     //Box::new(ConstantInt::get(&self.v_type, 0, false))
   //}
 
-  fn as_any(&self) -> &dyn Any {
-    self
-  }
+  //fn as_any(&self) -> &dyn Any {
+    //self
+  //}
 }
 
 // All zero aggregate value.
+#[derive(Debug)]
 pub struct ConstantAggregateZero {
   v_type: Box<dyn Type>,
   v_id: ValueType,
@@ -477,16 +470,12 @@ impl Value for ConstantAggregateZero {
     self.v_type.as_ref()
   }
 
-  fn get_context(&self) -> &BlitzContext {
-    self.v_type.get_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    self.v_type.get_context_mut()
-  }
-
   fn get_value_id(&self) -> ValueType {
     self.v_id.clone()
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
   }
 }
 
@@ -783,8 +772,8 @@ impl ConstantExpr {
   pub fn get_bin_op_identity(opcode: &OpCode, t: &Box<&dyn Type>,
     allow_rhs_constant: bool, _nsz: bool) -> Option<Box<dyn Constant>>
   {
-    debug_assert!(Instruction::is_binary_op_static(opcode), "Only binops allowed.");
-    if Instruction::is_commutative_static(opcode) {
+    debug_assert!(InstructionBase::is_binary_op_static(opcode), "Only binops allowed.");
+    if InstructionBase::is_commutative_static(opcode) {
       if *opcode == OpCode::Add || // Add: x + 0 = x
         *opcode == OpCode::Or || // Or: x | 0 = x
         *opcode == OpCode::Xor // Xor: x ^ 0 = x
@@ -841,7 +830,7 @@ impl ConstantExpr {
   pub fn get_fp_cast() {}
 
   pub fn is_cast(&self) -> bool {
-    Instruction::is_cast_static(self.get_opcode())
+    InstructionBase::is_cast_static(self.get_opcode())
   }
 
   // Return true if this is a compare constant expression.
@@ -854,7 +843,7 @@ impl ConstantExpr {
   pub fn get(opcode: OpCode, c1: &Box<dyn Constant>, c2: &Box<dyn Constant>,
     _flags: u32, _only_if_reduced_type: Option<Box<dyn Type>>) -> Option<Box<dyn Constant>>
   {
-    debug_assert!(Instruction::is_binary_op_static(&opcode),
+    debug_assert!(InstructionBase::is_binary_op_static(&opcode),
       "Invalid opcode in binary constant expression.");
 
     debug_assert!(ConstantExpr::is_supported_bin_op(&opcode),

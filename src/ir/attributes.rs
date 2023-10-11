@@ -83,6 +83,9 @@ pub enum AttrKind {
   NoMerge,
   ReturnsTwice,
   AlwaysInline,
+  StackProtect,
+  StackProtectReq,
+  StackProtectStrong,
 
   // TypeAttr
   ByVal,
@@ -816,12 +819,11 @@ impl AttributeList {
   // Add an attribute to the attribute set at the given index.
   // Returns a new list because attribute lists are immutable.
   pub fn add_attribute_at_index(&self, c: &mut BlitzContext,
-    _i: usize, attr: &Attribute) -> Self
+    i: usize, attr: &Attribute) -> Self
   {
     let mut b = AttrBuilder::new(c);
     b.add_attribute(attr);
-
-    AttributeList::new(None)
+    self.add_attributes_at_index(c, i, &b)
   }
 
   // Add an attributes to the attribute set at the given index.
@@ -981,7 +983,13 @@ impl AttributeList {
     self.remove_attribute_at_index_by_kind(c, AttrIndex::FunctionIndex as usize, kind)
   }
 
-  pub fn remove_fn_attribute_by_string() {}
+  pub fn remove_fn_attribute_by_string(&self) {}
+
+  // Remove the specified attribute at the function index from this
+  // attribute list. Returns a new list because attribute lists are immutable.
+  pub fn remove_fn_attributes_by_mask(&self, c: &mut BlitzContext, mask: &AttributeMask) -> Self {
+    self.remove_attributes_at_index_by_mask(c, AttrIndex::FunctionIndex as usize, mask)
+  }
 
   // Remove the attributes at the function index from this attribute list.
   // Returns a new list because attribute lists are immutable.
@@ -1176,7 +1184,7 @@ impl AttributeList {
   }
 
   // Return the attribute object that exists for the function.
-  pub fn get_fn_attr(&self, kind: &AttrKind) -> Option<Attribute> {
+  pub fn get_fn_attr_by_kind(&self, kind: &AttrKind) -> Option<Attribute> {
     self.get_attribute_at_index(AttrIndex::FunctionIndex as usize, kind)
   }
 

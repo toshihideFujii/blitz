@@ -4,7 +4,7 @@
 // floating point environment and related functions.
 
 use crate::adt::{floating_point_mode::RoundingMode, string_ref::StringRef, string_switch::StringSwitch};
-use super::{fmf::FastMathFlags, instruction::Instruction};
+use super::{fmf::FastMathFlags, instruction::InstructionBase};
 
 // Exception behavior used for floating point operations.
 #[derive(Debug, Clone, PartialEq)]
@@ -87,7 +87,7 @@ pub fn is_default_fp_environment(eb: ExceptionBehavior, rm: RoundingMode) -> boo
 
 // Returns constrained intrinsic id to represent the given instruction
 // in strictfp function.
-pub fn get_constrained_intrinsic_id(_instr: Instruction) {}
+pub fn get_constrained_intrinsic_id(_instr: InstructionBase) {}
 
 // Returns true if the rounding mode RM may be QRM at compile time or
 // at run time.

@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use crate::adt::ap_float::FltSemantics;
 use crate::adt::ap_int::APInt;
 use crate::support::type_size::TypeSize;
-use super::blits_context::{BlitzContext, blits_context, blits_context_mut};
+use super::blits_context::BlitzContext;
 //use super::value::Value;
 
 // Definitions of all of the base types for the Type system.
@@ -45,8 +45,6 @@ pub trait Type: Debug {
   fn get_subclass_data(&self) -> u32;
   fn set_subclass_data(&mut self, val: u32) {}
   fn dump(&self) {}
-  fn get_context(&self) -> &BlitzContext;
-  fn get_context_mut(&mut self) -> &mut BlitzContext;
   fn get_type_id(&self) -> TypeID;
 
   // Return true if this is 'void'.
@@ -297,14 +295,6 @@ impl Type for BasicType {
     self.id.clone()
   }
 
-  fn get_context(&self) -> &BlitzContext {
-    blits_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    blits_context_mut()
-  }
-
   fn get_subclass_data(&self) -> u32 {
     0
   }
@@ -407,16 +397,6 @@ impl Type for IntegerType {
   fn set_subclass_data(&mut self, val: u32) {
     self.sub_class_data = val;
     debug_assert!(self.get_subclass_data() == val, "Subclass data too large for field.");
-  }
-
-  fn get_context(&self) -> &BlitzContext {
-    //&self.context
-    blits_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    //&mut self.context
-    blits_context_mut()
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -528,16 +508,6 @@ impl Type for FunctionType {
   fn set_subclass_data(&mut self, val: u32) {
     self.sub_class_data = val;
     debug_assert!(self.get_subclass_data() == val, "Subclass data too large for field.");
-  }
-
-  fn get_context(&self) -> &BlitzContext {
-    //&self.context
-    blits_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    //&mut self.context
-    blits_context_mut()
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -675,14 +645,6 @@ impl Type for StructType {
     self.sub_class_data
   }
 
-  fn get_context(&self) -> &BlitzContext {
-    &self.context
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    &mut self.context
-  }
-
   fn get_type_id(&self) -> TypeID {
     TypeID::Struct
   }
@@ -751,14 +713,6 @@ impl Type for ArrayType {
     self.sub_class_data
   }
 
-  fn get_context(&self) -> &BlitzContext {
-    &self.context
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    &mut self.context
-  }
-
   fn get_type_id(&self) -> TypeID {
     TypeID::Array
   }
@@ -816,16 +770,6 @@ pub struct FixedVectorType {
 impl Type for FixedVectorType {
   fn get_subclass_data(&self) -> u32 {
     self.sub_class_data
-  }
-
-  fn get_context(&self) -> &BlitzContext {
-    //&self.context
-    blits_context()
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    //&mut self.context
-    blits_context_mut()
   }
 
   fn get_type_id(&self) -> TypeID {
@@ -899,14 +843,6 @@ impl Type for ScalableVectorType {
     self.sub_class_data
   }
 
-  fn get_context(&self) -> &BlitzContext {
-    &self.context
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    &mut self.context
-  }
-
   fn get_type_id(&self) -> TypeID {
     TypeID::ScalableVector
   }
@@ -964,7 +900,7 @@ impl VectorType for ScalableVectorType {
 
 // Class to represent pointers.
 #[derive(Debug)]
-struct PointerType {
+pub struct PointerType {
   sub_class_data: u32,
   context: BlitzContext,
   pointee_type: Option<Box<dyn Type>>
@@ -977,15 +913,6 @@ impl Type for PointerType {
 
   fn get_type_id(&self) -> TypeID {
     TypeID::Pointer
-  }
-
-  fn get_context(&self) -> &BlitzContext {
-    &self.context
-  }
-
-  fn get_context_mut(&mut self) -> &mut BlitzContext {
-    //&mut self.context
-    &mut self.context
   }
 
   fn is_pointer_type(&self) -> bool {

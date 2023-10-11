@@ -2,9 +2,9 @@
 
 // This file declares the value class.
 
+use std::{any::Any, fmt::Debug};
 use crate::adt::{string_ref::StringRef, twine::Twine};
 use super::{type_::Type, use_::Use,
-  blits_context::BlitzContext,
   metadata::{MDNode, Metadata}
 };
 
@@ -56,7 +56,7 @@ pub enum ValueType {
 // Some values can have a name and they belong to some Module.
 // Setting the name on the value automatically updates the mmodule's symbol
 // table.
-pub trait Value {
+pub trait Value: Debug {
   // Identifier of this value. Alternative to pointer address.
   fn get_id(&self) -> u64 { 0 }
 
@@ -66,10 +66,6 @@ pub trait Value {
 
   // All values are typed, get the type of this value.
   fn get_type(&self) -> &dyn Type;
-  
-  // All values hold a context through their type.
-  fn get_context(&self) -> &BlitzContext;
-  fn get_context_mut(&mut self) -> &mut BlitzContext;
 
   fn has_name(&self) -> bool { false }
   fn get_value_name(&self) {}
@@ -160,6 +156,8 @@ pub trait Value {
 
   fn get_subclass_data_from_value(&self) -> u32 { 0 }
   fn set_value_subclass_data(&mut self, _val: u32) {}
+
+  fn as_any(&self) -> &dyn Any;
 }
 
 /*
