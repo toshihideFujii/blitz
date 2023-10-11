@@ -107,8 +107,8 @@ impl Module {
   }
 
   // Get the data layout for the module's target platform.
-  pub fn get_data_layout(&self) -> DataLayout {
-    self.dl.clone()
+  pub fn get_data_layout(&self) -> &DataLayout {
+    &self.dl
   }
 
   // Get the target triple which is a string describing the target host.

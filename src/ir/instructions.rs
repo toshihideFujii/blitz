@@ -196,8 +196,8 @@ impl LoadInst {
   }
 
   // Return the alignment of the access that is being performed.
-  pub fn get_align(&self) -> Option<Align> {
-    self.align
+  pub fn get_align(&self) -> &Option<Align> {
+    &self.align
   }
 
   pub fn set_alignment(&mut self, align: Option<Align>) {
@@ -334,8 +334,8 @@ impl StoreInst {
     else if i == 1 { self.ptr_operand = v; }
   }
 
-  pub fn get_align(&self) -> Option<Align> {
-    self.align
+  pub fn get_align(&self) -> &Option<Align> {
+    &self.align
   }
 
   pub fn set_alignment(&mut self, align: Option<Align>) {
@@ -511,8 +511,8 @@ impl AtomicCmpXchgInst {
   }
 
   // Return the alignment of the memory that is being allocated by the instruction.
-  pub fn get_align(&self) -> Align {
-    self.align
+  pub fn get_align(&self) -> &Align {
+    &self.align
   }
 
   pub fn set_alignment(&mut self, align: Align) {
@@ -575,7 +575,7 @@ impl AtomicCmpXchgInst {
 
   // Sets the success ordering constraint of this cmpxchg instruction.
   pub fn set_success_ordering(&mut self, ordering: AtomicOrdering) {
-    debug_assert!(AtomicCmpXchgInst::is_valid_success_ordering(ordering),
+    debug_assert!(AtomicCmpXchgInst::is_valid_success_ordering(ordering.clone()),
       "Invalid CmpXchg success ordering.");
     self.success_ordering = ordering;
   }
@@ -587,7 +587,7 @@ impl AtomicCmpXchgInst {
 
   // Sets the failure ordering constraint of this cmpxvhg instruction.
   pub fn set_failure_ordering(&mut self, ordering: AtomicOrdering) {
-    debug_assert!(AtomicCmpXchgInst::is_valid_failure_ordering(ordering),
+    debug_assert!(AtomicCmpXchgInst::is_valid_failure_ordering(ordering.clone()),
       "Invalid CmpXchg failure ordering.");
     self.failure_ordering = ordering;
   }
@@ -609,8 +609,8 @@ impl AtomicCmpXchgInst {
   }
 
   // Returns the synchronization scope ID of this cmpxchg instruction.
-  pub fn get_sync_scope_id(&self) -> SyncScopeID {
-    self.ssid
+  pub fn get_sync_scope_id(&self) -> &SyncScopeID {
+    &self.ssid
   }
 
   // Sets the synchronization scope ID of this cmpxchg instruction.
@@ -717,13 +717,13 @@ impl AtomicRMWInst {
     }
   }
 
-  pub fn get_operation(&self) -> BinOp {
-    self.operation
+  pub fn get_operation(&self) -> &BinOp {
+    &self.operation
   }
 
   pub fn get_operation_name(&self, _op: BinOp) {}
 
-  pub fn is_fp_operation(op: BinOp) -> bool {
+  pub fn is_fp_operation(op: &BinOp) -> bool {
     match op {
       BinOp::FAdd => return true,
       BinOp::FSub => return true,
@@ -739,8 +739,8 @@ impl AtomicRMWInst {
 
   // Return the alignment of the memory that is being allocated by the
   // instruction.
-  pub fn get_align(&self) -> Align {
-    self.align
+  pub fn get_align(&self) -> &Align {
+    &self.align
   }
 
   pub fn set_alignment(&mut self, align: Align) {
@@ -789,8 +789,8 @@ impl AtomicRMWInst {
   }
 
   // Returns the synchronization scope ID of this rmw instruction.
-  pub fn get_sync_scope_id(&self) -> SyncScopeID {
-    self.ssid
+  pub fn get_sync_scope_id(&self) -> &SyncScopeID {
+    &self.ssid
   }
 
   // Sets the synchronization scope ID of this rmw instruction.
@@ -844,20 +844,22 @@ impl GetElementPtrInst {
   pub fn new_insert_before(pointee_type: Box<dyn Type>, ptr: Box<dyn Value>,
     idx_list: Vec<Box<dyn Value>>, name: Twine, ib: Option<Box<dyn Instruction>>) -> Self
   {
+    let len = idx_list.len() as u32;
     GetElementPtrInst {
       pointee_type: pointee_type, ptr: ptr, idx_list: idx_list,
-      values: idx_list.len() as u32 + 1, name: name,
-      src_elt_type: None, result_elt_type: None, insert_before: ib, insert_at_end: None
+      values: len + 1, name: name, src_elt_type: None, result_elt_type: None,
+      insert_before: ib, insert_at_end: None
     }
   }
 
   pub fn new_insert_at_end(pointee_type: Box<dyn Type>, ptr: Box<dyn Value>,
     idx_list: Vec<Box<dyn Value>>, name: Twine, ie: Option<BasicBlock>) -> Self
   {
+    let len = idx_list.len() as u32;
     GetElementPtrInst {
       pointee_type: pointee_type, ptr: ptr, idx_list: idx_list,
-      values: idx_list.len() as u32 + 1, name: name,
-      src_elt_type: None, result_elt_type: None, insert_before: None, insert_at_end: ie
+      values: len + 1, name: name, src_elt_type: None, result_elt_type: None,
+      insert_before: None, insert_at_end: ie
     }
   }
 
@@ -991,10 +993,10 @@ impl ICmpInst {
   // The predicate value may be changed to retain the same result if the
   // predicate is order dependent(e.g. ult).
   pub fn swap_operands(&mut self) {
-    self.set_predicate(*self.get_swapped_predicate());
-    let temp = self.lhs;
-    self.lhs = self.rhs;
-    self.rhs = temp;
+    //self.set_predicate(*self.get_swapped_predicate());
+    //let temp = self.lhs;
+    //self.lhs = self.rhs;
+    //self.rhs = temp;
   }
 
   // Return result of 'lhs pred rhs' comparison.
@@ -1118,10 +1120,10 @@ impl FCmpInst {
   }
 
   pub fn swap_operands(&mut self) {
-    self.set_predicate(*self.get_swapped_predicate());
-    let temp = self.lhs;
-    self.lhs = self.rhs;
-    self.rhs = temp;
+    //self.set_predicate(*self.get_swapped_predicate());
+    //let temp = self.lhs;
+    //self.lhs = self.rhs;
+    //self.rhs = temp;
   }
 
   pub fn predicates() {}
@@ -1150,16 +1152,16 @@ impl CmpInst for FCmpInst {
   }
 
   fn is_equality(&self) -> bool {
-    let p = *self.get_predicate();
-    p == Predicate::FCmpOeq || p == Predicate::FCmpOne ||
-    p == Predicate::FCmpUeq || p == Predicate::FCmpUne
+    let p = self.get_predicate();
+    p == &Predicate::FCmpOeq || p == &Predicate::FCmpOne ||
+    p == &Predicate::FCmpUeq || p == &Predicate::FCmpUne
   }
 
   fn is_commutative(&self) -> bool {
-    let p = *self.get_predicate();
+    let p = self.get_predicate();
     self.is_equality() ||
-    p == Predicate::FCmpFalse || p == Predicate::FCmpTrue ||
-    p == Predicate::FCmpOrd || p == Predicate::FCmpUno
+    p == &Predicate::FCmpFalse || p == &Predicate::FCmpTrue ||
+    p == &Predicate::FCmpOrd || p == &Predicate::FCmpUno
   }
 
   fn get_swapped_predicate(&self) -> &Predicate {
@@ -1315,9 +1317,9 @@ impl SelectInst {
   // Swap the true and false values of the select instruction.
   // This doesn't swap prof metadata.
   pub fn swap_values(&mut self) {
-    let temp = self.s1;
-    self.s1 = self.s2;
-    self.s2 = temp;
+    //let temp = self.s1;
+    //self.s1 = self.s2;
+    //self.s2 = temp;
   }
 
   pub fn are_invalid_operands() {}
@@ -1723,7 +1725,7 @@ impl PhiNode {
     phi
   }
 
-  pub fn get_operand(&self, i: u32) -> Option<&Box<dyn Value>> {
+  pub fn get_operand(&self, _i: u32) -> Option<&Box<dyn Value>> {
     //if i == 0 { return Some(&self.); }
     None
   }

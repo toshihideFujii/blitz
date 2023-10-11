@@ -304,7 +304,7 @@ pub trait CmpInst: Instruction {
   // Ex: EQ->EQ, SLE->SLE, UGT->SGT, etc.
   fn get_signed_predicate(&self) -> &Predicate {
     debug_assert!(self.is_unsigned(), "Call only with unsigned predicates.");
-    let p = *self.get_predicate();
+    let p = self.get_predicate();
     match p {
       Predicate::ICmpUlt => return &Predicate::ICmpSlt,
       Predicate::ICmpUle => return &Predicate::ICmpSle,
@@ -318,7 +318,7 @@ pub trait CmpInst: Instruction {
   // has to be an signed predicate).
   fn get_unsigned_predicate(&self) -> &Predicate {
     debug_assert!(self.is_signed(), "Call only with signed predicates.");
-    let p = *self.get_predicate();
+    let p = self.get_predicate();
     match p {
       Predicate::ICmpSlt => return &Predicate::ICmpUlt,
       Predicate::ICmpSle => return &Predicate::ICmpUle,
