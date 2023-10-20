@@ -105,7 +105,7 @@ impl DataLayout {
   // If t is a scalable vector type, the scalable property will be set
   // and the runtime size will be a positive integer multiple of the base size.
   // For example, returns 5 for i36 and 10 for x86_fp80.
-  pub fn get_type_store_size(t: Box<dyn Type>) {}
+  pub fn get_type_store_size(_t: Box<dyn Type>) {}
 
   pub fn get_type_store_size_in_bits() {}
   pub fn type_size_equal_store_size() {}
@@ -116,7 +116,7 @@ impl DataLayout {
   // and the runtime size will be a positive integer multiple of the base size.
   // This is the amount that alloca reserves for this type.
   // For example, returns 12 or 16 for x86_fp80, depending on alignment.
-  pub fn get_type_alloc_size(t: Box<dyn Type>) {
+  pub fn get_type_alloc_size(_t: Box<dyn Type>) {
     //align_to(size, align)
   }
 

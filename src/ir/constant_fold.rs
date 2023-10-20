@@ -45,8 +45,9 @@ pub fn constant_fold_binary_instruction(opcode: &OpCode,
     debug_assert!(InstructionBase::is_binary_op_static(opcode),
       "Non-binary instruction detected.");
 
+    let t = Box::new(c1.get_type());
     let identity =
-      ConstantExpr::get_bin_op_identity(opcode, &Box::new(c1.get_type().clone()),
+      ConstantExpr::get_bin_op_identity(opcode, &t,
         false, false);
 
     if identity.is_some() {

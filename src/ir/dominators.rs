@@ -35,7 +35,7 @@ impl BasicBlockEdge {
     let mut num_edges_to_end = 0;
     let ti = self.start.get_terminator();
     for i in 0..ti.unwrap().get_num_successors() {
-      if ti.unwrap().get_successor(i as u32).is_none() {
+      if ti.unwrap().get_successor(i).is_none() {
         num_edges_to_end += 1;
       }
       if num_edges_to_end >= 2 {

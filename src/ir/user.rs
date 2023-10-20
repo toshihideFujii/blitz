@@ -8,12 +8,17 @@
 //#[derive(Debug, Clone)]
 //pub struct User {}
 
-pub trait User {
+use super::value::Value;
+
+pub trait User: Value {
   fn alloc_hungoff_uses(&self) {}
   fn grow_hungoff_uses(&self) {}
   fn get_operand_list(&self) {}
-  fn get_operand(&self) {}
-  fn set_operand(&self) {}
+
+  fn get_operand(&self, _i: usize) -> Option<&Box<dyn Value>> { None }
+
+  fn set_operand(&self, _i: usize, _v: Box<dyn Value>) {}
+
   fn get_operand_use(&self) {}
   fn get_num_operands(&self) {}
   fn get_descriptor(&self) {}

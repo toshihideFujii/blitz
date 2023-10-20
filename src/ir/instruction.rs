@@ -10,7 +10,7 @@ use super::{
   blits_context::MDKind,
   debug_loc::DebugLoc, function::Function,
   value::{Value, ValueType}, 
-  type_::Type, metadata::MDNode, use_::Use,
+  type_::Type, metadata::MDNode, use_::Use, user::User,
 };
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -186,7 +186,7 @@ pub enum OtherOps {
   Freeze = 67
 }
 
-pub trait Instruction: Debug {
+pub trait Instruction: User {
   fn get_parent(&self) -> &Option<BasicBlock> { &None }
 
   // Returns a member of one of the enums like Instruction::Add.
@@ -205,7 +205,11 @@ pub trait Instruction: Debug {
   fn get_num_successors(&self) -> usize { 0 }
 
   // Return the specified successor. This instruction must be a terminator.
-  fn get_successor(&self, _index: u32) -> Option<&BasicBlock> { None }
+  fn get_successor(&self, _i: usize) -> Option<&BasicBlock> { None }
+
+  // Update the specified successor to point at the provided block.
+  // This instruction must be a terminator.
+  fn set_successor(&mut self, _i: usize, _b: BasicBlock) {}
 
   // Return true if the instruction is a blitz.lifetime.start or
   // blitz.lifetime.end marker.
@@ -214,7 +218,7 @@ pub trait Instruction: Debug {
   // Return true if the instruction is a variety of EH-block.
   fn is_eh_pad(&self) -> bool { false }
 
-  fn as_any(&self) -> &dyn Any;
+  fn as_any_inst(&self) -> &dyn Any;
 }
 
 #[derive(Debug)]
@@ -548,137 +552,4 @@ impl Value for InstructionBase {
   fn as_any(&self) -> &dyn Any {
     self
   }
-}
-
-struct InsertElementInst {}
-impl InsertElementInst {
-  pub fn new() {}
-  pub fn is_valid_operands() {}
-  pub fn get_type() {}
-  pub fn class_of() {}
-}
-
-struct BranchInst {}
-impl BranchInst {
-  pub fn new() {}
-}
-
-struct SwitchInst {}
-impl SwitchInst {
-  pub fn new() {}
-} 
-
-struct IndirectBrInst {}
-impl IndirectBrInst {
-  pub fn new() {}
-}
-
-struct InvokeInst {}
-impl InvokeInst {
-  pub fn new() {}
-}
-
-struct CallBrInst {}
-impl CallBrInst {
-  pub fn new() {}
-}
-
-struct ResumeInst {}
-impl ResumeInst {
-  pub fn new() {}
-}
-
-struct CatchSwitchInst {}
-impl CatchSwitchInst {
-  pub fn new() {}
-}
-
-struct CleanupPadInst {}
-impl CleanupPadInst {
-  pub fn new() {}
-}
-
-struct CatchPadInst {}
-impl CatchPadInst {
-  pub fn new() {}
-}
-
-struct CatchReturnInst {}
-impl CatchReturnInst {
-  pub fn new() {}
-}
-
-struct CleanupReturnInst {}
-impl CleanupReturnInst {
-  pub fn new() {}
-}
-
-struct UnreachableInst {}
-impl UnreachableInst {
-  pub fn new() {}
-}
-
-struct TruncInst {}
-impl TruncInst {
-  pub fn new() {}
-}
-
-struct ZExtInst {}
-impl ZExtInst {
-  pub fn new() {}
-}
-
-struct SExtInst {}
-impl SExtInst {
-  pub fn new() {}
-}
-
-struct FPTruncInst {}
-impl FPTruncInst {
-  pub fn new() {}
-} 
-
-struct FPExtInst {}
-impl FPExtInst {
-  pub fn new() {}
-}
-
-struct UIToFPInst {}
-impl UIToFPInst {
-  pub fn new() {}
-}
-
-struct SIToFpInst {}
-impl SIToFpInst {
-  pub fn new() {}
-}
-
-struct FPToUIInst {}
-impl FPToUIInst {
-  pub fn new() {}
-}
-
-struct FPToSIInst {}
-impl FPToSIInst {
-  pub fn new() {}
-}
-
-struct IntToPtrInst {}
-impl IntToPtrInst {
-  pub fn new() {}
-}
-
-struct PtrToIntInst {}
-impl PtrToIntInst {
-  pub fn new() {}
-}
-
-struct BitCastInst {}
-impl BitCastInst {
-  pub fn new() {}
-}
-
-struct AddrSpaceCastInst {}
-impl AddrSpaceCastInst {
-  pub fn new() {}
 }

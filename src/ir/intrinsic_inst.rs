@@ -2,8 +2,8 @@
 
 use std::any::Any;
 use std::fmt::Debug;
-use crate::ir::global_value::IntrinsicID;
-use super::instruction::Instruction;
+use crate::ir::{global_value::IntrinsicID, type_::Type, user::User};
+use super::{instruction::Instruction, value::{Value, ValueType}};
 
 // A wrapper class for inspecting calls to intrinsic functions.
 // This allows the standard isa/dyncast/cast functionality to work with
@@ -73,9 +73,27 @@ struct MemCpyInst {}
 struct MemMoveInst {}
 
 #[derive(Debug)]
-pub struct PseudoProbeInst {}
-impl Instruction for PseudoProbeInst {
+pub struct PseudoProbeInst {
+  t: Box<dyn Type>
+}
+
+impl Value for PseudoProbeInst {
+  fn get_type(&self) -> &dyn Type {
+    self.t.as_ref()
+  }
+  fn get_value_id(&self) -> ValueType {
+    ValueType::InstructionVal
+  }
   fn as_any(&self) -> &dyn Any {
+    self
+  }
+}
+
+impl User for PseudoProbeInst {
+}
+
+impl Instruction for PseudoProbeInst {
+  fn as_any_inst(&self) -> &dyn Any {
     self
   }
 }

@@ -381,7 +381,7 @@ impl ConstantFP {
 
 impl Value for ConstantFP {
   fn get_type(&self) -> &dyn Type {
-    &self.v_type//.as_ref()
+    &self.v_type
   }
 
   fn get_value_id(&self) -> ValueType {

@@ -38,7 +38,9 @@ pub enum TypeID {
   FixedVector,
   ScalableVector,
   TypedPointer,
-  TargetExt
+  TargetExt,
+  // Dummy
+  Unknown
 }
 
 pub trait Type: Debug {
@@ -701,7 +703,7 @@ impl PartialEq for StructType {
 
 // Class to represent array types.
 #[derive(Debug)]
-struct ArrayType {
+pub struct ArrayType {
   sub_class_data: u32,
   context: BlitzContext,
   contained_type: Box<dyn Type>,
@@ -974,4 +976,22 @@ impl PointerType {
 struct TargetExtType {}
 impl TargetExtType {
   pub fn new() {}
+}
+
+#[derive(Debug)]
+pub struct UnknownType {}
+impl UnknownType {
+  pub fn new() -> Self { UnknownType {  } }
+}
+impl Type for UnknownType {
+  fn get_type_id(&self) -> TypeID {
+    TypeID::Unknown
+  }
+  fn get_subclass_data(&self) -> u32 { 0 }
+  fn get_scalar_type(&self) -> Box<&dyn Type> {
+    Box::new(self)
+  }
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
 }
