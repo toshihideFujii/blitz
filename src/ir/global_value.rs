@@ -16,7 +16,7 @@ use crate::{
   adt::twine::Twine
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IntrinsicID {
   FAdd,
   FSub,
@@ -30,8 +30,42 @@ pub enum IntrinsicID {
   FPToUI,
   FPTrunc,
 
+  MaxNum,
+  MinNum,
+  Maximum,
+  Minimum,
+  SMax,
+  SMin,
+  UMax,
+  UMin,
+  SAddSat,
+  UAddSat,
+  SAddWithOverflow,
+  UAddWithOverflow,
+  SMulWithOverflow,
+  UMulWithOverflow,
+  SMulFix,
+  UMulFix,
+  SMulFixSat,
+  UMulFixSat,
+  Fma,
+  FMulAdd,
+
+  Assume,
+  SideEffect,
+  PseudoProbe,
+  DbgAssign,
+  DbgDeclare,
+  DbgValue,
+  DbgLabel,
+  InvariantStart,
+  InvariantEnd,
   LifetimeStart,
   LifetimeEnd,
+  ExperimentalNoAliasScopeDecl,
+  ObjectSize,
+  PtrAnnotation,
+  VarAnnotation,
 
   NotIntrinsic
 }
@@ -151,7 +185,9 @@ pub trait GlobalValue : Debug + Constant {
   fn has_section(&self) {}
   fn get_section(&self) {}
   fn get_type(&self) {}
-  fn get_value_type(&self) {}
+
+  fn get_value_type(&self) -> Option<Box<dyn Type>> { None }
+
   fn is_implicit_dso_local(&self) -> bool {
     self.has_local_linkage() || (!self.has_default_visibility() &&
     !self.has_external_weak_linkage())

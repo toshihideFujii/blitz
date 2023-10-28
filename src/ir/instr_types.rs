@@ -1,90 +1,95 @@
 #![allow(dead_code)]
 
+use std::any::Any;
 use crate::{
-  ir::{type_::Type, instruction::OpCode},
   adt::{twine::Twine, string_ref::StringRef},
+  ir::{
+    basic_block::BasicBlock, instruction::{Instruction, OpCode},
+    value::{Value, ValueType}, attributes::{AttributeList, AttrKind, Attribute},
+    use_::Use, user::User, type_::{Type, FixedVectorType, VectorType, ScalableVectorType},
+  },
   support::{alignment::MaybeAlign, mod_ref::MemoryEffects}
 };
 
-use super::{
-  instruction::{InstructionBase,
-  UnaryOps, BinaryOps, Instruction}, value::Value, attributes::{AttributeList,
-  AttrKind, Attribute}, use_::Use, //type_::FunctionType,
-  //basic_block::BasicBlock, blits_context::blits_context_mut
-};
+use super::{function::Function, global_value::IntrinsicID};
 
-/*
-pub struct UnaryInstruction {
-  pub inst: InstructionBase
-}
+pub trait UnaryInstruction: Instruction {}
 
-impl UnaryInstruction {
-  pub fn new(v_type: Box<dyn Type>, i_type: u32, _v: Box<dyn Value>,
-    ib: Option<Box<InstructionBase>>) -> Self
-  {
-    UnaryInstruction { inst: InstructionBase::new_ib(v_type, i_type, None,
-      1, ib) }
-  }
-
-  pub fn get_op_code(&self) -> OpCode {
-    self.inst.get_op_code()
-  }
-
-  pub fn get_operand(&self, _i: u32) -> Option<Box<dyn Value>> { None }
-  pub fn set_operand(&self, _v: Option<Box<dyn Value>>) {}
-  pub fn get_num_operands(&self) -> usize { 0 }
-
-  pub fn class_of(i: &InstructionBase) -> bool {
-    i.is_unary_op() ||
-    i.get_op_code() == OpCode::Alloca ||
-    i.get_op_code() == OpCode::Load ||
-    i.get_op_code() == OpCode::VAArg ||
-    i.get_op_code() == OpCode::ExtractValue ||
-    i.get_op_code() >= OpCode::Trunc &&
-    i.get_op_code() <= OpCode::AddrSpaceCast
-  }
-}
-*/
-pub trait UnaryInstruction: Instruction {
-  //fn get_operand(&self, _i: u32) -> Option<&Box<dyn Value>> { None }
-}
-
-struct UnaryOperator {
-  uinst: Option<Box<dyn UnaryInstruction>>
+#[derive(Debug)]
+pub struct UnaryOperator {
+  s: Box<dyn Value>,
+  t: Box<dyn Type>,
+  name: Twine,
+  insert_before: Option<Box<dyn Instruction>>,
+  insert_at_end: Option<BasicBlock>
 }
 
 impl UnaryOperator {
-  pub fn new(_i_type: UnaryOps, _s: Box<dyn Value>, _v_type: Box<dyn Type>,
-    _name: Twine, _ib: Option<Box<InstructionBase>>) -> Self
+  pub fn new_insert_before(s: Box<dyn Value>, t: Box<dyn Type>, name: Twine,
+    ib: Option<Box<dyn Instruction>>) -> Self
   {
-    UnaryOperator { uinst: None, /*UnaryInstruction::new(v_type, i_type as u32, s, ib)*/ }
+    UnaryOperator { s: s, t: t, name: name, insert_before: ib, insert_at_end: None }
   }
 
-  pub fn create_with_copied_flag() {}
-  pub fn create_f_neg_fmf() {}
-
-  pub fn get_op_code(&self) -> Option<UnaryOps> {
-    if self.uinst.as_ref().unwrap().get_op_code() == OpCode::FNeg {
-      return Some(UnaryOps::FNeg);
-    }
-    None
+  pub fn new_insert_at_end(s: Box<dyn Value>, t: Box<dyn Type>, name: Twine,
+    ie: Option<BasicBlock>) -> Self
+  {
+    UnaryOperator { s: s, t: t, name: name, insert_before: None, insert_at_end: ie }
   }
 
-  pub fn class_of(i: &InstructionBase) -> bool {
-    i.is_unary_op()
+  pub fn create_with_copied_flag(&self) {}
+  pub fn create_fneg_fmf(&self) {}
+  pub fn class_of(i: Box<dyn Instruction>) -> bool {
+    i.get_op_code() == OpCode::FNeg
   }
 }
 
-struct BinaryOperator {
-  inst: InstructionBase
+impl Value for UnaryOperator {
+  fn get_type(&self) -> &dyn Type {
+    self.t.as_ref()
+  }
+
+  fn get_value_id(&self) -> ValueType {
+    ValueType::InstructionVal
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
+}
+impl User for UnaryOperator {}
+impl Instruction for UnaryOperator {
+  fn get_op_code(&self) -> OpCode { OpCode::FNeg }
+  fn as_any_inst(&self) -> &dyn Any { self }
+}
+impl UnaryInstruction for UnaryOperator {}
+
+#[derive(Debug)]
+pub struct BinaryOperator {
+  opcode: OpCode,
+  s1: Box<dyn Value>,
+  s2: Box<dyn Value>,
+  v_type: Box<dyn Type>,
+  name: Twine,
+  insert_before: Option<Box<dyn Instruction>>,
+  insert_at_end: Option<BasicBlock>
 }
 
 impl BinaryOperator {
-  pub fn new(i_type: BinaryOps, _s1: Box<dyn Value>, _s2: Box<dyn Value>,
-    v_type: Box<dyn Type>, _name: Twine, ib: Option<Box<InstructionBase>>) -> Self
+  pub fn new_insert_before(opcode: OpCode, s1: Box<dyn Value>,
+    s2: Box<dyn Value>, v_type: Box<dyn Type>, name: Twine,
+    ib: Option<Box<dyn Instruction>>) -> Self
   {
-    BinaryOperator { inst: InstructionBase::new_ib(v_type, i_type as u32, None,
-      0, ib) }
+    BinaryOperator { opcode: opcode, s1: s1, s2: s2, v_type: v_type,
+      name: name, insert_before: ib, insert_at_end: None }
+  }
+
+  pub fn new_insert_at_end(opcode: OpCode, s1: Box<dyn Value>,
+    s2: Box<dyn Value>, v_type: Box<dyn Type>, name: Twine,
+    ie: Option<BasicBlock>) -> Self
+  {
+    BinaryOperator { opcode: opcode, s1: s1, s2: s2, v_type: v_type,
+      name: name, insert_before: None, insert_at_end: ie }
   }
 
   pub fn create_with_copied_flag() {}
@@ -96,61 +101,34 @@ impl BinaryOperator {
   pub fn create_nsw() {}
   pub fn create_nuw() {}
   pub fn create_exact() {}
-
   pub fn create_neg() {}
   pub fn create_nsw_neg() {}
   pub fn create_nuw_neg() {}
   pub fn create_not() {}
-
-  pub fn get_op_code(&self) -> Option<BinaryOps> {
-    /*
-    let code = self.inst.get_op_code();
-    if code == BinaryOps::Add as u32 {
-      return Some(BinaryOps::Add);
-    } else if code == BinaryOps::FAdd as u32 {
-      return Some(BinaryOps::FAdd);
-    } else if code == BinaryOps::Sub as u32 {
-      return Some(BinaryOps::Sub);
-    } else if code == BinaryOps::FSub as u32 {
-      return Some(BinaryOps::FSub);
-    } else if code == BinaryOps::Mul as u32 {
-      return Some(BinaryOps::Mul);
-    } else if code == BinaryOps::FMul as u32 {
-      return Some(BinaryOps::FMul);
-    } else if code == BinaryOps::UDiv as u32 {
-      return Some(BinaryOps::UDiv);
-    } else if code == BinaryOps::SDiv as u32 {
-      return Some(BinaryOps::SDiv);
-    } else if code == BinaryOps::FDiv as u32 {
-      return Some(BinaryOps::FDiv);
-    } else if code == BinaryOps::URem as u32 {
-      return Some(BinaryOps::URem);
-    } else if code == BinaryOps::SRem as u32 {
-      return Some(BinaryOps::SRem);
-    } else if code == BinaryOps::FRem as u32 {
-      return Some(BinaryOps::FRem);
-    } else if code == BinaryOps::Shl as u32 {
-      return Some(BinaryOps::Shl);
-    } else if code == BinaryOps::LShr as u32 {
-      return Some(BinaryOps::LShr);
-    } else if code == BinaryOps::AShr as u32 {
-      return Some(BinaryOps::AShr);
-    } else if code == BinaryOps::And as u32 {
-      return Some(BinaryOps::And);
-    } else if code == BinaryOps::Or as u32 {
-      return Some(BinaryOps::Or);
-    } else if code == BinaryOps::Xor as u32 {
-      return Some(BinaryOps::Xor);
-    }
-    */
-    None
-  }
-
   pub fn swap_operands() {}
 
-  pub fn class_of(i: &InstructionBase) -> bool {
+  pub fn class_of(i: Box<dyn Instruction>) -> bool {
     i.is_binary_op()
   }
+}
+
+impl Value for BinaryOperator {
+  fn get_type(&self) -> &dyn Type {
+    self.v_type.as_ref()
+  }
+
+  fn get_value_id(&self) -> ValueType {
+    ValueType::InstructionVal
+  }
+
+  fn as_any(&self) -> &dyn Any {
+    self
+  }
+}
+impl User for BinaryOperator {}
+impl Instruction for BinaryOperator {
+  fn get_op_code(&self) -> OpCode { self.opcode.clone() }
+  fn as_any_inst(&self) -> &dyn Any { self }
 }
 
 // This is the base class for all instructions that perform data casts.
@@ -167,7 +145,7 @@ pub trait CastInst: UnaryInstruction {
   fn create_trunc_or_bit_cast(&self) {}
   fn is_bit_castable(&self) {}
   fn is_bit_or_noop_pointer_castable(&self) {}
-  fn get_cast_op_code(&self) {}
+  //fn get_cast_op_code(&self) {}
   fn is_integer_cast(&self) {}
   fn is_noop_cast(&self) {}
   fn is_eliminable_cast_pair(&self) {}
@@ -175,6 +153,117 @@ pub trait CastInst: UnaryInstruction {
   fn get_src_type(&self) {}
   fn get_dest_type(&self) {}
   fn cast_is_valid(&self) {}
+}
+
+// Returns the opcode necessary to cast src_val into dest_t using usual casting rules.
+// Infer the opcode for cast operand and type.
+pub fn get_cast_op_code(src_val: &dyn Value, src_is_signed: bool,
+  dst_orig_t: &dyn Type, dst_is_signed: bool) -> OpCode
+{
+  let mut src_t = src_val.get_type();
+  let mut dst_t = dst_orig_t;
+  debug_assert!(src_t.is_first_class_type() && dst_t.is_first_class_type(),
+    "Only first class types are castable.");
+  
+  // if src_t == dst_t { retturn BitCast; }
+
+  if src_t.as_any().downcast_ref::<FixedVectorType>().is_some() {
+    if dst_t.as_any().downcast_ref::<FixedVectorType>().is_some() {
+      let src_vec_t = src_t.as_any().downcast_ref::<FixedVectorType>();
+      let dst_vec_t = dst_t.as_any().downcast_ref::<FixedVectorType>();
+      if src_vec_t.unwrap().get_element_count() == dst_vec_t.unwrap().get_element_count() {
+        src_t = src_vec_t.unwrap().get_element_type();
+        dst_t = dst_vec_t.unwrap().get_element_type();
+      }
+    }
+  }
+  if src_t.as_any().downcast_ref::<ScalableVectorType>().is_some() {
+    if dst_t.as_any().downcast_ref::<ScalableVectorType>().is_some() {
+      let src_vec_t = src_t.as_any().downcast_ref::<ScalableVectorType>();
+      let dst_vec_t = dst_t.as_any().downcast_ref::<ScalableVectorType>();
+      if src_vec_t.unwrap().get_element_count() == dst_vec_t.unwrap().get_element_count() {
+        //src_t = src_vec_t.unwrap().get_element_type();
+        //dst_t = dst_vec_t.unwrap().get_element_type();
+      }
+    }
+  }
+
+  let src_bits = src_t.get_primitive_size_in_bits();
+  let dst_bits = dst_t.get_primitive_size_in_bits();
+
+  if dst_t.is_integer_type() {
+    if src_t.is_integer_type() {
+      if dst_bits < src_bits {
+        return OpCode::Trunc;
+      } else if dst_bits > src_bits {
+        if src_is_signed {
+          return OpCode::SExt;
+        } else {
+          return OpCode::ZExt;
+        }
+      } else {
+        return OpCode::BitCast;
+      }
+    } else if src_t.is_floating_point_type() {
+      if dst_is_signed {
+        return OpCode::FPToSI;
+      } else {
+        return OpCode::FPToUI;
+      }
+    } else if src_t.is_vector_type() {
+      debug_assert!(dst_bits == src_bits,
+        "Casting vector to integer of different width.");
+      return OpCode::BitCast;
+    } else {
+      debug_assert!(src_t.is_pointer_type(),
+        "Casting from a valur that is not first-class type.");
+      return OpCode::PtrToInt;
+    }
+  } else if dst_t.is_floating_point_type() {
+    if src_t.is_integer_type() {
+      if src_is_signed {
+        return OpCode::SIToFp;
+      } else {
+        return OpCode::UIToFP;
+      }
+    } else if src_t.is_floating_point_type() {
+      if dst_bits < src_bits {
+        return OpCode::FPTrunc;
+      } else if dst_bits > src_bits {
+        return OpCode::FPExt;
+      } else {
+        return OpCode::BitCast;
+      }
+    } else if src_t.is_vector_type() {
+      debug_assert!(dst_bits == src_bits,
+        "Casting vector to floating point of different width.");
+      return OpCode::BitCast;
+    }
+    unreachable!("Casting pointer or non-first class to float.");
+  } else if dst_t.is_vector_type() {
+    debug_assert!(dst_bits == src_bits,
+      "Illegal cast to vector (wrong type or size).");
+    return OpCode::BitCast;
+  } else if dst_t.is_pointer_type() {
+    if src_t.is_pointer_type() {
+      if dst_t.get_pointer_address_space() != src_t.get_pointer_address_space() {
+        return OpCode::AddrSpaceCast;
+      }
+      return OpCode::BitCast;
+    } else if src_t.is_integer_type() {
+      return OpCode::IntToPtr;
+    }
+    unreachable!("Casting pointer to other than pointer or int.");
+  } else if dst_t.is_x86_mmx_type() {
+    if src_t.is_vector_type() {
+      debug_assert!(dst_bits == src_bits,
+        "Casting vector of wrong width to X86_MMX.");
+      return OpCode::BitCast;
+    }
+    unreachable!("Illegal cast to X86_MMX.");
+  }
+
+  unreachable!("Casting to type that is not first-class.");
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -416,9 +505,20 @@ pub trait CallBase: Instruction {
   // to the called function.
   fn has_argument(&self, _v: Box<dyn Value>) -> bool { false }
 
-  fn get_called_operand(&self) {}
+  fn get_called_operand(&self) -> Option<Box<dyn Value>> { None }
+
   fn get_called_operand_use(&self) {}
-  fn get_called_function(&self) {}
+
+  // Returns the function called, or None if this is an indirect function
+  // invocation or the function signature does not match the call signature.
+  fn get_called_function(&self) -> Option<Function> {
+    //let f =
+      //self.get_called_operand().as_ref().unwrap().as_any().downcast_ref::<Function>();
+    //if f.is_some() {
+
+    //}
+    None
+  }
 
   // Return true if the callsite is an indirect call.
   fn is_indirect_call(&self) -> bool { false }
@@ -434,7 +534,9 @@ pub trait CallBase: Instruction {
   // Tests if this call site is marked as a tailcall.
   fn is_tail_call(&self) -> bool { false }
 
-  fn get_intrinsic_id(&self) {}
+  // Returns the intrinsic ID of the intrinsic called or NotIntrinsic if the
+  // called function is not an intrinsic, or if this is an indirect call.
+  fn get_intrinsic_id(&self) -> IntrinsicID { IntrinsicID::NotIntrinsic }
 
   fn set_called_operand(&mut self, _v: Box<dyn Value>) {}
 

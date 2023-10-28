@@ -42,8 +42,8 @@ pub fn constant_fold_unary_instruction() {}
 pub fn constant_fold_binary_instruction(opcode: &OpCode,
   c1: &Box<dyn Constant>, c2: &Box<dyn Constant>) -> Option<Box<dyn Constant>>
 {
-    debug_assert!(InstructionBase::is_binary_op_static(opcode),
-      "Non-binary instruction detected.");
+    //debug_assert!(InstructionBase::is_binary_op_static(opcode),
+      //"Non-binary instruction detected.");
 
     let t = Box::new(c1.get_type());
     let identity =
@@ -104,7 +104,7 @@ pub fn constant_fold_binary_instruction(opcode: &OpCode,
         }
         OpCode::URem => {
           if ci2.unwrap().is_one() { // x % 1 == 0
-            return Some(constant::get_null_value(&Box::new(&ci2.unwrap().get_type())));
+            return Some(constant::get_null_const_value(&Box::new(&ci2.unwrap().get_type())));
           }
           if ci2.unwrap().is_zero() { // x % 0 == poison
             // TODO
@@ -112,7 +112,7 @@ pub fn constant_fold_binary_instruction(opcode: &OpCode,
         }
         OpCode::SRem => {
           if ci2.unwrap().is_one() { // x % 1 == 0
-            return Some(constant::get_null_value(&Box::new(&ci2.unwrap().get_type())));
+            return Some(constant::get_null_const_value(&Box::new(&ci2.unwrap().get_type())));
           }
           if ci2.unwrap().is_zero() { // x % 0 == poison
             // TODO

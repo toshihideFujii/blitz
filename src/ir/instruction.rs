@@ -108,33 +108,6 @@ pub enum TermOps {
   CallBr = 11,
 }
 
-// Standard unary operators.
-pub enum UnaryOps {
-  FNeg = 12
-}
-
-// Standard binary operators.
-pub enum BinaryOps {
-  Add = 13,
-  FAdd = 14,
-  Sub = 15,
-  FSub = 16,
-  Mul = 17,
-  FMul = 18,
-  UDiv = 19,
-  SDiv = 20,
-  FDiv = 21,
-  URem = 22,
-  SRem = 23,
-  FRem = 24,
-  Shl = 25,
-  LShr = 26,
-  AShr = 27,
-  And = 28,
-  Or = 29,
-  Xor = 30,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum MemoryOps {
   Alloca,
@@ -189,12 +162,86 @@ pub enum OtherOps {
 pub trait Instruction: User {
   fn get_parent(&self) -> &Option<BasicBlock> { &None }
 
+  fn set_parent(&mut self, _p: BasicBlock) {}
+
+  // Return the function this instruction belongs to.
+  fn get_function(&self) -> &Option<Function> { &None }
+
   // Returns a member of one of the enums like Instruction::Add.
   fn get_op_code(&self) -> OpCode { OpCode::Unknown }
 
-  fn is_terminator(&self) -> bool { false }
+  fn user_back(&self) {}
+  fn get_module(&self) /*-> &Module*/ {}
+  fn remove_from_parent(&self) {}
+  fn erase_from_parent(&self) {}
+  fn insert_before(&self) {}
+  fn insert_after(&self) {}
+  fn insert_into(&self, _bb: BasicBlock) {}
+  fn move_before(&self) {}
+  fn move_after(&self) {}
+  fn comes_before(&self) {}
+  fn get_insertion_poiint_after_def(&self) {}
+  fn get_opcode_name(&self) {}
+  fn is_only_user_of_any_operand(&self) {}
 
-  fn is_exceptional_terminator(&self) -> bool { false }
+  fn is_terminator(&self) -> bool {
+    let opcode = self.get_op_code();
+    OpCode::Ret <= opcode && opcode <= OpCode::CallBr
+  }
+
+  fn is_unary_op(&self) -> bool {
+    let opcode = self.get_op_code();
+    OpCode::FNeg <= opcode && opcode <= OpCode::FNeg
+  }
+
+  fn is_binary_op(&self) -> bool {
+    let opcode = self.get_op_code();
+    OpCode::Add <= opcode && opcode <= OpCode::Xor
+  }
+
+  fn is_int_div_rem(&self) -> bool {
+    let opcode = self.get_op_code();
+    opcode == OpCode::UDiv || opcode == OpCode::SDiv ||
+    opcode == OpCode::URem || opcode == OpCode::SRem
+  }
+
+  fn is_shift(&self) -> bool {
+    let opcode = self.get_op_code();
+    OpCode::Shl <= opcode && opcode <= OpCode::AShr
+  }
+
+  fn is_cast(&self) -> bool {
+    let opcode = self.get_op_code();
+    OpCode::Trunc  <= opcode && opcode <= OpCode::AddrSpaceCast
+  }
+
+  fn is_funclet_pad(&self) -> bool {
+    let opcode = self.get_op_code();
+    OpCode::CleanupPad <= opcode && opcode <= OpCode::CatchPad
+  }
+
+  fn is_logical_shift(&self) -> bool {
+    let opcode = self.get_op_code();
+    OpCode::Shl == opcode || opcode == OpCode::LShr
+  }
+
+  fn is_arithmetic_shift(&self) -> bool {
+    self.get_op_code() == OpCode::AShr
+  }
+
+  fn is_bitwise_logic_op(&self) -> bool {
+    let opcode = self.get_op_code();
+    opcode == OpCode::And || opcode == OpCode::Or || opcode == OpCode::Xor
+  }
+
+  fn is_exceptional_terminator(&self) -> bool {
+    let opcode = self.get_op_code();
+    if opcode == OpCode::CatchSwitch || opcode == OpCode::CatchRet ||
+       opcode == OpCode::CleanupRet || opcode == OpCode::Invoke ||
+       opcode == OpCode::Resume
+    { return true; }
+    false
+  }
 
   // Return true if this instruction has an AtomicOrdering of unordered
   // or higher.
@@ -243,129 +290,6 @@ impl InstructionBase {
   {
     InstructionBase { v_type: v_type, has_metadata: false, parent: None,
       dbg_loc: None, order: 0 }
-  }
-
-  pub fn user_back() {}
-
-  pub fn get_parent(&self) -> &Option<BasicBlock> {
-    &self.parent
-  }
-
-  pub fn set_parent(&mut self, p: BasicBlock) {
-    self.parent = Some(p);
-  }
-
-  pub fn get_module(&self) /*-> &Module*/ {
-    
-  }
-
-  // Return the function this instruction belongs to.
-  pub fn get_function(&self) -> &Option<Function> {
-    self.parent.as_ref().unwrap().get_parent()
-  }
-  
-  pub fn remove_from_parent() {}
-  pub fn erase_from_parent() {}
-  pub fn insert_before() {}
-  pub fn insert_after() {}
-  pub fn insert_into(&self, _bb: BasicBlock) {}
-  pub fn move_before() {}
-  pub fn move_after() {}
-  pub fn comes_before() {}
-  pub fn get_insertion_poiint_after_def() {}
-
-  // Returns a member of one of the enums like InstructionBase::Add.
-  pub fn get_op_code(&self) -> OpCode { OpCode::Unknown }
-
-  pub fn get_opcode_name() {}
-
-  pub fn is_terminator(&self) -> bool {
-    InstructionBase::is_terminator_static(self.get_op_code())
-  }
-
-  pub fn is_unary_op(&self) -> bool {
-    InstructionBase::is_unary_op_static(self.get_op_code())
-  }
-
-  pub fn is_binary_op(&self) -> bool {
-    InstructionBase::is_binary_op_static(&self.get_op_code())
-  }
-
-  pub fn is_int_div_rem(&self) -> bool {
-    InstructionBase::is_int_div_rem_static(self.get_op_code())
-  }
-
-  pub fn is_shift(&self) -> bool {
-    InstructionBase::is_shift_static(self.get_op_code())
-  }
-
-  pub fn is_cast(&self) -> bool {
-    InstructionBase::is_cast_static(self.get_op_code())
-  }
-
-  pub fn is_funclet_pad(&self) -> bool {
-    InstructionBase::is_funclet_pad_static(self.get_op_code())
-  }
-
-  pub fn is_exceptional_terminator() {}
-  pub fn is_only_user_of_any_operand() {}
-
-  pub fn is_logical_shift(&self) -> bool {
-    self.get_op_code() == OpCode::Shl || self.get_op_code() == OpCode::LShr
-  }
-
-  pub fn is_arithmetic_shift(&self) -> bool {
-    self.get_op_code() == OpCode::AShr
-  }
-
-  pub fn is_bitwise_logic_op(&self) -> bool {
-    InstructionBase::is_bitwise_logic_op_static(self.get_op_code())
-  }
-
-  pub fn is_terminator_static(opcode: OpCode) -> bool {
-    OpCode::Ret <= opcode && opcode <= OpCode::CallBr
-  }
-
-  pub fn is_unary_op_static(opcode: OpCode) -> bool {
-    OpCode::FNeg <= opcode && opcode <= OpCode::FNeg
-  }
-
-  pub fn is_binary_op_static(opcode: &OpCode) -> bool {
-    OpCode::Add <= *opcode && *opcode <= OpCode::Xor //BinaryOps::Xor as u32 + 1
-  }
-
-  pub fn is_int_div_rem_static(opcode: OpCode) -> bool {
-    opcode == OpCode::UDiv || opcode == OpCode::SDiv ||
-    opcode == OpCode::URem || opcode == OpCode::SRem
-  }
-
-  pub fn is_shift_static(opcode: OpCode) -> bool {
-    OpCode::Shl <= opcode && opcode <= OpCode::AShr
-  }
-
-  pub fn is_bitwise_logic_op_static(opcode: OpCode) -> bool {
-    opcode == OpCode::And || opcode == OpCode::Or || opcode == OpCode::Xor
-  }
-
-  // Determine if the opcode is one of the CastInst instructions.
-  pub fn is_cast_static(opcode: OpCode) -> bool {
-    OpCode::Trunc  <= opcode && opcode <= OpCode::AddrSpaceCast
-  }
-
-  // Determine if the opcode is one of the FuncletPadInst instructions.
-  pub fn is_funclet_pad_static(opcode: OpCode) -> bool {
-    OpCode::CleanupPad <= opcode && opcode <= OpCode::CatchPad
-  }
-
-  // Return true if the opcode is a terminator related to exception handling.
-  pub fn is_exceptional_terminator_static(opcode: OpCode) -> bool {
-    if opcode == OpCode::CatchSwitch || opcode == OpCode::CatchRet ||
-       opcode == OpCode::CleanupRet || opcode == OpCode::Invoke ||
-       opcode == OpCode::Resume
-    {
-      return true;
-    }
-    false
   }
 
   // Return true if this instruction has metadata attached to it other

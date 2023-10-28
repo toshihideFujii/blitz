@@ -10,7 +10,7 @@ use crate::{support::{atomic_ordering::AtomicOrdering, alignment::Align},
 use super::{instr_types::{UnaryInstruction, CmpInst, Predicate, //CallBase,
   OperandBundleDef, CallBase, FuncletPadInst, CastInst},
   type_::{Type, PointerType, VectorType, ArrayType, FunctionType, UnknownType, /*FunctionType*/},
-  instruction::{InstructionBase, OpCode, Instruction}, value::{Value, ValueType},
+  instruction::{OpCode, Instruction}, value::{Value, ValueType},
   //attributes::{AttrKind, /*AttributeList*/},
   blits_context::{/*BlitzContext,*/ SyncScopeID}, basic_block::BasicBlock,
   constants::ConstantInt, constant::Constant,
@@ -71,7 +71,7 @@ impl AllocaInst {
   }
 
   // Return the address space for the allocation.
-  pub fn get_address_space(&self) -> u32 {
+  pub fn get_address_space(&self) -> usize {
     self.get_ptr_type().unwrap().get_address_space()
   }
 
@@ -505,7 +505,7 @@ impl Value for FenceInst {
   fn get_type(&self) -> &dyn Type {
     self.t.as_ref()
   }
-  
+
   fn get_value_id(&self) -> ValueType {
     ValueType::InstructionVal
   }
@@ -1308,85 +1308,41 @@ pub enum TailCallKind {
 // calling convention. This class uses low bit of the syb_class_data field
 // to indicate whether or not this is a tail call. The rest of the bits
 // hold the calling convention of the call.
-struct CallInst {
-  //call_base: CallBase
-}
+pub trait CallInst: CallBase {
+  fn compute_num_operands(&self) {}
+  fn craete_malloc(&self) {}
+  fn create_free(&self) {}
 
-impl CallInst {
-  /*
-  pub fn new_ib(ft: FunctionType, _func: Box<dyn Value>,
-    args: Vec<Box<dyn Value>>, bundles: Vec<OperandBundleDefType<Box<dyn Value>>>,
-    _name: Twine, ib: Option<Box<Instruction>>) -> Self
-  {
-    let call_inst = CallInst {
-      call_base: CallBase::new_ib(ft.get_return_type(),
-      OtherOps::Call as u32, None,
-      args.len() as u32 + CallBase::count_bundle_inputs(bundles) as u32 + 1,
-      ib, AttributeList::new(), ft)
-    };
-    call_inst
-  }
-
-  pub fn new_ie(ft: FunctionType, _func: Box<dyn Value>,
-    args: Vec<Box<dyn Value>>, bundles: Vec<OperandBundleDefType<Box<dyn Value>>>,
-    _name: Twine, ie: Option<BasicBlock>) -> Self
-  {
-    CallInst { call_base: CallBase::new_ie(ft.get_return_type(),
-      OtherOps::Call as u32, None,
-      args.len() as u32 + CallBase::count_bundle_inputs(bundles) as u32 + 1,
-      ie, AttributeList::new(), ft)
-    }
-  }
-  */
-
-  fn init(&mut self, _func: Box<dyn Value>, _args: Vec<Box<dyn Value>>,
-    _bundles: Vec<OperandBundleDef<Box<dyn Value>>>, _name: Twine)
-  {
-    // Set operands in order of their index to match use-list-order prediction.
-    // copy(args, op);
-    //self.call_base.set_called_operand(func);
-
-    //self.call_base.inst.set_name(name);
-  }
-
-  pub fn compute_num_operands() {}
-  pub fn craete_malloc() {}
-  pub fn create_free() {}
-
-  pub fn get_tail_call_kind(&self) -> TailCallKind {
+  fn get_tail_call_kind(&self) -> TailCallKind {
     TailCallKind::None
   }
 
-  pub fn is_tail_call(&self) -> bool {
+  fn is_tail_call(&self) -> bool {
     let kind = self.get_tail_call_kind();
     kind == TailCallKind::Tail || kind == TailCallKind::MustTail
   }
 
-  pub fn is_must_tail_call(&self) -> bool {
+  fn is_must_tail_call(&self) -> bool {
     self.get_tail_call_kind() == TailCallKind::MustTail
   }
 
-  pub fn is_no_tail_call(&self) -> bool {
+  fn is_no_tail_call(&self) -> bool {
     self.get_tail_call_kind() == TailCallKind::NoTail
   }
 
-  pub fn set_tail_call_kind(_tck: TailCallKind) {}
+  fn set_tail_call_kind(&self, _tck: TailCallKind) {}
 
   // Return true if the call can return twice.
-  pub fn can_return_twice(&self) -> bool {
+  fn can_return_twice(&self) -> bool {
     //self.call_base.has_fn_attr(AttrKind::ReturnsTwice)
     false
   }
 
-  pub fn set_can_return_twice(&mut self) {
+  fn set_can_return_twice(&mut self) {
     //self.call_base.add_fn_attr(AttrKind::ReturnsTwice)
   }
 
-  pub fn class_of(i: InstructionBase) -> bool {
-    i.get_op_code() == OpCode::Call
-  }
-
-  pub fn update_prof_weight() {}
+  fn update_prof_weight(&self) {}
 }
 
 // This class represents the Blitz 'select' instruction.
@@ -2068,19 +2024,19 @@ impl Instruction for LandingPadInst {
 // Execution does not continue in this function any longer.
 #[derive(Debug)]
 struct ReturnInst {
-  retval: Box<dyn Value>,
+  retval: Option<Box<dyn Value>>,
   insert_before: Option<Box<dyn Instruction>>,
   insert_at_end: Option<BasicBlock>
 }
 
 impl ReturnInst {
-  pub fn new_insert_before(retval: Box<dyn Value>,
+  pub fn new_insert_before(retval: Option<Box<dyn Value>>,
     ib: Option<Box<dyn Instruction>>) -> Self
   {
     ReturnInst { retval: retval, insert_before: ib, insert_at_end: None }
   }
 
-  pub fn new_insert_at_end(retval: Box<dyn Value>,
+  pub fn new_insert_at_end(retval: Option<Box<dyn Value>>,
     ie: Option<BasicBlock>) -> Self
   {
     ReturnInst { retval: retval, insert_before: None, insert_at_end: ie }
@@ -2093,27 +2049,14 @@ impl ReturnInst {
     None
   }
 
-  pub fn get_num_successors(&self) -> u32 { 0 }
-
-  pub fn get_operand(&self, i: u32) -> Option<&Box<dyn Value>> {
-    if i == 0  { return Some(&self.retval); }
-    None
-  }
-
-  pub fn set_operand(&mut self, i: u32, v: Box<dyn Value>) {
-    debug_assert!(i == 0, "Set value at index 0 only.");
-    self.retval = v;
-  }
-
-  pub fn get_num_operands(&self) -> u32 { 0 }
-
   pub fn class_of(i: Box<dyn Instruction>) -> bool {
     i.get_op_code() == OpCode::Ret
   }
 }
+
 impl Value for ReturnInst {
   fn get_type(&self) -> &dyn Type {
-    self.retval.get_type()
+    self.retval.as_ref().unwrap().get_type()
   }
 
   fn get_value_id(&self) -> ValueType {
@@ -2122,8 +2065,30 @@ impl Value for ReturnInst {
 
   fn as_any(&self) -> &dyn Any { self }
 }
-impl User for ReturnInst {}
+
+impl User for ReturnInst {
+  fn get_operand(&self, i: usize) -> Option<&Box<dyn Value>> {
+    if i == 0  {
+      let ret = self.retval.as_ref().unwrap();
+      return Some(ret);
+    }
+    None
+  }
+
+  fn set_operand(&mut self, i: usize, v: Box<dyn Value>) {
+    debug_assert!(i == 0, "Set value at index 0 only.");
+    self.retval = Some(v);
+  }
+
+  fn get_num_operands(&self) -> usize {
+    if self.retval.is_some() { return 1; }
+    0
+  }
+}
+
 impl Instruction for ReturnInst {
+  fn get_num_successors(&self) -> usize { 0 }
+
   fn as_any_inst(&self) -> &dyn Any {
     self
   }
@@ -2132,35 +2097,33 @@ impl Instruction for ReturnInst {
 // Conditional or unconditional branch instruction.
 #[derive(Debug)]
 pub struct BranchInst {
-  if_true: BasicBlock,
-  if_false: BasicBlock,
+  if_true: Box<dyn Value>,
+  if_false: Option<Box<dyn Value>>,
   cond: Option<Box<dyn Value>>,
   insert_before: Option<Box<dyn Instruction>>,
   insert_at_end: Option<BasicBlock>
 }
 
 impl BranchInst {
-  pub fn new_insert_before(if_true: BasicBlock, if_false: BasicBlock,
-    cond: Box<dyn Value>, ib: Option<Box<dyn Instruction>>) -> Self
+  pub fn new_insert_before(if_true: Box<BasicBlock>,
+    if_false: Option<Box<BasicBlock>>, cond: Option<Box<dyn Value>>,
+    ib: Option<Box<dyn Instruction>>) -> Self
   {
-    BranchInst { if_true: if_true, if_false: if_false, cond: Some(cond),
+    let mut false_val: Option<Box<dyn Value>> = None;
+    if if_false.is_some() { false_val = Some(if_false.unwrap()); }
+    BranchInst { if_true: if_true, if_false: false_val, cond: cond,
       insert_before: ib, insert_at_end: None }
   }
 
-  pub fn new_insert_at_end(if_true: BasicBlock, if_false: BasicBlock,
-    cond: Box<dyn Value>, ie: Option<BasicBlock>) -> Self
+  pub fn new_insert_at_end(if_true: Box<BasicBlock>,
+    if_false: Option<Box<BasicBlock>>, cond: Option<Box<dyn Value>>,
+    ie: Option<BasicBlock>) -> Self
   {
-    BranchInst { if_true: if_true, if_false: if_false, cond: Some(cond),
+    let mut false_val: Option<Box<dyn Value>> = None;
+    if if_false.is_some() { false_val = Some(if_false.unwrap()); }
+    BranchInst { if_true: if_true, if_false: false_val, cond: cond,
       insert_before: None, insert_at_end: ie }
   }
-
-  pub fn get_operand(&self) -> Option<&Box<dyn Value>> {
-    None
-  }
-
-  pub fn set_operand(&mut self, _v: Box<dyn Value>) {}
-
-  pub fn get_num_operands(&self) -> usize { 0 }
 
   pub fn is_unconditional(&self) -> bool {
     self.get_num_operands() == 1
@@ -2180,29 +2143,13 @@ impl BranchInst {
     self.cond = Some(v);
   }
 
-  pub fn get_num_successors(&self) -> usize {
-    if self.is_conditional() { return 2; } else { return 1; }
-  }
-
-  pub fn get_successor(&self, i: usize) -> Option<&BasicBlock> {
-    debug_assert!(i < self.get_num_successors(), "Successor # out of range for branch.");
-    if i == 1 { return Some(&self.if_true); }
-    else if i == 2 { return Some(&self.if_false); }
-    None
-  }
-
-  pub fn set_successor(&mut self, i: usize, new_succ: BasicBlock) {
-    debug_assert!(i < self.get_num_successors(), "Successor # out of range for branch.");
-    if i == 1 { self.if_true = new_succ; }
-    else if i == 2 { self.if_false = new_succ; }
-  }
-
   pub fn swap_successors() {}
 
   pub fn class_of(i: Box<dyn Instruction>) -> bool {
     i.get_op_code() == OpCode::Br
   }
 }
+
 impl Value for BranchInst {
   fn get_type(&self) -> &dyn Type {
     self.if_true.get_type()
@@ -2214,8 +2161,56 @@ impl Value for BranchInst {
 
   fn as_any(&self) -> &dyn Any { self }
 }
-impl User for BranchInst {}
+
+impl User for BranchInst {
+  fn get_operand(&self, i: usize) -> Option<&Box<dyn Value>> {
+    if i == 0 && self.cond.is_some() {
+      let cond = self.cond.as_ref().unwrap();
+      return Some(cond);
+    } else if i == 1 && self.if_false.is_some() {
+      let if_false = self.if_false.as_ref().unwrap();
+      return Some(if_false);
+    } else if i == 2 {
+      return Some(&self.if_true);
+    }
+    None
+  }
+
+  fn set_operand(&mut self, _i: usize, _v: Box<dyn Value>) {}
+
+  fn get_num_operands(&self) -> usize {
+    if self.if_false.is_none() && self.cond.is_none() {
+      return 1;
+    } else if self.if_false.is_some() && self.cond.is_none() {
+      return 2;
+    } else if self.if_false.is_some() && self.cond.is_some() {
+      return 3;
+    }
+    panic!("Invalidate condition.");
+  }
+}
+
 impl Instruction for BranchInst {
+  fn get_successor(&self, i: usize) -> Option<&BasicBlock> {
+    debug_assert!(i < self.get_num_successors(), "Successor # out of range for branch.");
+    if i == 0 {
+      return self.if_true.as_any().downcast_ref::<BasicBlock>();
+    } else if i == 1 && self.if_false.is_some() {
+      return self.if_false.as_ref().unwrap().as_any().downcast_ref::<BasicBlock>();
+    }
+    None
+  }
+
+  fn set_successor(&mut self, i: usize, bb: BasicBlock) {
+    debug_assert!(i < self.get_num_successors(), "Successor # out of range for branch.");
+    if i == 0 { self.if_true = Box::new(bb); }
+    else if i == 1 { self.if_false = Some(Box::new(bb)); }
+  }
+
+  fn get_num_successors(&self) -> usize {
+    if self.is_conditional() { return 2; } else { return 1; }
+  }
+
   fn as_any_inst(&self) -> &dyn Any {
     self
   }
@@ -3745,21 +3740,137 @@ impl UnaryInstruction for FreezeInst {}
 
 #[cfg(test)]
 mod tests {
-  //use crate::ir::{type_::IntegerType, constants::ConstantInt};
-  //use super::*;
+  use crate::ir::{
+    type_::{self, FixedVectorType, ScalableVectorType},
+    type_::IntegerType,
+    blits_context::{BlitzContext, blits_context_mut},
+    constants::ConstantInt, constant, instr_types};
+  use super::*;
 
   #[test]
   fn test_return_inst() {
-    /*
     let mut c = BlitzContext::new();
-    let r0 = ReturnInst::new_ib(&mut c, None, None);
+    let r0 =
+      ReturnInst::new_insert_before(None, None);
     assert_eq!(r0.get_num_operands(), 0);
 
     let i1 = IntegerType::get(&mut c, 1);
     let one = ConstantInt::get(&i1, 1, true);
-    let r1 = ReturnInst::new_ib(&mut c, Some(Box::new(one)), None);
+    let r1 =
+      ReturnInst::new_insert_before(Some(Box::new(one)), None);
     assert_eq!(r1.get_num_operands(), 1);
-    //assert_eq!(r1.get_operand(0).unwrap().as_ref(), one);
-    */
+    let val =
+      r1.get_operand(0).unwrap().as_any().downcast_ref::<ConstantInt>();
+    assert_eq!(val.unwrap().is_one(), true);
+  }
+
+  #[test]
+  fn test_branch_inst() {
+    let bb0 = BasicBlock::new(None, None,
+      None);
+    let br0 = BranchInst::new_insert_before(Box::new(bb0),
+      None, None, None);
+    assert_eq!(br0.is_unconditional(), true);
+    assert_eq!(br0.is_conditional(), false);
+    assert_eq!(br0.get_num_successors(), 1);
+    assert_eq!(br0.get_num_operands(), 1);
+
+    let i1 = IntegerType  ::get(&blits_context_mut(), 1);
+    let one = ConstantInt::get(&i1, 1, true);
+
+    let bb0_1 = BasicBlock::new(
+      Some(Twine::new_from_string(String::from("bb0_1"))),
+      None, None);
+    let bb1 = BasicBlock::new(
+      Some(Twine::new_from_string(String::from("bb1"))),
+      None, None);
+    let br1 = BranchInst::new_insert_before(Box::new(bb0_1),
+      Some(Box::new(bb1)), Some(Box::new(one)), None);
+    assert_eq!(br1.is_unconditional(), false);
+    assert_eq!(br1.is_conditional(), true);
+    assert_eq!(br1.get_num_successors(), 2);
+    assert_eq!(br1.get_num_operands(), 3);
+
+    let cond1 =
+      br1.get_operand(0).unwrap().as_any().downcast_ref::<ConstantInt>();
+    assert_eq!(cond1.unwrap().is_one(), true);
+    let cond2 =
+      br1.get_condition().as_any().downcast_ref::<ConstantInt>();
+    assert_eq!(cond2.unwrap().is_one(), true);
+
+    let if_false_1 =
+      br1.get_operand(1).unwrap().as_any().downcast_ref::<BasicBlock>();
+    assert_eq!(if_false_1.as_ref().unwrap().name.as_ref().unwrap().str(),
+      Some(String::from("bb1")));
+    let if_false_2 = br1.get_successor(1);
+    assert_eq!(if_false_2.as_ref().unwrap().name.as_ref().unwrap().str(),
+      Some(String::from("bb1")));
+
+    let if_true_1 =
+      br1.get_operand(2).unwrap().as_any().downcast_ref::<BasicBlock>();
+    assert_eq!(if_true_1.as_ref().unwrap().name.as_ref().unwrap().str(),
+      Some(String::from("bb0_1")));
+    let if_true_2 = br1.get_successor(0);
+    assert_eq!(if_true_2.as_ref().unwrap().name.as_ref().unwrap().str(),
+      Some(String::from("bb0_1")));
+  }
+
+  #[test]
+  fn test_cast_inst() {
+    let i8_t = type_::get_int_8_type(&blits_context_mut());
+    let i16_t = type_::get_int_16_type(&blits_context_mut());
+    let i16_t_2 = type_::get_int_16_type(&blits_context_mut());
+    let i16_t_3 = type_::get_int_16_type(&blits_context_mut());
+    let i16_t_4 = type_::get_int_16_type(&blits_context_mut());
+    let i32_t = type_::get_int_32_type(&blits_context_mut());
+    let i32_t_2 = type_::get_int_32_type(&blits_context_mut());
+    let i32_t_3 = type_::get_int_32_type(&blits_context_mut());
+    let i32_t_4 = type_::get_int_32_type(&blits_context_mut());
+    let i64_t = type_::get_int_64_type(&blits_context_mut());
+    let i64_t_2 = type_::get_int_64_type(&blits_context_mut());
+    let i64_t_3 = type_::get_int_64_type(&blits_context_mut());
+    let i64_t_4 = type_::get_int_64_type(&blits_context_mut());
+    let i64_t_5 = type_::get_int_64_type(&blits_context_mut());
+
+    let v8x8_t =
+      FixedVectorType::get(Box::new(i8_t), 8);
+    let v8x64_t =
+      FixedVectorType::get(Box::new(i64_t), 8);
+    let _x86mmx_t = type_::get_x86_mmx_type(&blits_context_mut());
+
+    let _v2_i32_t =
+      FixedVectorType::get(Box::new(i32_t), 2);
+    let _v2_i64_t =
+      FixedVectorType::get(Box::new(i64_t_2), 2);
+    let _v4_i16_t =
+      FixedVectorType::get(Box::new(i16_t), 4);
+    let _v1_i16_t =
+      FixedVectorType::get(Box::new(i16_t_2), 1);
+
+    let _vs_v2_i32_t =
+      ScalableVectorType::get(Box::new(i32_t_2), 2);
+    let _vs_v2_i64_t =
+      ScalableVectorType::get(Box::new(i64_t_3), 2);
+    let _vs_v4_i16_t =
+      ScalableVectorType::get(Box::new(i16_t_3), 4);
+    let _vs_v1_i16_t =
+      ScalableVectorType::get(Box::new(i16_t_4), 1);
+
+    let _i32_ptr_t =
+      PointerType::get(Box::new(i32_t_3), 0);
+    let _i64_ptr_t =
+      PointerType::get(Box::new(i64_t_4), 0);
+    let _i32_ptr_as1_t =
+      PointerType::get(Box::new(i32_t_4), 1);
+    let _i64_ptr_as1_t =
+      PointerType::get(Box::new(i64_t_5), 1);
+
+    let c8 = constant::get_null_value(&Box::new(&v8x8_t));
+    let c64 = constant::get_null_value(&Box::new(&v8x64_t));
+
+    assert_eq!(instr_types::get_cast_op_code(c64.as_ref(), true,
+      &v8x8_t, true), OpCode::Trunc);
+    assert_eq!(instr_types::get_cast_op_code(c8.as_ref(), true,
+      &v8x64_t, true), OpCode::SExt);
   }
 }

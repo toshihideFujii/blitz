@@ -12,13 +12,13 @@
 
 use std::any::Any;
 use crate::{
-  adt::{ap_int::APInt, ap_float::APFloat},
+  adt::{ap_int::APInt, ap_float::APFloat}, ir::{type_::{type_id_to_string, TypeID}, blits_context::blits_context_mut},
   //ir::constants_context::ConstantExprKeyType
 };
 use super::{
   blits_context::{BlitzContext, blits_context},
   //type_::{self, /*FixedVectorType*/},
-  type_::{IntegerType, Type, FixedVectorType, ScalableVectorType},
+  type_::{IntegerType, Type, FixedVectorType, ScalableVectorType, VectorType},
   value::{Value, ValueType},
   instruction::{InstructionBase, OpCode},
   constant,
@@ -82,7 +82,7 @@ impl ConstantInt {
 
   // Return a ConstantInt with the specified integer value for the specified type.
   pub fn get(t: &IntegerType, v: i64, is_signed: bool) -> ConstantInt {
-    let val = APInt::new(t.get_bit_width(), v, is_signed);
+    let val = APInt::new(t.get_bit_width() as u32, v, is_signed);
     ConstantInt::get_from_apint(blits_context(), val)
   }
 
@@ -445,19 +445,74 @@ impl Constant for ConstantFP {
 }
 
 // All zero aggregate value.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConstantAggregateZero {
-  v_type: Box<dyn Type>,
-  v_id: ValueType,
+  fixed_vec_t: Option<FixedVectorType>
 }
 
 impl ConstantAggregateZero {
-  pub fn new() {}
-  pub fn get() {}
-  pub fn get_sequential_element() {}
+  //pub fn new(t: Box<dyn Type>) -> Self {
+    //if t.get_type_id() == TypeID::FixedVector {
+      //let fixed_vec_t = t.as_any().downcast_ref::<FixedVectorType>().unwrap().clone();
+      //ConstantAggregateZero { fixed_vec: Some(*fixed_vec_t) }
+    //}
+  //}
+
+  pub fn new_from_fixed_vec(t: FixedVectorType) -> Self {
+    ConstantAggregateZero { fixed_vec_t: Some(t) }
+  }
+
+  pub fn get(t: &Box<&dyn Type>) -> ConstantAggregateZero {
+    debug_assert!(t.is_struct_type() || t.is_array_type() || t.is_vector_type(),
+      "Cannot create aggregate zero of non-aggregate type.");
+
+    let mut key = type_id_to_string(&t.get_type_id());
+    if t.get_type_id() == TypeID::FixedVector {
+      let fixed_vec = t.as_any().downcast_ref::<FixedVectorType>();
+      key.push_str(fixed_vec.unwrap().get_id().to_string().as_str());
+    }
+
+    let entry = blits_context().caz_constants.get(&key);
+    if entry.is_none() {
+      // TODO: other supported case.
+      let fixed_vec_t =
+        t.as_any().downcast_ref::<FixedVectorType>();
+      let new_entry =
+        ConstantAggregateZero::new_from_fixed_vec(fixed_vec_t.unwrap().clone());
+      blits_context_mut().caz_constants.insert(key, new_entry.clone());
+      new_entry
+    } else {
+      entry.unwrap().clone()
+    }
+  }
+
+  // If this caz has array or vector type, return a zero with the
+  // right element type.
+  pub fn get_sequential_element(&self) -> Box<dyn Constant> {
+    if self.fixed_vec_t.is_some() {
+      let elt_t = self.fixed_vec_t.as_ref().unwrap().get_element_type();
+      return constant::get_null_const_value(&Box::new(elt_t));
+    }
+    unimplemented!("caz::get_sequential_element()");
+  }
+
   pub fn get_struct_element() {}
-  pub fn get_element_value() {}
-  pub fn get_element_count() {}
+
+  // Return a zero of the right value for the specified GEP index.
+  pub fn get_element_value(&self, _index: usize) -> Box<dyn Constant> {
+    if self.fixed_vec_t.is_some() {
+      return self.get_sequential_element();
+    }
+    unimplemented!("caz::get_element_value()");
+  }
+
+  // Return the number of elements in the array, vector, or struct.
+  pub fn get_element_count(&self) -> usize {
+    if self.fixed_vec_t.is_some() {
+      return self.fixed_vec_t.as_ref().unwrap().get_element_count();
+    }
+    unimplemented!("caz::get_element_count");
+  }
 
   // Methods to support type inquiry through isa, cast, and dyn_cast.
   pub fn class_of(v: &dyn Value) -> bool {
@@ -465,18 +520,18 @@ impl ConstantAggregateZero {
   }
 }
 
+impl Constant for ConstantAggregateZero {}
+
 impl Value for ConstantAggregateZero {
   fn get_type(&self) -> &dyn Type {
-    self.v_type.as_ref()
+    self.fixed_vec_t.as_ref().unwrap()
   }
 
   fn get_value_id(&self) -> ValueType {
-    self.v_id.clone()
+    ValueType::ConstantAggregateZeroVal
   }
 
-  fn as_any(&self) -> &dyn Any {
-    self
-  }
+  fn as_any(&self) -> &dyn Any { self }
 }
 
 struct ConstantArray {}
@@ -772,13 +827,13 @@ impl ConstantExpr {
   pub fn get_bin_op_identity(opcode: &OpCode, t: &Box<&dyn Type>,
     allow_rhs_constant: bool, _nsz: bool) -> Option<Box<dyn Constant>>
   {
-    debug_assert!(InstructionBase::is_binary_op_static(opcode), "Only binops allowed.");
+    //debug_assert!(InstructionBase::is_binary_op_static(opcode), "Only binops allowed.");
     if InstructionBase::is_commutative_static(opcode) {
       if *opcode == OpCode::Add || // Add: x + 0 = x
         *opcode == OpCode::Or || // Or: x | 0 = x
         *opcode == OpCode::Xor // Xor: x ^ 0 = x
       {
-        return Some(constant::get_null_value(t));
+        return Some(constant::get_null_const_value(t));
       } else if *opcode == OpCode::Mul { // Mul: x * 1 = x
         return Some(Box::new(ConstantInt::get(&t.as_any().
           downcast_ref::<IntegerType>().unwrap(), 1, false)));
@@ -802,7 +857,7 @@ impl ConstantExpr {
       *opcode == OpCode::AShr || // AShr: x >> 0 = x
       *opcode == OpCode::FSub // FSub: x - 0.0 = x
     {
-      return Some(constant::get_null_value(t));
+      return Some(constant::get_null_const_value(t));
     } else if
       *opcode == OpCode::SDiv || // SDiv: x / 1 = x
       *opcode == OpCode::UDiv // UDiv: x /u 1 = x
@@ -830,7 +885,8 @@ impl ConstantExpr {
   pub fn get_fp_cast() {}
 
   pub fn is_cast(&self) -> bool {
-    InstructionBase::is_cast_static(self.get_opcode())
+    //InstructionBase::is_cast_static(self.get_opcode())
+    false
   }
 
   // Return true if this is a compare constant expression.
@@ -843,8 +899,8 @@ impl ConstantExpr {
   pub fn get(opcode: OpCode, c1: &Box<dyn Constant>, c2: &Box<dyn Constant>,
     _flags: u32, _only_if_reduced_type: Option<Box<dyn Type>>) -> Option<Box<dyn Constant>>
   {
-    debug_assert!(InstructionBase::is_binary_op_static(&opcode),
-      "Invalid opcode in binary constant expression.");
+    //debug_assert!(InstructionBase::is_binary_op_static(&opcode),
+      //"Invalid opcode in binary constant expression.");
 
     debug_assert!(ConstantExpr::is_supported_bin_op(&opcode),
       "Binop not supported as constant expression.");
@@ -972,6 +1028,6 @@ mod tests {
     let c = BlitzContext::new();
     let _fp128_type = type_::get_fp128_type(&c);
     let int128_type = type_::get_int_n_type(&c, 128);
-    let _zero_128 = constant::get_null_value(&Box::new(&int128_type));
+    let _zero_128 = constant::get_null_const_value(&Box::new(&int128_type));
   }
 }

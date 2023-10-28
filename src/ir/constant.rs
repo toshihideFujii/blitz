@@ -5,7 +5,7 @@
 //use std::any::Any;
 use crate::{adt::ap_int::APInt, ir::blits_context::blits_context};
 use super::{
-  type_::{Type, TypeID, FixedVectorType, IntegerType, /*TypeID, IntegerType,*/ /*IntegerType*/},
+  type_::{Type, TypeID, FixedVectorType, IntegerType, VectorType, /*TypeID, IntegerType,*/ /*IntegerType*/},
   constants::{ConstantFP, ConstantAggregateZero,
   ConstantPointerNull, ConstantTokenNone, ConstantTargetNone, ConstantInt},
   value::{ValueType, Value},
@@ -209,7 +209,7 @@ impl ConstantBase {
     // Check thst vectors don't contain INT_MIN.
     let vec = self.v_type.as_any().downcast_ref::<FixedVectorType>();
     if vec.is_some() {
-      for i in 0..vec.unwrap().get_num_elements() {
+      for i in 0..vec.unwrap().get_element_count() {
         let elt = self.get_aggregate_element(i as u32);
         if elt.is_none() || !elt.unwrap().is_not_min_signed_value() {
           return false;
@@ -238,7 +238,7 @@ impl ConstantBase {
   pub fn is_finite_non_zero_fp(&self) -> bool {
     let vec = self.v_type.as_any().downcast_ref::<FixedVectorType>();
     if vec.is_some() {
-      for i in 0..vec.unwrap().get_num_elements() {
+      for i in 0..vec.unwrap().get_element_count() {
         let elt = self.get_aggregate_element(i as u32);
         if elt.is_none() { return false; }
         let temp = elt.unwrap();
@@ -264,7 +264,7 @@ impl ConstantBase {
   pub fn is_normal_fp(&self) -> bool {
     let vec = self.v_type.as_any().downcast_ref::<FixedVectorType>();
     if vec.is_some() {
-      for i in 0..vec.unwrap().get_num_elements() {
+      for i in 0..vec.unwrap().get_element_count() {
         let elt = self.get_aggregate_element(i as u32);
         if elt.is_none() { return false; }
         let temp = elt.unwrap();
@@ -289,7 +289,7 @@ impl ConstantBase {
   pub fn has_exact_inverse_fp(&self) -> bool {
     let vec = self.v_type.as_any().downcast_ref::<FixedVectorType>();
     if vec.is_some() {
-      for i in 0..vec.unwrap().get_num_elements() {
+      for i in 0..vec.unwrap().get_element_count() {
         let elt = self.get_aggregate_element(i as u32);
         if elt.is_none() { return false; }
         let temp = elt.unwrap();
@@ -314,7 +314,7 @@ impl ConstantBase {
   pub fn is_nan(&self) -> bool {
     let vec = self.v_type.as_any().downcast_ref::<FixedVectorType>();
     if vec.is_some() {
-      for i in 0..vec.unwrap().get_num_elements() {
+      for i in 0..vec.unwrap().get_element_count() {
         let elt = self.get_aggregate_element(i as u32);
         if elt.is_none() { return false; }
         let temp = elt.unwrap();
@@ -350,12 +350,25 @@ impl ConstantBase {
   }
 }
 
-pub fn get_null_value(t: &Box<&dyn Type>) -> Box<dyn Constant> {
+pub fn get_null_value(t: &Box<&dyn Type>) -> Box<dyn Value> {
+  match t.get_type_id() {
+    TypeID::Integer =>
+      return Box::new(ConstantInt::get(t.as_any().downcast_ref::<IntegerType>().unwrap(),
+        0, false)),
+    TypeID::FixedVector =>
+      return Box::new(ConstantAggregateZero::get(t)),
+    _ => panic!("Not implemented yet.")
+  };
+}
+
+pub fn get_null_const_value(t: &Box<&dyn Type>) -> Box<dyn Constant> {
   match t.get_type_id() {
     TypeID::Integer =>
       return Box::new(
         ConstantInt::get(t.as_any().downcast_ref::<IntegerType>().unwrap(),
         0, false)),
+    TypeID::FixedVector =>
+      return Box::new(ConstantAggregateZero::get(t)),
     _ => panic!("Not implemented yet.")
   };
 }
@@ -367,7 +380,7 @@ pub fn get_all_ones_value(t: &Box<&dyn Type>) -> Box<dyn Constant> {
   if t.as_any().downcast_ref::<IntegerType>().is_some() {
     let int_t = t.as_any().downcast_ref::<IntegerType>().unwrap();
     return Box::new(ConstantInt::get_from_apint(blits_context(),
-      APInt::get_all_ones(int_t.get_bit_width())));
+      APInt::get_all_ones(int_t.get_bit_width() as u32)));
   }
 
   if t.is_floating_point_type() {

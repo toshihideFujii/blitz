@@ -19,12 +19,12 @@ use crate::{
     //module::Module,
     diagnostic_handler::DiagnositicHandler,
     blitz_remark_streamer::BlitzRemarkStreamer,
-    constants::{ConstantInt, ConstantFP, ConstantTokenNone},
+    constants::{ConstantInt, ConstantFP, ConstantTokenNone, ConstantAggregateZero},
     attribute_impl::{AttributeImpl, AttributeListImpl, AttributeSetNode},
     metadata::{MDString, /*ValueAsMetadata, Metadata, MetadataAsValue, MDNode*/},
     value::Value,
     debug_info_metadata::DICompositeType,
-    type_::{/*Type,*/TypeID, IntegerType, BasicType},
+    type_::{/*Type,*/ TypeID, IntegerType, BasicType},
     //global_object::GlobalObject,
     /*global_value::GlobalValueBase,*/
     tracking_md_ref::TypedTrackingMDRef,
@@ -33,7 +33,7 @@ use crate::{
   remarks::remark_streamer::RemarkStreamer
 };
 
-use super::function::Function;
+use super::{function::Function, type_::FixedVectorType};
 
 // Known synchronization scope IDs, which always have the same value.
 // All synchronization scope IDs that Blitz has special knowledge of
@@ -148,8 +148,7 @@ pub struct BlitzContext {
   di_type_map: DenseMap<MDString, DICompositeType>,
   //distinct_md_nodes: Vec<MDNode>,
 
-  //caz_constants: DenseMap<&dyn Type, ConstantAggregateZero>,
-
+  pub caz_constants: HashMap<String, ConstantAggregateZero>,
   the_true_val: Option<ConstantInt>,
   the_false_val: Option<ConstantInt>,
 
@@ -157,19 +156,18 @@ pub struct BlitzContext {
   pub void_type: BasicType,
   pub label_type: BasicType,
   pub fp128_type: BasicType,
-  /*
-  half_type: Box<dyn Type>,
-  b_float_type: Box<dyn Type>,
-  float_type: Box<dyn Type>,
-  double_type: Box<dyn Type>,
-  metadata_type: Box<dyn Type>,
-  token_type: Box<dyn Type>,
 
-  x86_fp80_type: Box<dyn Type>,
-  ppc_fp128_type: Box<dyn Type>,
-  x86_mmx_type: Box<dyn Type>,
-  x86_amx_type: Box<dyn Type>,
-  */
+  //half_type: Box<dyn Type>,
+  //b_float_type: Box<dyn Type>,
+  //float_type: Box<dyn Type>,
+  //double_type: Box<dyn Type>,
+  //metadata_type: Box<dyn Type>,
+  //token_type: Box<dyn Type>,
+
+  //x86_fp80_type: Box<dyn Type>,
+  //ppc_fp128_type: Box<dyn Type>,
+  pub x86_mmx_type: BasicType,
+  //x86_amx_type: Box<dyn Type>,
 
   int_1_type: IntegerType,
   int_8_type: IntegerType,
@@ -183,6 +181,7 @@ pub struct BlitzContext {
   pub integer_types: DenseMap<u32, IntegerType>,
   //function_types: DenseSet<FunctionType>,
   //anon_struct_types: DenseSet<>
+  pub fixed_vector_types: HashMap<String, FixedVectorType>,
 
   custom_md_kind_names: StringMap<u32>,
   pub value_metadata: HashMap<Box<dyn Value>, MDAttachments>,
@@ -216,11 +215,13 @@ impl BlitzContext {
       //metadata_as_values: DenseMap::new(),
       di_type_map: DenseMap::new(),
       //distinct_md_nodes: Vec::new(),
+      caz_constants: HashMap::new(),
       the_true_val: None,
       the_false_val: None,
       void_type: BasicType::new(TypeID::Void),
       label_type: BasicType::new(TypeID::Label),
       fp128_type: BasicType::new(TypeID::Fp128),
+      x86_mmx_type: BasicType::new(TypeID::X86Mmx),
       int_1_type: IntegerType::new(1),
       int_8_type: IntegerType::new(8),
       int_16_type: IntegerType::new(16),
@@ -229,6 +230,7 @@ impl BlitzContext {
       int_128_type: IntegerType::new(128),
       the_none_token: ConstantTokenNone::new(),
       integer_types: DenseMap::new(),
+      fixed_vector_types: HashMap::new(),
       custom_md_kind_names: StringMap::new(),
       value_metadata: HashMap::new(),
       //global_object_sections: DenseMap::new(),

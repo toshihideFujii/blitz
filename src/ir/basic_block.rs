@@ -9,7 +9,7 @@ use super::{
   //symbol_table_list::SymbolTableList,
   instruction::Instruction,
   value::{Value, ValueType},
-  type_::Type, blits_context::BlitzContext,
+  type_::Type, blits_context::blits_context_mut,
   module::Module, instructions::{PhiNode, LoadInst, StoreInst, LandingPadInst},
   intrinsic_inst::PseudoProbeInst, //intrinsic_inst::DbgInfoIntrinsic
 };
@@ -21,25 +21,29 @@ use super::{
 pub struct BasicBlock {
   v_type: Box<dyn Type>,
   inst_list: Vec<Box<dyn Instruction>>, //SymbolTableList<Instruction>,
-  parent: Option<Function>
+  pub name: Option<Twine>,
+  parent: Option<Function>,
+  insert_before: Option<Box<BasicBlock>>
 }
 
 impl BasicBlock {
   // If the function parameter is specified, the basic block is automatically
   // inserted at either the end of the function (if insert_before is null),
   // or before the specified basic block.
-  pub fn new(c: &BlitzContext, _name: &Twine, new_parent: Option<Function>,
-    insert_before: Option<BasicBlock>) -> Self
+  pub fn new(name: Option<Twine>, parent: Option<Function>,
+    insert_before: Option<Box<BasicBlock>>) -> Self
   {
     let bb = BasicBlock {
-      v_type: Box::new(super::type_::get_label_type(c)),
+      v_type: Box::new(super::type_::get_label_type(&blits_context_mut())),
       inst_list: Vec::new(),
-      parent: None
+      name: name,
+      parent: parent,
+      insert_before: insert_before
     };
-    if new_parent.is_some() {
+    if bb.parent.is_some() {
       // TODO
     } else {
-      debug_assert!(insert_before.is_none(),
+      debug_assert!(bb.insert_before.is_none(),
         "Cannot insert block before another block with no function.");
     }
     bb

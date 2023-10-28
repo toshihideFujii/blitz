@@ -4,10 +4,10 @@
 // convenient way to create Blitz instructions with a consistent
 // and simplified interface.
 
-use crate::adt::{ap_int::APInt, twine::Twine};
+use crate::adt::ap_int::APInt;
 use super::{constants::ConstantInt, blits_context::blits_context_mut,
-  type_::{IntegerType, self}, instruction::InstructionBase,
-  basic_block::BasicBlock, value::Value};
+  type_::{IntegerType, self}, /*instruction::InstructionBase,
+  basic_block::BasicBlock, value::Value*/};
 
 // This provides the default implementation of the IRBuilder
 // 'inser_helper' method that is called whenever an instruction is
@@ -15,12 +15,12 @@ use super::{constants::ConstantInt, blits_context::blits_context_mut,
 struct IRBuilderDefaultInserter {}
 impl IRBuilderDefaultInserter {
   pub fn new() {}
-  pub fn insert_helper(&self, i: InstructionBase, name: Twine, bb: Option<BasicBlock>) {
-    if bb.is_some() {
-      i.insert_into(bb.unwrap());
-    }
-    Value::set_name(&i, name);
-  }
+  //pub fn insert_helper(&self, i: InstructionBase, name: Twine, bb: Option<BasicBlock>) {
+    //if bb.is_some() {
+      //i.insert_into(bb.unwrap());
+    //}
+    //Value::set_name(&i, name);
+  //}
 }
 
 struct IRBuilderCallbackInserter {}

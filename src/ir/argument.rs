@@ -51,7 +51,7 @@ impl Argument {
       return true;
     } else if self.get_dereferenceable_bytes() > 0 &&
       !self.null_pointer_is_defined(self.get_parent(),
-        self.get_type().get_pointer_address_space()) {
+        self.get_type().get_pointer_address_space() as u32) {
       return true;
     }
     false

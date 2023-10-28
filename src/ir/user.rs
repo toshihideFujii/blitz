@@ -16,11 +16,10 @@ pub trait User: Value {
   fn get_operand_list(&self) {}
 
   fn get_operand(&self, _i: usize) -> Option<&Box<dyn Value>> { None }
-
-  fn set_operand(&self, _i: usize, _v: Box<dyn Value>) {}
-
+  fn set_operand(&mut self, _i: usize, _v: Box<dyn Value>) {}
   fn get_operand_use(&self) {}
-  fn get_num_operands(&self) {}
+  fn get_num_operands(&self) -> usize { 0 }
+
   fn get_descriptor(&self) {}
   fn set_global_variable_num_operands(&self) {}
   fn set_num_hungoff_use_operands(&self) {}
