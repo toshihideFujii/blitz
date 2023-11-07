@@ -191,13 +191,11 @@ impl DirectedGraph {
     }
     */
     for i in 0..self.nodes.size() {
-      println!("bbbbbbbbbbbbb: i {}", i);
       let node = self.nodes.index(i);
       if node == n {
         continue;
       }
       let mut temp_list = node.find_edges_to(n);
-      println!("aaaaaaaaaaa : i: {}, {}", i, temp_list.len());
       el.append(&mut temp_list);
       temp_list.clear();
     }

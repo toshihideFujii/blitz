@@ -33,7 +33,7 @@ use crate::{
   remarks::remark_streamer::RemarkStreamer
 };
 
-use super::{function::Function, type_::FixedVectorType};
+use super::{function::Function, type_::{FixedVectorType, ScalableVectorType}};
 
 // Known synchronization scope IDs, which always have the same value.
 // All synchronization scope IDs that Blitz has special knowledge of
@@ -157,10 +157,10 @@ pub struct BlitzContext {
   pub label_type: BasicType,
   pub fp128_type: BasicType,
 
-  //half_type: Box<dyn Type>,
+  pub half_type: BasicType,
   //b_float_type: Box<dyn Type>,
-  //float_type: Box<dyn Type>,
-  //double_type: Box<dyn Type>,
+  pub float_type: BasicType,
+  pub double_type: BasicType,
   //metadata_type: Box<dyn Type>,
   //token_type: Box<dyn Type>,
 
@@ -182,6 +182,7 @@ pub struct BlitzContext {
   //function_types: DenseSet<FunctionType>,
   //anon_struct_types: DenseSet<>
   pub fixed_vector_types: HashMap<String, FixedVectorType>,
+  pub scalable_vector_types: HashMap<String, ScalableVectorType>,
 
   custom_md_kind_names: StringMap<u32>,
   pub value_metadata: HashMap<Box<dyn Value>, MDAttachments>,
@@ -221,6 +222,9 @@ impl BlitzContext {
       void_type: BasicType::new(TypeID::Void),
       label_type: BasicType::new(TypeID::Label),
       fp128_type: BasicType::new(TypeID::Fp128),
+      half_type: BasicType::new(TypeID::Half),
+      float_type: BasicType::new(TypeID::Float),
+      double_type: BasicType::new(TypeID::Double),
       x86_mmx_type: BasicType::new(TypeID::X86Mmx),
       int_1_type: IntegerType::new(1),
       int_8_type: IntegerType::new(8),
@@ -231,6 +235,7 @@ impl BlitzContext {
       the_none_token: ConstantTokenNone::new(),
       integer_types: DenseMap::new(),
       fixed_vector_types: HashMap::new(),
+      scalable_vector_types: HashMap::new(),
       custom_md_kind_names: StringMap::new(),
       value_metadata: HashMap::new(),
       //global_object_sections: DenseMap::new(),

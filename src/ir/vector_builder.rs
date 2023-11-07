@@ -37,8 +37,8 @@ impl VectorBuilder {
     self
   }
 
-  pub fn set_static_vl(&mut self, fixed_vl: u32) -> &VectorBuilder {
-    self.static_vector_length = ElementCount::get_fixed(fixed_vl);
+  pub fn set_static_vl(&mut self, fixed_val: usize) -> &VectorBuilder {
+    self.static_vector_length = ElementCount::get_fixed(fixed_val);
     self
   }
 

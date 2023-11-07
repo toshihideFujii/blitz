@@ -209,7 +209,8 @@ impl ConstantBase {
     // Check thst vectors don't contain INT_MIN.
     let vec = self.v_type.as_any().downcast_ref::<FixedVectorType>();
     if vec.is_some() {
-      for i in 0..vec.unwrap().get_element_count() {
+      let ec = vec.unwrap().get_element_count();
+      for i in 0..ec.get_known_min_value() {
         let elt = self.get_aggregate_element(i as u32);
         if elt.is_none() || !elt.unwrap().is_not_min_signed_value() {
           return false;
@@ -238,7 +239,8 @@ impl ConstantBase {
   pub fn is_finite_non_zero_fp(&self) -> bool {
     let vec = self.v_type.as_any().downcast_ref::<FixedVectorType>();
     if vec.is_some() {
-      for i in 0..vec.unwrap().get_element_count() {
+      let ec = vec.unwrap().get_element_count();
+      for i in 0..ec.get_known_min_value() {
         let elt = self.get_aggregate_element(i as u32);
         if elt.is_none() { return false; }
         let temp = elt.unwrap();
@@ -264,7 +266,8 @@ impl ConstantBase {
   pub fn is_normal_fp(&self) -> bool {
     let vec = self.v_type.as_any().downcast_ref::<FixedVectorType>();
     if vec.is_some() {
-      for i in 0..vec.unwrap().get_element_count() {
+      let ec = vec.unwrap().get_element_count();
+      for i in 0..ec.get_known_min_value() {
         let elt = self.get_aggregate_element(i as u32);
         if elt.is_none() { return false; }
         let temp = elt.unwrap();
@@ -289,7 +292,8 @@ impl ConstantBase {
   pub fn has_exact_inverse_fp(&self) -> bool {
     let vec = self.v_type.as_any().downcast_ref::<FixedVectorType>();
     if vec.is_some() {
-      for i in 0..vec.unwrap().get_element_count() {
+      let ec = vec.unwrap().get_element_count();
+      for i in 0..ec.get_known_min_value() {
         let elt = self.get_aggregate_element(i as u32);
         if elt.is_none() { return false; }
         let temp = elt.unwrap();
@@ -314,7 +318,8 @@ impl ConstantBase {
   pub fn is_nan(&self) -> bool {
     let vec = self.v_type.as_any().downcast_ref::<FixedVectorType>();
     if vec.is_some() {
-      for i in 0..vec.unwrap().get_element_count() {
+      let ec = vec.unwrap().get_element_count();
+      for i in 0..ec.get_known_min_value() {
         let elt = self.get_aggregate_element(i as u32);
         if elt.is_none() { return false; }
         let temp = elt.unwrap();
@@ -355,8 +360,8 @@ pub fn get_null_value(t: &Box<&dyn Type>) -> Box<dyn Value> {
     TypeID::Integer =>
       return Box::new(ConstantInt::get(t.as_any().downcast_ref::<IntegerType>().unwrap(),
         0, false)),
-    TypeID::FixedVector =>
-      return Box::new(ConstantAggregateZero::get(t)),
+    TypeID::FixedVector => return Box::new(ConstantAggregateZero::get(t)),
+    TypeID::ScalableVector => return Box::new(ConstantAggregateZero::get(t)),
     _ => panic!("Not implemented yet.")
   };
 }
@@ -367,8 +372,8 @@ pub fn get_null_const_value(t: &Box<&dyn Type>) -> Box<dyn Constant> {
       return Box::new(
         ConstantInt::get(t.as_any().downcast_ref::<IntegerType>().unwrap(),
         0, false)),
-    TypeID::FixedVector =>
-      return Box::new(ConstantAggregateZero::get(t)),
+    TypeID::FixedVector => return Box::new(ConstantAggregateZero::get(t)),
+    TypeID::ScalableVector => return Box::new(ConstantAggregateZero::get(t)),
     _ => panic!("Not implemented yet.")
   };
 }

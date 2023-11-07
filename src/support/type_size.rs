@@ -15,24 +15,45 @@ struct StackOffset {}
 
 // Stores the number of elements for a type and whether this type
 // is fixed (n-elements) or scalable (e.g., SVE).
+// - ElementCount::get_fixed(1): A scalar value.
+// - ElementCount::get_fixed(2): A vector type holding 2 values.
+// - ElementCount::get_scalable(4): A scalable vector type holding 4 values.
+#[derive(Debug, Clone, PartialEq)]
 pub struct ElementCount {
-  quantity: u32,
+  quantity: usize,
   scalable: bool
 }
 
 impl ElementCount {
-  pub fn new(min_val: u32, scalable: bool) -> Self {
+  pub fn new(min_val: usize, scalable: bool) -> Self {
     ElementCount { quantity: min_val, scalable: scalable }
   }
 
-  pub fn get_fixed(min_val: u32) -> Self {
+  pub fn get_fixed(min_val: usize) -> Self {
     ElementCount::new(min_val, false)
   }
 
-  pub fn get_scalable() {}
-  pub fn get() {}
-  pub fn is_scalar() {}
-  pub fn is_vector() {}
+  pub fn get_scalable(min_val: usize) -> Self {
+    ElementCount::new(min_val, true)
+  }
+
+  pub fn get(min_val: usize, scalable: bool) -> Self {
+    ElementCount::new(min_val, scalable)
+  }
+
+  // Exactly one element.
+  pub fn is_scalar(&self) -> bool {
+    !self.scalable && self.quantity == 1
+  }
+
+  // One or more element.
+  pub fn is_vector(&self) -> bool {
+    (self.scalable && self.quantity != 0) || self.quantity > 1
+  }
+
+  pub fn get_known_min_value(&self) -> usize {
+    self.quantity
+  }
 }
 
 // Stores the size of a type.

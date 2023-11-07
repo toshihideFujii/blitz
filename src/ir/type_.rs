@@ -9,7 +9,7 @@ use rand::Rng;
 use crate::adt::ap_float::FltSemantics;
 use crate::adt::ap_int::APInt;
 use crate::ir::blits_context::blits_context_mut;
-use crate::support::type_size::TypeSize;
+use crate::support::type_size::{TypeSize, ElementCount};
 //use crate::ir::constants::ConstantInt;
 use super::blits_context::BlitzContext;
 //use super::constant::Constant;
@@ -133,7 +133,10 @@ pub trait Type: Debug {
     };
   }
 
+  // Return true if this is X86 MMX.
   fn is_x86_mmx_type(&self) -> bool { false }
+
+  // Return true if this is X86 AMX.
   fn is_x86_amx_type(&self) -> bool { false }
 
   // Return true if this is a fp type or a vector of fp.
@@ -170,7 +173,11 @@ pub trait Type: Debug {
   fn is_pointer_type(&self) -> bool { false }
 
   fn is_opaque_pointer_type(&self) {}
-  fn is_ptr_or_ptr_vector_type(&self) {}
+
+  // Return true if this is a pointer type or a vector of pointer types.
+  fn is_ptr_or_ptr_vector_type(&self) -> bool {
+    self.get_scalar_type().is_pointer_type()
+  }
 
   // True if this is an instance of VectorType.
   fn is_vector_type(&self) -> bool { false }
@@ -199,20 +206,43 @@ pub trait Type: Debug {
       TypeID::X86Mmx => return TypeSize::fixed(64),
       TypeID::X86Amx => return TypeSize::fixed(8192),
       TypeID::Integer => return TypeSize::fixed(self.get_integer_bit_width()),
+      TypeID::FixedVector => {
+        let fixed_vec =
+          self.as_any().downcast_ref::<FixedVectorType>().unwrap();
+        let ec = fixed_vec.get_element_count();
+        let ets = fixed_vec.get_element_type().get_primitive_size_in_bits();
+        return TypeSize::fixed(ets.get_fixed_value() * ec.get_known_min_value());
+      },
+      TypeID::ScalableVector => {
+        let scalable_vec =
+        self.as_any().downcast_ref::<ScalableVectorType>().unwrap();
+        let ec = scalable_vec.get_element_count();
+        let ets = scalable_vec.get_element_type().get_primitive_size_in_bits();
+        return TypeSize::scalable(ets.get_fixed_value() * ec.get_known_min_value());
+      },
       _ => return TypeSize::fixed(0)
     };
   }
 
-  fn get_scalar_size_in_bits(&self) -> u32 { 0 }
+  fn get_scalar_size_in_bits(&self) -> usize {
+    self.get_scalar_type().get_primitive_size_in_bits().get_fixed_value()
+  }
 
   fn get_fp_mantissa_width(&self) {}
   fn is_ieee(&self) {}
 
-  // If this is a vector type, return the element type, otherwise
-  // return 'self'.
-  fn get_scalar_type(&self) -> Box<&dyn Type>;
+  // If this is a vector type, return the element type, otherwise return 'self'.
+  fn get_scalar_type(&self) -> &dyn Type {
+    unreachable!("Abstract call Type::get_cscalar_type().");
+  }
 
-  fn get_contained_type(&self) {}
+  // This method is used to implement the type iterator (defined at the end
+  // of the file). For derived types, this returns the types 'contained' in
+  // the derived type.
+  fn get_contained_type(&self, i: usize) -> &dyn Type {
+    unreachable!("abstract callType::get_contained_type().");
+  }
+
   fn get_num_contained_type(&self) {}
   fn get_integer_bit_width(&self) -> usize { 0 }
   fn get_function_param_type(&self) {}
@@ -228,6 +258,8 @@ pub trait Type: Debug {
   fn get_with_new_type(&self) {}
   fn get_with_new_bit_width(&self) {}
   fn get_extended_type(&self) {}
+
+  // Get the address space of this pointer or pointer vector type.
   fn get_pointer_address_space(&self) -> usize { 0 }
   fn get_primitive_type(&self) {}
 
@@ -265,10 +297,20 @@ pub fn get_fp128_type(c: &BlitzContext) -> BasicType {
   c.fp128_type.clone()
 }
 
-pub fn get_half_type() {}
+pub fn get_half_type(c: &BlitzContext) -> BasicType {
+  c.half_type.clone()
+}
+
 pub fn get_b_float_type() {}
-pub fn get_float_type() {}
-pub fn get_double_type() {}
+
+pub fn get_float_type(c: &BlitzContext) -> BasicType {
+  c.float_type.clone()
+}
+
+pub fn get_double_type(c: &BlitzContext) -> BasicType {
+  c.double_type.clone()
+}
+
 pub fn get_metadata_type() {}
 pub fn get_x86_fp80_type() {}
 pub fn get_ppc_fp128_type() {}
@@ -330,8 +372,12 @@ impl Type for BasicType {
 
   fn get_subclass_data(&self) -> u32 { 0 }
 
-  fn get_scalar_type(&self) -> Box<&dyn Type> {
-    Box::new(self)
+  fn is_x86_mmx_type(&self) -> bool {
+    self.id == TypeID::X86Mmx
+  }
+
+  fn is_x86_amx_type(&self) -> bool {
+    self.id == TypeID::X86Amx
   }
 
   fn as_any(&self) -> &dyn Any { self }
@@ -440,12 +486,8 @@ impl Type for IntegerType {
     TypeSize::fixed(self.get_bit_width() as usize)
   }
 
-  fn get_scalar_size_in_bits(&self) -> u32 {
-    self.get_primitive_size_in_bits().get_fixed_value() as u32
-  }
-
-  fn get_scalar_type(&self) -> Box<&dyn Type> {
-    Box::new(self)
+  fn get_scalar_type(&self) -> &dyn Type {
+    self
   }
 
   fn get_integer_bit_width(&self) -> usize {
@@ -546,10 +588,6 @@ impl Type for FunctionType {
   fn get_type_id(&self) -> TypeID { TypeID::Function }
 
   fn is_function_type(&self) -> bool { true }
-
-  fn get_scalar_type(&self) -> Box<&dyn Type> {
-    Box::new(self)
-  }
 
   fn as_any(&self) -> &dyn Any { self }
 }
@@ -694,13 +732,9 @@ impl Type for StructType {
     false
   }
 
-  fn get_scalar_type(&self) -> Box<&dyn Type> {
-    Box::new(self)
-  }
+  fn get_scalar_type(&self) -> &dyn Type { self }
 
-  fn as_any(&self) -> &dyn Any {
-    self
-  }
+  fn as_any(&self) -> &dyn Any { self }
 }
 
 impl PartialEq for StructType {
@@ -767,16 +801,14 @@ impl Type for ArrayType {
   fn get_type_id(&self) -> TypeID { TypeID::Array }
   fn is_array_type(&self) -> bool { true }
 
-  fn get_scalar_type(&self) -> Box<&dyn Type> {
-    Box::new(self)
-  }
+  fn get_scalar_type(&self) -> &dyn Type { self }
 
   fn as_any(&self) -> &dyn Any { self }
 }
 
 pub trait VectorType : Type {
   // Return the number of elements in the vector.
-  fn get_element_count(&self) -> usize;
+  fn get_element_count(&self) -> ElementCount;
 }
 
 // Class to represent fixed width SIMD vectors
@@ -784,25 +816,30 @@ pub trait VectorType : Type {
 pub struct FixedVectorType {
   id: u64,
   int_t: Option<IntegerType>,
+  ptr_t: Option<PointerType>,
   element_quantity: usize
 }
 
 impl FixedVectorType {
-  //pub fn new(v_type: Box<dyn Type>, num_elts: usize) -> Self {
-    //FixedVectorType { contained_type: v_type, int_t: None, element_quantity: num_elts }
-  //}
-
   pub fn new_from_int(int_t: IntegerType, num_elts: usize) -> Self {
     let mut rng = rand::thread_rng();
     let id: u64 = rng.gen();
-    FixedVectorType { id: id, int_t: Some(int_t), element_quantity: num_elts }
+    FixedVectorType { id: id, int_t: Some(int_t), ptr_t: None, element_quantity: num_elts }
+  }
+
+  pub fn new_from_ptr(ptr_t: PointerType, num_elts: usize) -> Self {
+    let mut rng = rand::thread_rng();
+    let id: u64 = rng.gen();
+    FixedVectorType { id: id, int_t: None, ptr_t: Some(ptr_t), element_quantity: num_elts }
   }
 
   pub fn get_element_type(&self) -> &dyn Type {
     if self.int_t.is_some() {
       return self.int_t.as_ref().unwrap();
+    } else if self.ptr_t.is_some() {
+      return self.ptr_t.as_ref().unwrap();
     }
-    unreachable!("Unsupported type.");
+    unimplemented!("Not implemented.");
   }
 
   pub fn get(elt_t: Box<dyn Type>, num_elts: usize) -> FixedVectorType {
@@ -816,21 +853,33 @@ impl FixedVectorType {
     if elt_t.as_ref().get_type_id() == TypeID::Integer {
       key.push_str("_");
       key.push_str(elt_t.as_ref().get_integer_bit_width().to_string().as_str());
+      key.push_str("_");
+      key.push_str(num_elts.to_string().as_str());
     }
-    key.push_str("_");
-    key.push_str(num_elts.to_string().as_str());
-    //println!("key: {}", key);
+    if elt_t.as_ref().get_type_id() == TypeID::Pointer {
+      let ptr_t = elt_t.as_any().downcast_ref::<PointerType>();
+      key.push_str("_");
+      key.push_str(ptr_t.unwrap().get_id().to_string().as_str());
+    }
 
-    let entry =
-      blits_context_mut().fixed_vector_types.get(&key);
+    let entry = blits_context_mut().fixed_vector_types.get(&key);
     if entry.is_none() {
       // TODO: supported types.
-      let int_t =
-        elt_t.as_any().downcast_ref::<IntegerType>();
-      let new_entry =
-        FixedVectorType::new_from_int(int_t.unwrap().clone(), num_elts);
-      blits_context_mut().fixed_vector_types.insert(key, new_entry.clone());
-      return new_entry;
+      let int_t = elt_t.as_any().downcast_ref::<IntegerType>();
+      if int_t.is_some() {
+        let new_entry =
+          FixedVectorType::new_from_int(int_t.unwrap().clone(), num_elts);
+        blits_context_mut().fixed_vector_types.insert(key, new_entry.clone());
+        return new_entry;
+      }
+      let ptr_t = elt_t.as_any().downcast_ref::<PointerType>();
+      if ptr_t.is_some() {
+        let new_entry =
+          FixedVectorType::new_from_ptr(ptr_t.unwrap().clone(), num_elts);
+        blits_context_mut().fixed_vector_types.insert(key, new_entry.clone());
+        return new_entry;
+      }
+      unimplemented!("Unimplemented.");
     } else {
       return entry.unwrap().clone();
     }
@@ -867,62 +916,104 @@ impl FixedVectorType {
   }
 }
 
+impl VectorType for FixedVectorType {
+  fn get_element_count(&self) -> ElementCount {
+    ElementCount::get(self.element_quantity, false)
+  }
+}
+
 impl Type for FixedVectorType {
   fn get_type_id(&self) -> TypeID { TypeID::FixedVector }
 
   fn is_vector_type(&self) -> bool { true }
 
-  fn get_scalar_type(&self) -> Box<&dyn Type> {
-    Box::new(self) // TODO
+  fn get_scalar_type(&self) -> &dyn Type {
+    self.get_contained_type(0)
+  }
+
+  fn get_contained_type(&self, i: usize) -> &dyn Type {
+    if self.int_t.is_some() {
+      return self.int_t.as_ref().unwrap();
+    } else if self.ptr_t.is_some() {
+      return self.ptr_t.as_ref().unwrap();
+    }
+    unreachable!("Can't get contained type,");
   }
 
   fn as_any(&self) -> &dyn Any { self }
 }
 
-impl VectorType for FixedVectorType {
-  fn get_element_count(&self) -> usize {
-    self.element_quantity
-  }
-}
-
-
 // Class to represent scalable SIMD vectors.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ScalableVectorType {
-  contained_type: Box<dyn Type>,
+  id: u64,
+  int_t: Option<IntegerType>,
+  ptr_t: Option<PointerType>,
   element_quantity: usize
 }
 
 impl ScalableVectorType {
-  pub fn new(elt_t: Box<dyn Type>, min_num_elts: usize) -> Self {
-    ScalableVectorType { contained_type: elt_t, element_quantity: min_num_elts }
+  pub fn new_from_int(int_t: IntegerType, num_elts: usize) -> Self {
+    let mut rng = rand::thread_rng();
+    let id: u64 = rng.gen();
+    ScalableVectorType { id: id, int_t: Some(int_t), ptr_t: None, element_quantity: num_elts }
   }
 
-  pub fn get_element_type(&self) -> &Box<dyn Type> {
-    &self.contained_type
+  pub fn new_from_ptr(ptr_t: PointerType, num_elts: usize) -> Self {
+    let mut rng = rand::thread_rng();
+    let id: u64 = rng.gen();
+    ScalableVectorType { id: id, int_t: None, ptr_t: Some(ptr_t), element_quantity: num_elts }
   }
 
-  pub fn get(elt_t: Box<dyn Type>, min_num_elts: usize) -> ScalableVectorType{
-    debug_assert!(min_num_elts > 0,
+  pub fn get_element_type(&self) -> &dyn Type {
+    if self.int_t.is_some() {
+      return self.int_t.as_ref().unwrap();
+    } else if self.ptr_t.is_some() {
+      return self.ptr_t.as_ref().unwrap();
+    }
+    unimplemented!("Not implemented.");
+  }
+
+  pub fn get(elt_t: Box<dyn Type>, num_elts: usize) -> ScalableVectorType{
+    debug_assert!(num_elts > 0,
       "Elements of a VectorType must be grater than 0.");
     debug_assert!(ScalableVectorType::is_valid_element_type(&elt_t),
       "Element type of a VectorType must be an integer, floating point,
        or pointer type.");
-    /*
+    
     let mut key = type_id_to_string(&elt_t.as_ref().get_type_id());
-    key.push_str(num_elts.to_string().as_str());
-
-    let entry =
-      blits_context_mut().fixed_vector_types.get(&key);
-    if entry.is_none() {
-      let new_entry = FixedVectorType::new(elt_t);
-      blits_context_mut().fixed_vector_types.insert(key, new_entry);
-      return new_entry;
-    } else {
-      return Some(entry);
+    if elt_t.as_ref().get_type_id() == TypeID::Integer {
+      key.push_str("_");
+      key.push_str(elt_t.as_ref().get_integer_bit_width().to_string().as_str());
+      key.push_str("_");
+      key.push_str(num_elts.to_string().as_str());
     }
-    */
-    ScalableVectorType::new(elt_t, min_num_elts)
+    if elt_t.as_ref().get_type_id() == TypeID::Pointer {
+      let ptr_t = elt_t.as_any().downcast_ref::<PointerType>();
+      key.push_str("_");
+      key.push_str(ptr_t.unwrap().get_id().to_string().as_str());
+    }
+
+    let entry = blits_context_mut().scalable_vector_types.get(&key);
+    if entry.is_none() {
+      let int_t = elt_t.as_any().downcast_ref::<IntegerType>();
+      if int_t.is_some() {
+        let new_entry =
+          ScalableVectorType::new_from_int(int_t.unwrap().clone(), num_elts);
+        blits_context_mut().scalable_vector_types.insert(key, new_entry.clone());
+        return new_entry;
+      }
+      let ptr_t = elt_t.as_any().downcast_ref::<PointerType>();
+      if ptr_t.is_some() {
+        let new_entry =
+          ScalableVectorType::new_from_ptr(ptr_t.unwrap().clone(), num_elts);
+        blits_context_mut().scalable_vector_types.insert(key, new_entry.clone());
+        return new_entry;
+      }
+      unimplemented!("Not implemented.");
+    } else {
+      return entry.unwrap().clone();
+    }
   }
 
   pub fn get_integer() {}
@@ -940,14 +1031,18 @@ impl ScalableVectorType {
   // Get the minimum number of elements in this vector.
   // The actual number of elements in the vector is an integer multiple of
   // this value.
-  pub fn get_num_elements(&self) -> usize {
-    self.element_quantity
-  }
+  //pub fn get_num_elements(&self) -> usize {
+    //self.element_quantity
+  //}
 
   // Return true if the specified type is valid as a element type.
   fn is_valid_element_type(t: &Box<dyn Type>) -> bool {
     t.is_integer_type() || t.is_floating_point_type() ||
     t.is_pointer_type() || t.get_type_id() == TypeID::TypedPointer
+  }
+
+  pub fn get_id(&self) -> u64 {
+    self.id
   }
 
   pub fn classof(t: &dyn Type) -> bool {
@@ -956,7 +1051,9 @@ impl ScalableVectorType {
 }
 
 impl VectorType for ScalableVectorType {
-  fn get_element_count(&self) -> usize { 0 }
+  fn get_element_count(&self) -> ElementCount {
+    ElementCount::get(self.element_quantity, true)
+  }
 }
 
 impl Type for ScalableVectorType {
@@ -964,29 +1061,41 @@ impl Type for ScalableVectorType {
 
   fn is_vector_type(&self) -> bool { true }
 
-  fn get_scalar_type(&self) -> Box<&dyn Type> {
-    Box::new(self) // TODO
+  fn get_scalar_type(&self) -> &dyn Type { self.get_contained_type(0) }
+
+  fn get_contained_type(&self, i: usize) -> &dyn Type {
+    if self.int_t.is_some() {
+      return self.int_t.as_ref().unwrap();
+    } else if self.ptr_t.is_some() {
+      return self.ptr_t.as_ref().unwrap();
+    }
+    unreachable!("Can't get contained type,");
   }
 
   fn as_any(&self) -> &dyn Any { self }
 }
 
 // Class to represent pointers.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PointerType {
-  pointee_type: Option<Box<dyn Type>>,
+  id: u64,
+  //pointee_type: Option<Box<dyn Type>>,
+  pointee_int: Option<IntegerType>,
   address_space: usize
 }
 
 impl PointerType {
-  pub fn new(ppintee_type: Option<Box<dyn Type>>, address_space: usize) -> Self {
-    PointerType { pointee_type: ppintee_type, address_space: address_space }
+  pub fn new_from_int(pointee_int: IntegerType, address_space: usize) -> Self {
+    let mut rng = rand::thread_rng();
+    let id: u64 = rng.gen();
+    PointerType { id: id, pointee_int: Some(pointee_int), address_space: address_space }
   }
 
   pub fn get(elt_t: Box<dyn Type>, address_space: usize) -> PointerType {
     debug_assert!(PointerType::is_valid_element_type(&elt_t),
       "Invalid type for pointer element.");
-    PointerType::new(Some(elt_t), address_space)
+    let int_t = elt_t.as_any().downcast_ref::<IntegerType>().unwrap().clone();
+    PointerType::new_from_int(int_t, address_space)
   }
 
   pub fn get_unqual() {}
@@ -994,7 +1103,7 @@ impl PointerType {
   pub fn get_with_same_pointee_type() {}
 
   pub fn is_opaque(&self) -> bool {
-    if self.pointee_type.is_none() {
+    if self.pointee_int.is_none() {
       return true;
     } else {
       return false;
@@ -1022,6 +1131,10 @@ impl PointerType {
 
   pub fn has_same_element_type_as() {}
 
+  pub fn get_id(&self) -> u64 {
+    self.id
+  }
+
   pub fn classof(t: &dyn Type) -> bool {
     t.get_type_id() == TypeID::Pointer
   }
@@ -1030,7 +1143,8 @@ impl PointerType {
 impl Type for PointerType {
   fn get_type_id(&self) -> TypeID { TypeID::Pointer }
   fn is_pointer_type(&self) -> bool { true }
-  fn get_scalar_type(&self) -> Box<&dyn Type> { Box::new(self) }
+  fn get_scalar_type(&self) -> &dyn Type { self }
+  fn get_pointer_address_space(&self) -> usize { self.address_space }
   fn as_any(&self) -> &dyn Any { self }
 }
 
@@ -1049,9 +1163,7 @@ impl Type for UnknownType {
     TypeID::Unknown
   }
   fn get_subclass_data(&self) -> u32 { 0 }
-  fn get_scalar_type(&self) -> Box<&dyn Type> {
-    Box::new(self)
-  }
+  fn get_scalar_type(&self) -> &dyn Type { self }
   fn as_any(&self) -> &dyn Any {
     self
   }

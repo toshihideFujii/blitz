@@ -1,14 +1,16 @@
 #![allow(dead_code)]
 
-// This file defines layoout properties related to datatype
-// size/offset/alignment information.
+// This file defines layout properties related to datatype size/offset/
+// alignment information. It uses lazy annotations to cache information
+// about how structure types are laid out and used.
 
 use crate::{
   ir::type_::Type,
   support::alignment::MaybeAlign/* , type_size::align_to*/
 };
 
-enum AlignType {
+// Enum used to categorize the alignment types atored by LayoutAlignElem.
+pub enum AlignType {
   IntegerAlign,
   VectorAlign,
   FloatAlign,
@@ -16,7 +18,12 @@ enum AlignType {
 }
 
 // Layout alignment element.
-struct LayoutAlignElem {}
+// Stores the alignment data associated with a given type bit width.
+pub struct LayoutAlignElem {}
+impl LayoutAlignElem {
+  pub fn new() {}
+  pub fn get() {}
+}
 
 // Layout pointer alignment element.
 struct PointerAlignElem {}

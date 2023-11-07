@@ -3741,8 +3741,8 @@ impl UnaryInstruction for FreezeInst {}
 #[cfg(test)]
 mod tests {
   use crate::ir::{
-    type_::{self, FixedVectorType, ScalableVectorType},
-    type_::IntegerType,
+    type_::{self, FixedVectorType, /*ScalableVectorType*/},
+    type_::{IntegerType, ScalableVectorType},
     blits_context::{BlitzContext, blits_context_mut},
     constants::ConstantInt, constant, instr_types};
   use super::*;
@@ -3818,59 +3818,215 @@ mod tests {
   #[test]
   fn test_cast_inst() {
     let i8_t = type_::get_int_8_type(&blits_context_mut());
-    let i16_t = type_::get_int_16_type(&blits_context_mut());
-    let i16_t_2 = type_::get_int_16_type(&blits_context_mut());
-    let i16_t_3 = type_::get_int_16_type(&blits_context_mut());
-    let i16_t_4 = type_::get_int_16_type(&blits_context_mut());
-    let i32_t = type_::get_int_32_type(&blits_context_mut());
-    let i32_t_2 = type_::get_int_32_type(&blits_context_mut());
-    let i32_t_3 = type_::get_int_32_type(&blits_context_mut());
-    let i32_t_4 = type_::get_int_32_type(&blits_context_mut());
-    let i64_t = type_::get_int_64_type(&blits_context_mut());
-    let i64_t_2 = type_::get_int_64_type(&blits_context_mut());
-    let i64_t_3 = type_::get_int_64_type(&blits_context_mut());
-    let i64_t_4 = type_::get_int_64_type(&blits_context_mut());
-    let i64_t_5 = type_::get_int_64_type(&blits_context_mut());
-
     let v8x8_t =
       FixedVectorType::get(Box::new(i8_t), 8);
+  
+    let i64_t = type_::get_int_64_type(&blits_context_mut());
     let v8x64_t =
       FixedVectorType::get(Box::new(i64_t), 8);
-    let _x86mmx_t = type_::get_x86_mmx_type(&blits_context_mut());
-
-    let _v2_i32_t =
-      FixedVectorType::get(Box::new(i32_t), 2);
-    let _v2_i64_t =
-      FixedVectorType::get(Box::new(i64_t_2), 2);
-    let _v4_i16_t =
-      FixedVectorType::get(Box::new(i16_t), 4);
-    let _v1_i16_t =
-      FixedVectorType::get(Box::new(i16_t_2), 1);
-
-    let _vs_v2_i32_t =
-      ScalableVectorType::get(Box::new(i32_t_2), 2);
-    let _vs_v2_i64_t =
-      ScalableVectorType::get(Box::new(i64_t_3), 2);
-    let _vs_v4_i16_t =
-      ScalableVectorType::get(Box::new(i16_t_3), 4);
-    let _vs_v1_i16_t =
-      ScalableVectorType::get(Box::new(i16_t_4), 1);
-
-    let _i32_ptr_t =
-      PointerType::get(Box::new(i32_t_3), 0);
-    let _i64_ptr_t =
-      PointerType::get(Box::new(i64_t_4), 0);
-    let _i32_ptr_as1_t =
-      PointerType::get(Box::new(i32_t_4), 1);
-    let _i64_ptr_as1_t =
-      PointerType::get(Box::new(i64_t_5), 1);
-
+        
+    let x86mmx_t = type_::get_x86_mmx_type(&blits_context_mut());
     let c8 = constant::get_null_value(&Box::new(&v8x8_t));
     let c64 = constant::get_null_value(&Box::new(&v8x64_t));
 
-    assert_eq!(instr_types::get_cast_op_code(c64.as_ref(), true,
-      &v8x8_t, true), OpCode::Trunc);
-    assert_eq!(instr_types::get_cast_op_code(c8.as_ref(), true,
-      &v8x64_t, true), OpCode::SExt);
+    assert_eq!(instr_types::get_cast_op_code(c64.as_ref(), true, &v8x8_t, true), OpCode::Trunc);
+    assert_eq!(instr_types::get_cast_op_code(c8.as_ref(), true, &v8x64_t, true), OpCode::SExt);
+
+    let i64_t_2 = type_::get_int_64_type(&blits_context_mut());
+    assert_eq!(instr_types::is_bit_castable(&v8x8_t, &x86mmx_t), false);
+    assert_eq!(instr_types::is_bit_castable(&x86mmx_t, &v8x8_t), false);
+    assert_eq!(instr_types::is_bit_castable(&i64_t_2, &x86mmx_t), false);
+    assert_eq!(instr_types::is_bit_castable(&v8x64_t, &v8x8_t), false);
+    assert_eq!(instr_types::is_bit_castable(&v8x8_t, &v8x64_t), false);
+
+    // Check address space casts are rejected since we don't know the sizes here.
+    let i32_t = type_::get_int_32_type(&blits_context_mut());
+    let i32_t_1 = type_::get_int_32_type(&blits_context_mut());
+    let i32_t_2 = type_::get_int_32_type(&blits_context_mut());
+    let i32_t_3 = type_::get_int_32_type(&blits_context_mut());
+
+    let i32_ptr_t = PointerType::get(Box::new(i32_t), 0);
+    let i32_ptr_t_1 = PointerType::get(Box::new(i32_t_1), 0);
+    let i32_ptr_as1_t = PointerType::get(Box::new(i32_t_2), 1);
+    let i32_ptr_as1_1_t = PointerType::get(Box::new(i32_t_3), 1);
+
+    let i64_t_3 = type_::get_int_64_type(&blits_context_mut());
+    let i64_ptr_as1_t = PointerType::get(Box::new(i64_t_3), 1);
+
+    let v2_i32_ptr_t = FixedVectorType::get(Box::new(i32_ptr_t_1), 2);
+    let v2_i32_ptr_as1_t = FixedVectorType::get(Box::new(i32_ptr_as1_t), 2);
+    let v2_i64_ptr_as1_t = FixedVectorType::get(Box::new(i64_ptr_as1_t), 2);
+    let v2_ptr_32 = constant::get_null_value(&Box::new(&v2_i32_ptr_t));
+
+    assert_eq!(instr_types::is_bit_castable(&i32_ptr_t, &i32_ptr_as1_1_t), false);
+    assert_eq!(instr_types::is_bit_castable(&i32_ptr_as1_1_t, &i32_ptr_t), false);
+    assert_eq!(instr_types::is_bit_castable(&v2_i32_ptr_t, &v2_i32_ptr_as1_t), false);
+    assert_eq!(instr_types::is_bit_castable(&v2_i32_ptr_as1_t, &v2_i64_ptr_as1_t), true);
+    assert_eq!(instr_types::get_cast_op_code(v2_ptr_32.as_ref(), true, &v2_i32_ptr_as1_t, true),
+      OpCode::AddrSpaceCast);
+
+    // Test mismatched number of elements for pointers.
+    let i64_t_4 = type_::get_int_64_type(&blits_context_mut());
+    let i64_ptr_as1_1_t = PointerType::get(Box::new(i64_t_4), 1);
+    let v4_i64_ptr_as1_t = FixedVectorType::new_from_ptr(i64_ptr_as1_1_t, 4);
+
+    let i32_t_4 = type_::get_int_32_type(&blits_context_mut());
+    let i32_ptr_as1_2_t = PointerType::get(Box::new(i32_t_4), 1);
+    let v4_i32_ptr_as1_t = FixedVectorType::new_from_ptr(i32_ptr_as1_2_t, 4);
+    assert_eq!(instr_types::is_bit_castable(&v2_i32_ptr_as1_t, &v4_i64_ptr_as1_t), false);
+    assert_eq!(instr_types::is_bit_castable(&v4_i64_ptr_as1_t, &v2_i32_ptr_as1_t), false);
+    assert_eq!(instr_types::is_bit_castable(&v2_i32_ptr_as1_t, &v4_i32_ptr_as1_t), false);
+    assert_eq!(instr_types::is_bit_castable(&i32_ptr_t, &v2_i32_ptr_t), false);
+    assert_eq!(instr_types::is_bit_castable(&v2_i32_ptr_t, &i32_ptr_t), false);
+
+    let i64_t_5 = type_::get_int_64_type(&blits_context_mut());
+    let i64_ptr_t = PointerType::get(Box::new(i64_t_5), 0);
+    let float_t = type_::get_float_type(&blits_context_mut());
+    let double_t = type_::get_double_type(&blits_context_mut());
+    let i32_t_5 = type_::get_int_32_type(&blits_context_mut());
+    let i16_t = type_::get_int_16_type(&blits_context_mut());
+    let half_t = type_::get_half_type(&blits_context_mut());
+    let i32_t_6 = type_::get_int_32_type(&blits_context_mut());
+    let v2_i32_t = FixedVectorType::get(Box::new(i32_t_6), 2);
+    let i64_t_6 = type_::get_int_64_type(&blits_context_mut());
+    assert_eq!(instr_types::is_bit_castable(&i32_ptr_t, &i64_ptr_t), true);
+    assert_eq!(instr_types::is_bit_castable(&double_t, &float_t), false);
+    assert_eq!(instr_types::is_bit_castable(&float_t, &double_t), false);
+    assert_eq!(instr_types::is_bit_castable(&float_t, &float_t), true);
+    assert_eq!(instr_types::is_bit_castable(&float_t, &i32_t_5), true);
+    assert_eq!(instr_types::is_bit_castable(&i16_t, &half_t), true);
+    assert_eq!(instr_types::is_bit_castable(&i32_t_5, &float_t), true);
+    assert_eq!(instr_types::is_bit_castable(&v2_i32_t, &i64_t_6), true);
+
+    let i16_t_1 = type_::get_int_16_type(&blits_context_mut());
+    let v4_i16_t = FixedVectorType::get(Box::new(i16_t_1), 4);
+    assert_eq!(instr_types::is_bit_castable(&v2_i32_t, &v4_i16_t), true);
+    assert_eq!(instr_types::is_bit_castable(&i32_t_5, &i64_t_6), false);
+    assert_eq!(instr_types::is_bit_castable(&i64_t_6, &i32_t_5), false);
+
+    let i64_t_7 = type_::get_int_64_type(&blits_context_mut());
+    let i64_ptr_t_1 = PointerType::get(Box::new(i64_t_7), 0);
+    let v2_i64_ptr_t =  FixedVectorType::get(Box::new(i64_ptr_t_1), 2);
+    let i64_t_8 = type_::get_int_64_type(&blits_context_mut());
+    let v2_i64_t = FixedVectorType::get(Box::new(i64_t_8), 2);
+    assert_eq!(instr_types::is_bit_castable(&v2_i32_ptr_t, &i64_t_6), false);
+    assert_eq!(instr_types::is_bit_castable(&i64_t_6, &v2_i32_ptr_t), false);
+    assert_eq!(instr_types::is_bit_castable(&v2_i64_ptr_t, &v2_i32_ptr_t), true);
+    assert_eq!(instr_types::is_bit_castable(&v2_i32_ptr_t, &v2_i64_ptr_t), true);
+    assert_eq!(instr_types::is_bit_castable(&v2_i32_t, &v2_i64_t), false);
+    assert_eq!(instr_types::is_bit_castable(&v2_i64_t, &v2_i32_t), false);
+
+    let i32_t_7 = type_::get_int_32_type(&blits_context_mut());
+    let i32_ptr_t_1 = PointerType::get(Box::new(i32_t_7), 0);
+    let v4_i32_ptr_t = FixedVectorType::get(Box::new(i32_ptr_t_1), 4);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&v4_i32_ptr_t)).get_type(),
+      &v2_i32_ptr_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&v2_i32_ptr_t)).get_type(),
+      &v4_i32_ptr_t), false);
+
+    assert_eq!(instr_types::cast_is_valid(OpCode::AddrSpaceCast,
+      constant::get_null_value(&Box::new(&v4_i32_ptr_as1_t)).get_type(),
+      &v2_i32_ptr_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::AddrSpaceCast,
+      constant::get_null_value(&Box::new(&v2_i32_ptr_t)).get_type(),
+      &v4_i32_ptr_as1_t), false);
+
+    // Address space cast of fixed/scalable vectors of pointers to scalable/fixed
+    // vector of pointers.
+    let i32_t_8 = type_::get_int_32_type(&blits_context_mut());
+    let i32_ptr_as1_3_t = PointerType::get(Box::new(i32_t_8), 1);
+    let vscale_v4_i32_ptr_as1_t =
+      ScalableVectorType::new_from_ptr(i32_ptr_as1_3_t, 4);
+    assert_eq!(instr_types::cast_is_valid(OpCode::AddrSpaceCast,
+      constant::get_null_value(&Box::new(&vscale_v4_i32_ptr_as1_t)).get_type(),
+      &v4_i32_ptr_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::AddrSpaceCast,
+      constant::get_null_value(&Box::new(&v4_i32_ptr_t)).get_type(),
+      &vscale_v4_i32_ptr_as1_t), false);
+
+    // Address space cast of scalabel vectors of pointers to scalable vector
+    // of pointers.
+    let i32_t_9 = type_::get_int_32_type(&blits_context_mut());
+    let i32_ptr_t_2 = PointerType::get(Box::new(i32_t_9), 0);
+    let vscale_v2_i32_ptr_t = ScalableVectorType::new_from_ptr(i32_ptr_t_2, 2);
+    let i64_t_9 = type_::get_int_64_type(&blits_context_mut());
+    let i64_ptr_t_2 = PointerType::get(Box::new(i64_t_9), 0);
+    let vscale_v4_i64_ptr_t = ScalableVectorType::new_from_ptr(i64_ptr_t_2, 4);
+    assert_eq!(instr_types::cast_is_valid(OpCode::AddrSpaceCast,
+      constant::get_null_value(&Box::new(&vscale_v4_i32_ptr_as1_t)).get_type(),
+      &vscale_v2_i32_ptr_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::AddrSpaceCast,
+      constant::get_null_value(&Box::new(&vscale_v2_i32_ptr_t)).get_type(),
+      &vscale_v4_i32_ptr_as1_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::AddrSpaceCast,
+      constant::get_null_value(&Box::new(&vscale_v4_i64_ptr_t)).get_type(),
+      &vscale_v4_i32_ptr_as1_t), true);
+
+    // Same number of lanes, different address scapce.
+    let i32_t_10 = type_::get_int_32_type(&blits_context_mut());
+    let i32_ptr_t_3 = PointerType::get(Box::new(i32_t_10), 0);
+    let vscale_v4_i32_ptr_t = ScalableVectorType::new_from_ptr(i32_ptr_t_3, 4);
+    assert_eq!(instr_types::cast_is_valid(OpCode::AddrSpaceCast,
+      constant::get_null_value(&Box::new(&vscale_v4_i32_ptr_as1_t)).get_type(),
+      &vscale_v4_i32_ptr_t), true);
+
+    // Same number of lanes, same address scapce.
+    assert_eq!(instr_types::cast_is_valid(OpCode::AddrSpaceCast,
+      constant::get_null_value(&Box::new(&vscale_v4_i64_ptr_t)).get_type(),
+      &vscale_v4_i32_ptr_t), false);
+
+    // Bit casting fixed/scalable vector to scalable/fixed vectors.
+    let i32_t_11 = type_::get_int_32_type(&blits_context_mut());
+    let vscale_v2_i32_t = ScalableVectorType::new_from_int(i32_t_11, 2);
+    let i64_t_10 = type_::get_int_64_type(&blits_context_mut());
+    let vscale_v2_i64_t = ScalableVectorType::new_from_int(i64_t_10, 2);
+    let i16_t_2 = type_::get_int_16_type(&blits_context_mut());
+    let vscale_v4_i16_t = ScalableVectorType::new_from_int(i16_t_2, 4);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&v2_i32_t)).get_type(),
+      &vscale_v2_i32_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&v2_i64_t)).get_type(),
+      &vscale_v2_i64_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&v4_i16_t)).get_type(),
+      &vscale_v4_i16_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&vscale_v2_i32_t)).get_type(),
+      &v2_i32_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&vscale_v2_i64_t)).get_type(),
+      &v2_i64_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&vscale_v4_i16_t)).get_type(),
+      &v4_i16_t), false);
+
+    // Bit casting scalable vectors to scalable vectors.
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&vscale_v4_i16_t)).get_type(),
+      &vscale_v2_i32_t), true);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&vscale_v2_i32_t)).get_type(),
+      &vscale_v4_i16_t), true);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&vscale_v2_i64_t)).get_type(),
+      &vscale_v2_i32_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&vscale_v2_i32_t)).get_type(),
+      &vscale_v2_i64_t), false);
+
+    // Bit casting to/from <vscale x 1 x t>
+    let i16_t_3 = type_::get_int_16_type(&blits_context_mut());
+    let v1_i16_t = FixedVectorType::new_from_int(i16_t_3, 1);
+    let i16_t_4 = type_::get_int_16_type(&blits_context_mut());
+    let vscale_v1_i16_t = ScalableVectorType::new_from_int(i16_t_4, 1);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&vscale_v1_i16_t)).get_type(),
+      &v1_i16_t), false);
+    assert_eq!(instr_types::cast_is_valid(OpCode::BitCast,
+      constant::get_null_value(&Box::new(&v1_i16_t)).get_type(),
+      &vscale_v1_i16_t), false);
   }
 }

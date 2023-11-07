@@ -8,10 +8,10 @@ use crate::{
     value::{Value, ValueType}, attributes::{AttributeList, AttrKind, Attribute},
     use_::Use, user::User, type_::{Type, FixedVectorType, VectorType, ScalableVectorType},
   },
-  support::{alignment::MaybeAlign, mod_ref::MemoryEffects}
+  support::{alignment::MaybeAlign, mod_ref::MemoryEffects, type_size::ElementCount}
 };
 
-use super::{function::Function, global_value::IntrinsicID};
+use super::{function::Function, global_value::IntrinsicID, type_::PointerType};
 
 pub trait UnaryInstruction: Instruction {}
 
@@ -143,7 +143,7 @@ pub trait CastInst: UnaryInstruction {
   fn crate_integer_cast(&self) {}
   fn crate_fp_cast(&self) {}
   fn create_trunc_or_bit_cast(&self) {}
-  fn is_bit_castable(&self) {}
+  //fn is_bit_castable(&self) {}
   fn is_bit_or_noop_pointer_castable(&self) {}
   //fn get_cast_op_code(&self) {}
   fn is_integer_cast(&self) {}
@@ -153,6 +153,63 @@ pub trait CastInst: UnaryInstruction {
   fn get_src_type(&self) {}
   fn get_dest_type(&self) {}
   fn cast_is_valid(&self) {}
+}
+
+// Check whether a bitcast between these types is valid.
+pub fn is_bit_castable(src_org_t: &dyn Type, dst_org_t: &dyn Type) -> bool {
+  let mut src_t = src_org_t;
+  let mut dst_t = dst_org_t;
+  if !src_t.is_first_class_type() || !dst_t.is_first_class_type() {
+    return false;
+  }
+
+  // src_t == dst_t
+
+  if src_t.as_any().downcast_ref::<FixedVectorType>().is_some() {
+    if dst_t.as_any().downcast_ref::<FixedVectorType>().is_some() {
+      let src_vec_t = src_t.as_any().downcast_ref::<FixedVectorType>();
+      let dst_vec_t = dst_t.as_any().downcast_ref::<FixedVectorType>();
+      if src_vec_t.unwrap().get_element_count() == dst_vec_t.unwrap().get_element_count() {
+        src_t = src_vec_t.unwrap().get_element_type();
+        dst_t = dst_vec_t.unwrap().get_element_type();
+      }
+    }
+  }
+
+  if src_t.as_any().downcast_ref::<ScalableVectorType>().is_some() {
+    if dst_t.as_any().downcast_ref::<ScalableVectorType>().is_some() {
+      let src_vec_t = src_t.as_any().downcast_ref::<ScalableVectorType>();
+      let dst_vec_t = dst_t.as_any().downcast_ref::<ScalableVectorType>();
+      if src_vec_t.unwrap().get_element_count() == dst_vec_t.unwrap().get_element_count() {
+        //src_t = src_vec_t.unwrap().get_element_type();
+        //dst_t = dst_vec_t.unwrap().get_element_type();
+      }
+    }
+  }
+
+  if src_t.as_any().downcast_ref::<PointerType>().is_some() {
+    if dst_t.as_any().downcast_ref::<PointerType>().is_some() {
+      let src_ptr_t = src_t.as_any().downcast_ref::<PointerType>();
+      let dst_ptr_t = dst_t.as_any().downcast_ref::<PointerType>();
+      return src_ptr_t.unwrap().get_address_space() == dst_ptr_t.unwrap().get_address_space();
+    }
+  }
+
+  let src_bits = src_t.get_primitive_size_in_bits();
+  let dst_bits = dst_t.get_primitive_size_in_bits();
+  if src_bits.get_known_min_value() == 0 || dst_bits.get_known_min_value() == 0 {
+    return false;
+  }
+
+  if src_bits != dst_bits {
+    return false;
+  }
+
+  if dst_t.is_x86_mmx_type() || src_t.is_x86_mmx_type() {
+    return  false;
+  }
+
+  true
 }
 
 // Returns the opcode necessary to cast src_val into dest_t using usual casting rules.
@@ -177,6 +234,7 @@ pub fn get_cast_op_code(src_val: &dyn Value, src_is_signed: bool,
       }
     }
   }
+  
   if src_t.as_any().downcast_ref::<ScalableVectorType>().is_some() {
     if dst_t.as_any().downcast_ref::<ScalableVectorType>().is_some() {
       let src_vec_t = src_t.as_any().downcast_ref::<ScalableVectorType>();
@@ -264,6 +322,127 @@ pub fn get_cast_op_code(src_val: &dyn Value, src_is_signed: bool,
   }
 
   unreachable!("Casting to type that is not first-class.");
+}
+
+pub fn cast_is_valid(op: OpCode, src_t: &dyn Type, dst_t: &dyn Type) -> bool {
+  if !src_t.is_first_class_type() || !dst_t.is_first_class_type() ||
+    src_t.is_aggregate_type() || dst_t.is_aggregate_type() {
+    return false;
+  }
+
+  let src_scalar_bit_size = src_t.get_scalar_size_in_bits();
+  let dst_scalar_bit_size = dst_t.get_scalar_size_in_bits();
+
+  let mut src_ec = ElementCount::get_fixed(0);
+  if src_t.is_vector_type() {
+    let src_fvec_t =
+      src_t.as_any().downcast_ref::<FixedVectorType>();
+    if src_fvec_t.is_some() {
+      src_ec = src_fvec_t.unwrap().get_element_count();
+    }
+    // sclar vector type
+    let src_svec_t =
+      src_t.as_any().downcast_ref::<ScalableVectorType>();
+    if src_svec_t.is_some() {
+      src_ec = src_svec_t.unwrap().get_element_count();
+    }
+  }
+
+  let mut dst_ec = ElementCount::get_fixed(0);
+  if dst_t.is_vector_type() {
+    let dst_fvec_t =
+      dst_t.as_any().downcast_ref::<FixedVectorType>();
+    if dst_fvec_t.is_some() {
+      dst_ec = dst_fvec_t.unwrap().get_element_count();
+    }
+    // sclar vector type
+    let dst_svec_t =
+      dst_t.as_any().downcast_ref::<ScalableVectorType>();
+    if dst_svec_t.is_some() {
+      dst_ec = dst_svec_t.unwrap().get_element_count();
+    }
+  }
+
+  match op {
+    OpCode::Trunc => {
+      return src_t.is_int_or_int_vector_type() && dst_t.is_int_or_int_vector_type() &&
+        src_ec == dst_ec && src_scalar_bit_size > dst_scalar_bit_size;
+    },
+    OpCode::ZExt => {
+      return src_t.is_int_or_int_vector_type() && dst_t.is_int_or_int_vector_type() &&
+        src_ec == dst_ec && src_scalar_bit_size < dst_scalar_bit_size;
+    },
+    OpCode::SExt => {
+      return src_t.is_int_or_int_vector_type() && dst_t.is_int_or_int_vector_type() &&
+        src_ec == dst_ec && src_scalar_bit_size < dst_scalar_bit_size;
+    },
+    OpCode::FPTrunc => {
+      return src_t.is_fp_or_fpvector_type() && dst_t.is_fp_or_fpvector_type() &&
+        src_ec == dst_ec && src_scalar_bit_size > dst_scalar_bit_size;
+    },
+    OpCode::FPExt => {
+      return src_t.is_fp_or_fpvector_type() && dst_t.is_fp_or_fpvector_type() &&
+        src_ec == dst_ec && src_scalar_bit_size < dst_scalar_bit_size;
+    },
+    OpCode::FPToUI => {
+      return src_t.is_fp_or_fpvector_type() && dst_t.is_int_or_int_vector_type() &&
+        src_ec == dst_ec;
+    },
+    OpCode::FPToSI => {
+      return src_t.is_fp_or_fpvector_type() && dst_t.is_int_or_int_vector_type() &&
+        src_ec == dst_ec;
+    },
+    OpCode::PtrToInt => {
+      if src_ec != dst_ec { return false; }
+      return src_t.is_ptr_or_ptr_vector_type() && dst_t.is_int_or_int_vector_type();
+    },
+    OpCode::IntToPtr => {
+      if src_ec != dst_ec { return false; }
+      return src_t.is_int_or_int_vector_type() && dst_t.is_ptr_or_ptr_vector_type();
+    },
+    OpCode::BitCast => {
+      let src_ptr_t =
+        src_t.get_scalar_type().as_any().downcast_ref::<PointerType>();
+      let dst_ptr_t =
+        dst_t.get_scalar_type().as_any().downcast_ref::<PointerType>();
+      // For non-pointer cases, the cast is okay if the source and destination bit
+      // widths are identical.
+      if src_ptr_t.is_none() {
+        return src_t.get_primitive_size_in_bits() == dst_t.get_primitive_size_in_bits();
+      }
+      // If both are pointers then the address spaces must match.
+      if dst_ptr_t.is_some() {
+        if src_ptr_t.unwrap().get_address_space() != dst_ptr_t.unwrap().get_address_space() {
+          return false;
+        }
+      }
+      // A vector of pointers must have the same number of elements.
+      if src_t.is_vector_type() && dst_t.is_vector_type() {
+        return src_ec == dst_ec;
+      }
+      if src_t.is_vector_type() {
+        return src_ec == ElementCount::get_fixed(1);
+      }
+      if dst_t.is_vector_type() {
+        return dst_ec == ElementCount::get_fixed(1);
+      }
+      return true;
+    },
+    OpCode::AddrSpaceCast => {
+      let src_ptr_t =
+        src_t.get_scalar_type().as_any().downcast_ref::<PointerType>();
+      if src_ptr_t.is_none() { return false; }
+      let dst_ptr_t =
+        dst_t.get_scalar_type().as_any().downcast_ref::<PointerType>();
+      if dst_ptr_t.is_none() { return false; }
+
+      if src_ptr_t.unwrap().get_address_space() == dst_ptr_t.unwrap().get_address_space() {
+        return false;
+      }
+      return src_ec == dst_ec;
+    },
+    _ => return false
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]

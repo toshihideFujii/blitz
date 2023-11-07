@@ -12,7 +12,8 @@
 
 use std::any::Any;
 use crate::{
-  adt::{ap_int::APInt, ap_float::APFloat}, ir::{type_::{type_id_to_string, TypeID}, blits_context::blits_context_mut},
+  adt::{ap_int::APInt, ap_float::APFloat}, ir::{type_::{type_id_to_string, TypeID},
+  blits_context::blits_context_mut}, support::type_size::ElementCount,
   //ir::constants_context::ConstantExprKeyType
 };
 use super::{
@@ -447,7 +448,8 @@ impl Constant for ConstantFP {
 // All zero aggregate value.
 #[derive(Debug, Clone)]
 pub struct ConstantAggregateZero {
-  fixed_vec_t: Option<FixedVectorType>
+  fixed_vec_t: Option<FixedVectorType>,
+  scalable_vec_t: Option<ScalableVectorType>
 }
 
 impl ConstantAggregateZero {
@@ -459,7 +461,11 @@ impl ConstantAggregateZero {
   //}
 
   pub fn new_from_fixed_vec(t: FixedVectorType) -> Self {
-    ConstantAggregateZero { fixed_vec_t: Some(t) }
+    ConstantAggregateZero { fixed_vec_t: Some(t), scalable_vec_t: None }
+  }
+
+  pub fn new_from_scalable_vec(t: ScalableVectorType) -> Self {
+    ConstantAggregateZero { fixed_vec_t: None, scalable_vec_t: Some(t) }
   }
 
   pub fn get(t: &Box<&dyn Type>) -> ConstantAggregateZero {
@@ -470,6 +476,9 @@ impl ConstantAggregateZero {
     if t.get_type_id() == TypeID::FixedVector {
       let fixed_vec = t.as_any().downcast_ref::<FixedVectorType>();
       key.push_str(fixed_vec.unwrap().get_id().to_string().as_str());
+    } else if t.get_type_id() == TypeID::ScalableVector {
+      let fixed_vec = t.as_any().downcast_ref::<ScalableVectorType>();
+      key.push_str(fixed_vec.unwrap().get_id().to_string().as_str());
     }
 
     let entry = blits_context().caz_constants.get(&key);
@@ -477,10 +486,21 @@ impl ConstantAggregateZero {
       // TODO: other supported case.
       let fixed_vec_t =
         t.as_any().downcast_ref::<FixedVectorType>();
-      let new_entry =
-        ConstantAggregateZero::new_from_fixed_vec(fixed_vec_t.unwrap().clone());
-      blits_context_mut().caz_constants.insert(key, new_entry.clone());
-      new_entry
+      if fixed_vec_t.is_some() {
+        let new_entry =
+          ConstantAggregateZero::new_from_fixed_vec(fixed_vec_t.unwrap().clone());
+        blits_context_mut().caz_constants.insert(key, new_entry.clone());
+        return new_entry;
+      }
+      let scalable_vec_t =
+        t.as_any().downcast_ref::<ScalableVectorType>();
+      if scalable_vec_t.is_some() {
+        let new_entry =
+          ConstantAggregateZero::new_from_scalable_vec(scalable_vec_t.unwrap().clone());
+        blits_context_mut().caz_constants.insert(key, new_entry.clone());
+        return new_entry;
+      }
+      unimplemented!("Not implemented.");
     } else {
       entry.unwrap().clone()
     }
@@ -507,7 +527,7 @@ impl ConstantAggregateZero {
   }
 
   // Return the number of elements in the array, vector, or struct.
-  pub fn get_element_count(&self) -> usize {
+  pub fn get_element_count(&self) -> ElementCount {
     if self.fixed_vec_t.is_some() {
       return self.fixed_vec_t.as_ref().unwrap().get_element_count();
     }
@@ -524,7 +544,12 @@ impl Constant for ConstantAggregateZero {}
 
 impl Value for ConstantAggregateZero {
   fn get_type(&self) -> &dyn Type {
-    self.fixed_vec_t.as_ref().unwrap()
+    if self.fixed_vec_t.is_some() {
+      return self.fixed_vec_t.as_ref().unwrap();
+    } else if self.scalable_vec_t.is_some() {
+      return self.scalable_vec_t.as_ref().unwrap();
+    }
+    unimplemented!("Not implemented");
   }
 
   fn get_value_id(&self) -> ValueType {
