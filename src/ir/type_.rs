@@ -134,43 +134,56 @@ pub trait Type: Debug {
   }
 
   // Return true if this is X86 MMX.
-  fn is_x86_mmx_type(&self) -> bool { false }
+  fn is_x86_mmx_type(&self) -> bool { self.get_type_id() == TypeID::X86Mmx }
 
   // Return true if this is X86 AMX.
-  fn is_x86_amx_type(&self) -> bool { false }
+  fn is_x86_amx_type(&self) -> bool { self.get_type_id() == TypeID::X86Amx }
+
+  // Return true if this is a target extension type or a target extension type
+  // with a scalable layout.
+  fn is_target_ext_type(&self) -> bool { self.get_type_id() == TypeID::TargetExt }
+
+  fn is_scalable_target_ext_type(&self) -> bool { false }
+  fn is_scalable_type(&self) -> bool { false }
 
   // Return true if this is a fp type or a vector of fp.
   fn is_fp_or_fpvector_type(&self) -> bool {
     self.get_scalar_type().is_floating_point_type()
   }
 
-  fn is_label_type(&self) -> bool { false }
-  fn is_metadata_type(&self) -> bool { false }
-  fn is_token_type(&self) -> bool { false }
+  // Return true if this is 'label'.
+  fn is_label_type(&self) -> bool { self.get_type_id() == TypeID::Label }
+
+  // Return true if this is 'metadata'.
+  fn is_metadata_type(&self) -> bool { self.get_type_id() == TypeID::Metadata }
+
+  // Return true if this is 'token'.
+  fn is_token_type(&self) -> bool { self.get_type_id() == TypeID::Token }
 
   // True if this is an instance of IntegerType.
-  fn is_integer_type(&self) -> bool {
-    false
-  }
+  fn is_integer_type(&self) -> bool { self.get_type_id() == TypeID::Integer }
 
   // Return true if this is an integer type or a vector of integer types.
   fn is_int_or_int_vector_type(&self) -> bool { 
     self.get_scalar_type().is_integer_type()
   }
 
-  fn is_int_or_int_ptr_type(&self) {}
+  // Return true if this is an integer type or a pointer type.
+  fn is_int_or_ptr_type(&self) -> bool {
+    self.is_integer_type() || self.is_pointer_type()
+  }
 
   // True if this is an instance of FunctionType.
-  fn is_function_type(&self) -> bool { false }
+  fn is_function_type(&self) -> bool { self.get_type_id() == TypeID::Function }
 
   // True if this is an instance of StructType.
-  fn is_struct_type(&self) -> bool { false }
+  fn is_struct_type(&self) -> bool { self.get_type_id() == TypeID::Struct }
 
   // True if this is an instance of ArrayType.
-  fn is_array_type(&self) -> bool { false }
+  fn is_array_type(&self) -> bool { self.get_type_id() == TypeID::Array }
 
   // True if this is an instance of PointerType.
-  fn is_pointer_type(&self) -> bool { false }
+  fn is_pointer_type(&self) -> bool { self.get_type_id() == TypeID::Pointer }
 
   fn is_opaque_pointer_type(&self) {}
 
@@ -180,7 +193,11 @@ pub trait Type: Debug {
   }
 
   // True if this is an instance of VectorType.
-  fn is_vector_type(&self) -> bool { false }
+  fn is_vector_type(&self) -> bool {
+    self.get_type_id() == TypeID::ScalableVector ||
+    self.get_type_id() == TypeID::FixedVector
+  }
+
   fn is_empty_type(&self) -> bool { false }
 
   // Return true if the type is "first class", meaning it is a valid type
@@ -190,8 +207,32 @@ pub trait Type: Debug {
   }
 
   fn is_single_value_type(&self) -> bool { false }
-  fn is_aggregate_type(&self) -> bool { false }
-  fn is_sized(&self) -> bool { false }
+
+  // Return true if the type is an aggregate type. This mean it is valid as the
+  // first operand of an insert_value or extract_value instruction.
+  // This includes struct and array types, but does not include vector types.
+  fn is_aggregate_type(&self) -> bool {
+    self.get_type_id() == TypeID::Struct || self.get_type_id() == TypeID::Array
+  }
+
+  // Return true if it makes sense to take the size of this type.
+  // To get the actual size for particular target, it is reasonable to use the
+  // DataLayout subsystem to do this.
+  fn is_sized(&self) -> bool {
+    if self.get_type_id() == TypeID::Integer || self.get_type_id() == TypeID::Pointer ||
+      self.get_type_id() == TypeID::X86Mmx || self.get_type_id() == TypeID::X86Amx ||
+      self.is_floating_point_type()
+    {
+      return true;
+    }
+    if self.get_type_id() != TypeID::Struct && self.get_type_id() != TypeID::Array &&
+      self.get_type_id() != TypeID::TargetExt && !self.is_vector_type()
+    {
+      return false;
+    }
+    // is_sized_derived_type()
+    false
+  }
 
   // Return the basic size of this type if it is a primitive type.
   fn get_primitive_size_in_bits(&self) -> TypeSize {
@@ -774,8 +815,8 @@ impl ArrayType {
     self.num_elements
   }
 
-  pub fn get_element_type(&self) -> &Box<dyn Type> {
-    &self.contained_type
+  pub fn get_element_type(&self) -> &dyn Type {
+    self.contained_type.as_ref()
   }
 
   pub fn get() {}
@@ -925,8 +966,6 @@ impl VectorType for FixedVectorType {
 impl Type for FixedVectorType {
   fn get_type_id(&self) -> TypeID { TypeID::FixedVector }
 
-  fn is_vector_type(&self) -> bool { true }
-
   fn get_scalar_type(&self) -> &dyn Type {
     self.get_contained_type(0)
   }
@@ -1058,8 +1097,6 @@ impl VectorType for ScalableVectorType {
 
 impl Type for ScalableVectorType {
   fn get_type_id(&self) -> TypeID { TypeID::ScalableVector }
-
-  fn is_vector_type(&self) -> bool { true }
 
   fn get_scalar_type(&self) -> &dyn Type { self.get_contained_type(0) }
 

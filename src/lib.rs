@@ -12,5 +12,6 @@ pub mod passes;
 pub mod profile_data;
 pub mod remarks;
 pub mod support;
+pub mod target_parser;
 pub mod transforms;
 pub mod xray;

@@ -195,12 +195,12 @@ impl Attribute {
 
   pub fn get_by_alignment(context: &mut BlitzContext, align: Align) -> Self {
     debug_assert!(align.value() <= value::MAXIMUM_ALIGNMENT, "Alignment too large.");
-    Attribute::get_by_int(context, AttrKind::Alignment, align.value())
+    Attribute::get_by_int(context, AttrKind::Alignment, align.value() as u64)
   }
 
   pub fn get_by_stack_alignment(context: &mut BlitzContext, align: Align) -> Self {
     debug_assert!(align.value() <= 0x100, "Alignment too large.");
-    Attribute::get_by_int(context, AttrKind::StackAlignment, align.value())
+    Attribute::get_by_int(context, AttrKind::StackAlignment, align.value() as u64)
   }
 
   pub fn get_by_dereferenceable_bytes(context: &mut BlitzContext, bytes: u64) -> Self {
@@ -1583,7 +1583,7 @@ impl AttrBuilder {
   // This call has no effect if align is not set.
   pub fn add_alignment_attr(&mut self, align: &MaybeAlign) {
     if align.value() == 0 { return; }
-    debug_assert!(align.value() <= value::MAXIMUM_ALIGNMENT, "Alignment is too large.");
+    debug_assert!(align.value() <= value::MAXIMUM_ALIGNMENT as u64, "Alignment is too large.");
     // Original code use align.value(), but it is not going well.
     self.add_raw_int_attr(&AttrKind::Alignment, align.shift_value() /*align.value()*/)
   }

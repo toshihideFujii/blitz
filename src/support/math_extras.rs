@@ -73,7 +73,7 @@ pub fn log2_64(value: u64) -> u32 {
 // a and b are either alignments or offsets.
 // Return the minimum alignment that may be assumed after adding the
 // two together.
-pub fn min_align(a: u64, b: u64) -> u64 {
+pub fn min_align(a: usize, b: usize) -> usize {
   (a | b) & (1 + !(a | b))
 }
 
@@ -87,6 +87,18 @@ pub fn next_power_of_2(mut a: u64) -> u64 {
   a |= a >> 16;
   a |= a >> 32;
   a + 1
+}
+
+// Returns the next integer (mod 2**64) that is grater than or equal to value
+// and is a multiple of align. align must be non-zero.
+pub fn align_to(value: usize, align: usize)  -> usize {
+  debug_assert!(align != 0, "Align can't be 0.");
+  return (value + align - 1) / align * align
+}
+
+// Returns the integer ceil (numerator / denominaotor).
+pub fn divide_ceil(numerator: usize, denominator: usize) -> usize {
+  align_to(numerator, denominator) / denominator
 }
 
 // Sign-extend the number in the bottom b bits of x to a 32-bit integer.

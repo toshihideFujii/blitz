@@ -11,8 +11,8 @@ use super::{type_::Type, use_::Use,
 // The maximum alignment for instructions.
 // This is the greatest alignment value supported by load, store, and
 // alloca instructions, and global values.
-pub const MAX_ALIGNMENT_EXPONENT: u64 = 32;
-pub const MAXIMUM_ALIGNMENT: u64 = 1 << MAX_ALIGNMENT_EXPONENT;
+pub const MAX_ALIGNMENT_EXPONENT: usize = 32;
+pub const MAXIMUM_ALIGNMENT: usize = 1 << MAX_ALIGNMENT_EXPONENT;
 
 // Concrete subclass of Value.
 // An enumeration for keeping track of the concrete subclass of Value
