@@ -304,6 +304,13 @@ pub trait Type: Debug {
   fn get_pointer_address_space(&self) -> usize { 0 }
   fn get_primitive_type(&self) {}
 
+  // Return a pointer to the current type.
+  // This is equivalent to PointerType::get(Foo, addr_space).
+  fn get_pointer_to(&self, address_space: usize) -> PointerType {
+    //PointerType::get(self, address_space)
+    unimplemented!("Not implemented.")
+  }
+
   // For StructType.
   fn contains_scalable_vector_type(&self) -> bool { false }
 
@@ -342,7 +349,9 @@ pub fn get_half_type(c: &BlitzContext) -> BasicType {
   c.half_type.clone()
 }
 
-pub fn get_b_float_type() {}
+pub fn get_b_float_type(c: &BlitzContext) -> BasicType {
+  c.b_float_type.clone()
+}
 
 pub fn get_float_type(c: &BlitzContext) -> BasicType {
   c.float_type.clone()
@@ -389,6 +398,22 @@ pub fn get_int_128_type(c: &BlitzContext) -> IntegerType {
 
 pub fn get_int_n_type(c: &BlitzContext, n: u32) -> IntegerType {
   IntegerType::get(c, n)
+}
+
+pub fn get_int_8_ptr_type(c: &BlitzContext, address_space: usize) -> PointerType {
+  get_int_8_type(c).get_pointer_to(address_space)
+}
+
+pub fn get_int_16_ptr_type(c: &BlitzContext, address_space: usize) -> PointerType {
+  get_int_16_type(c).get_pointer_to(address_space)
+}
+
+pub fn get_int_32_ptr_type(c: &BlitzContext, address_space: usize) -> PointerType {
+  get_int_32_type(c).get_pointer_to(address_space)
+}
+
+pub fn get_int_64_ptr_type(c: &BlitzContext, address_space: usize) -> PointerType {
+  get_int_8_type(c).get_pointer_to(address_space)
 }
 
 // This enum is just used to hold constants we need for IntegerType.
@@ -519,25 +544,23 @@ impl Type for IntegerType {
     TypeID::Integer
   }
 
-  fn is_integer_type(&self) -> bool {
-    true
-  }
+  fn is_integer_type(&self) -> bool { true }
 
   fn get_primitive_size_in_bits(&self) -> TypeSize {
     TypeSize::fixed(self.get_bit_width() as usize)
   }
 
-  fn get_scalar_type(&self) -> &dyn Type {
-    self
-  }
+  fn get_scalar_type(&self) -> &dyn Type { self }
 
   fn get_integer_bit_width(&self) -> usize {
     self.get_bit_width() as usize
   }
 
-  fn as_any(&self) -> &dyn Any {
-    self
+  fn get_pointer_to(&self, address_space: usize) -> PointerType {
+    PointerType::get(self, address_space)
   }
+
+  fn as_any(&self) -> &dyn Any { self }
 }
 
 // Class to represent function types
@@ -1128,8 +1151,8 @@ impl PointerType {
     PointerType { id: id, pointee_int: Some(pointee_int), address_space: address_space }
   }
 
-  pub fn get(elt_t: Box<dyn Type>, address_space: usize) -> PointerType {
-    debug_assert!(PointerType::is_valid_element_type(&elt_t),
+  pub fn get(elt_t: &dyn Type, address_space: usize) -> PointerType {
+    debug_assert!(PointerType::is_valid_element_type(elt_t),
       "Invalid type for pointer element.");
     let int_t = elt_t.as_any().downcast_ref::<IntegerType>().unwrap().clone();
     PointerType::new_from_int(int_t, address_space)
@@ -1148,14 +1171,14 @@ impl PointerType {
   }
 
   // Return true if the specified type is valid as a element type.
-  pub fn is_valid_element_type(elem_type: &Box<dyn Type>) -> bool {
+  pub fn is_valid_element_type(elem_type: &dyn Type) -> bool {
     !elem_type.is_void_type() && !elem_type.is_label_type() &&
     !elem_type.is_metadata_type() && !elem_type.is_token_type() &&
     !elem_type.is_x86_amx_type()
   }
 
   // Return true if we can load or store from a pointer to this type.
-  pub fn is_loadable_or_storable_type(elem_type: &Box<dyn Type>) -> bool {
+  pub fn is_loadable_or_storable_type(elem_type: &dyn Type) -> bool {
     PointerType::is_valid_element_type(elem_type) && !elem_type.is_function_type()
   }
 
@@ -1164,7 +1187,15 @@ impl PointerType {
     self.address_space
   }
 
-  pub fn is_opaque_or_pointee_type_matches() {}
+  // Return true if either this is an opaque pointer type or if this pointee
+  // type matches t.
+  pub fn is_opaque_or_pointee_type_matches(&self, t: &dyn Type) -> bool {
+    if t.as_any().downcast_ref::<IntegerType>().is_some() {
+      let ptr = t.as_any().downcast_ref::<IntegerType>().unwrap();
+      return self.is_opaque() || self.pointee_int.as_ref().unwrap() == ptr;
+    }
+    unimplemented!("Not implemented.");
+  }
 
   pub fn has_same_element_type_as() {}
 
@@ -1182,6 +1213,11 @@ impl Type for PointerType {
   fn is_pointer_type(&self) -> bool { true }
   fn get_scalar_type(&self) -> &dyn Type { self }
   fn get_pointer_address_space(&self) -> usize { self.address_space }
+
+  fn get_pointer_to(&self, address_space: usize) -> PointerType {
+    PointerType::get(self, address_space)
+  }
+
   fn as_any(&self) -> &dyn Any { self }
 }
 

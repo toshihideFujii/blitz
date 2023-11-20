@@ -4,9 +4,10 @@
 // convenient way to create Blitz instructions with a consistent
 // and simplified interface.
 
-use crate::adt::ap_int::APInt;
-use super::{constants::ConstantInt, blits_context::blits_context_mut,
-  type_::{IntegerType, self}, /*instruction::InstructionBase,
+use crate::{adt::{ap_int::APInt, twine::Twine}, support::alignment::MaybeAlign};
+use super::{constants::ConstantInt, blits_context::{blits_context_mut, blits_context},
+  type_::{IntegerType, self, BasicType, PointerType, Type}, data_layout::DataLayout,
+  value::Value, metadata::MDNode, instruction::{OpCode, Instruction}, basic_block::BasicBlock, global_value::IntrinsicID, /*instruction::InstructionBase,
   basic_block::BasicBlock, value::Value*/};
 
 // This provides the default implementation of the IRBuilder
@@ -47,16 +48,39 @@ impl OperandBundlesGuard {
 // them into a basic block either at the end of a BasicBlock, or at a specific 
 // iterator location in a block.
 struct IRBuilder {
-  //context: BlitzContext
+  bb: Option<BasicBlock>,
+  insert_pt: Option<Box<dyn Instruction>>
 }
 
 impl IRBuilder {
   pub fn new() {}
-  pub fn insert() {}
-  pub fn clear_insertion_point() {}
-  pub fn get_insert_block() {}
-  pub fn get_context() {}
-  pub fn set_insert_point() {}
+  pub fn insert_inst(&self) {}
+  pub fn insert_val(&self, _v: &dyn Value, _name: &Twine) {
+    //let i = v.as_any().downcast_ref::<dyn Instruction>();
+  }
+
+  // Clear the insertion point: created instructions will not be inserted
+  // into a block.
+  pub fn clear_insertion_point(&mut self) {
+    self.bb = None;
+    self.insert_pt = None;
+  }
+
+  pub fn get_insert_block(&self) -> &Option<BasicBlock> {
+    &self.bb
+  }
+
+  // This specifies that created instructions shoould be inserted to the
+  // end of the specified block.
+  pub fn set_insert_point(&mut self, the_bb: BasicBlock) {
+    self.bb = Some(the_bb);
+    //self.insert_pt = Some(the_bb);
+  }
+
+  // This specifies that created instructions shoould be inserted before
+  // the specified instruction.
+  pub fn set_insert_point_at_inst(&mut self, _i: &dyn Instruction) {}
+
   pub fn set_current_debug_location() {}
   pub fn collect_metadata_to_copy() {}
   pub fn get_current_debug_location() {}
@@ -85,77 +109,77 @@ impl IRBuilder {
   pub fn create_global_string() {}
 
   // Get the constant value for i1 true.
-  pub fn get_true(&mut self) -> ConstantInt {
+  pub fn get_true(&self) -> ConstantInt {
     ConstantInt::get_true(blits_context_mut()).unwrap()
   }
 
   // Get the constant value for i1 false.
-  pub fn get_false(&mut self) -> ConstantInt {
+  pub fn get_false(&self) -> ConstantInt {
     ConstantInt::get_false(blits_context_mut()).unwrap()
   }
 
   // Get a constant value representing either true or false.
-  pub fn get_int_1(&mut self, v: bool) -> ConstantInt {
+  pub fn get_int_1(&self, v: bool) -> ConstantInt {
     ConstantInt::get(&self.get_int_1_type(), v as i64, false)
   }
 
   // Get a constant 8-bit value.
-  pub fn get_int_8(&mut self, c: u8) -> ConstantInt {
+  pub fn get_int_8(&self, c: u8) -> ConstantInt {
     ConstantInt::get(&self.get_int_8_type(), c as i64, false)
   }
 
   // Get a constant 16-bit value.
-  pub fn get_int_16(&mut self, c: u16) -> ConstantInt {
+  pub fn get_int_16(&self, c: u16) -> ConstantInt {
     ConstantInt::get(&self.get_int_16_type(), c as i64, false)
   }
 
   // Get a constant 32-bit value.
-  pub fn get_int_32(&mut self, c: u32) -> ConstantInt {
+  pub fn get_int_32(&self, c: u32) -> ConstantInt {
     ConstantInt::get(&self.get_int_32_type(), c as i64, false)
   }
 
   // Get a constant 64-bit value.
-  pub fn get_int_64(&mut self, c: i64) -> ConstantInt {
-    ConstantInt::get(&self.get_int_64_type(), c, false)
+  pub fn get_int_64(&self, c: u64) -> ConstantInt {
+    ConstantInt::get(&self.get_int_64_type(), c as i64, false)
   }
 
   // Get a constant n-bit value, zero extended or truncated from a 64-bit value.
-  pub fn get_int_n(&mut self, n: u32, c: i64) -> ConstantInt {
+  pub fn get_int_n(&self, n: u32, c: i64) -> ConstantInt {
     ConstantInt::get(&self.get_int_n_type(n), c, false)
   }
 
   // Get a constant integer value.
-  pub fn get_int(&mut self, apint: &APInt) -> ConstantInt {
+  pub fn get_int(&self, apint: &APInt) -> ConstantInt {
     ConstantInt::get_from_apint(blits_context_mut(), apint.clone())
   }
 
   // Fetch the type representing a single bit.
-  pub fn get_int_1_type(&mut self) -> IntegerType {
+  pub fn get_int_1_type(&self) -> IntegerType {
     type_::get_int_1_type(blits_context_mut())
   }
 
   // Fetch the type representing an 8-bit integer.
-  pub fn get_int_8_type(&mut self) -> IntegerType {
+  pub fn get_int_8_type(&self) -> IntegerType {
     type_::get_int_8_type(blits_context_mut())
   }
 
   // Fetch the type representing a 16-bit integer.
-  pub fn get_int_16_type(&mut self) -> IntegerType {
+  pub fn get_int_16_type(&self) -> IntegerType {
     type_::get_int_16_type(blits_context_mut())
   }
 
   // Fetch the type representing a 32-bit integer.
-  pub fn get_int_32_type(&mut self) -> IntegerType {
+  pub fn get_int_32_type(&self) -> IntegerType {
     type_::get_int_32_type(blits_context_mut())
   }
 
   // Fetch the type representing a 64-bit integer.
-  pub fn get_int_64_type(&mut self) -> IntegerType {
+  pub fn get_int_64_type(&self) -> IntegerType {
     type_::get_int_64_type(blits_context_mut())
   }
 
   // Fetch the type representing a 128-bit integer.
-  pub fn get_int_128_type(&mut self) -> IntegerType {
+  pub fn get_int_128_type(&self) -> IntegerType {
     type_::get_int_128_type(blits_context_mut())
   }
 
@@ -164,19 +188,59 @@ impl IRBuilder {
     type_::get_int_n_type(blits_context_mut(), n)
   }
 
-  pub fn get_half_type() {}
-  pub fn get_b_float_type() {}
-  pub fn get_float_type() {}
-  pub fn get_double_type() {}
-  pub fn get_void_type() {}
-  pub fn get_ptr_type() {}
-  pub fn get_int_8_ptr_type() {}
-  pub fn get_int_ptr_type() {}
-  pub fn get_index_type() {}
+  // Fetch the type representing a 16-bit floating point value.
+  pub fn get_half_type(&self) -> BasicType {
+    type_::get_half_type(blits_context())
+  }
 
-  // Create and insert a memset to the specified pointer and the specified
-  // value.
-  pub fn create_mem_set() {}
+  // Fetch the type representing a 16-bit brain floating point value.
+  pub fn get_b_float_type(&self) -> BasicType {
+    type_::get_b_float_type(&blits_context())
+  }
+
+  // Fetch the type representing a 32-bit floating point value.
+  pub fn get_float_type(&self) -> BasicType {
+    type_::get_float_type(blits_context())
+  }
+
+  // Fetch the type representing a 64-bit floating point value.
+  pub fn get_double_type(&self) -> BasicType {
+    type_::get_double_type(blits_context())
+  }
+
+  // Fetch the type representing void.
+  pub fn get_void_type(&self) -> BasicType {
+    type_::get_void_type(blits_context())
+  }
+
+  // Fetch the type representing a pointer.
+  pub fn get_ptr_type(&self) {}
+
+  // Fetch the type representing a pointer to an 8-bit integer value.
+  pub fn get_int_8_ptr_type(&self, address_space: usize) -> PointerType {
+    type_::get_int_8_ptr_type(blits_context(), address_space)
+  }
+
+  // Fetch the type of an integer with size at least as big as that of a pointer
+  // in the given address space.
+  pub fn get_int_ptr_type(&self, _dl: &DataLayout, _address_space: usize) {
+    //dl.get_int_ptr_type(t)
+  }
+
+  // Fetch the type of an integer that should be used to index GEP operations
+  // within address_space.
+  pub fn get_index_type(&self, dl: &DataLayout, address_space: usize) -> IntegerType {
+    dl.get_index_type(address_space)
+  }
+
+  // Create and insert a memset to the specified pointer and the specified value.
+  pub fn create_mem_set(&self, _ptr: &dyn Value, _val: &dyn Value, size: u64,
+    _align: MaybeAlign, _is_volatile: bool, _t_baa_tag: Option<&dyn MDNode>,
+    _scope_tag: Option<&dyn MDNode>, _no_alias_tag: Option<&dyn MDNode>)
+  {
+    let _int_size = self.get_int_64(size);
+  }
+
   pub fn create_element_unordered_atomic_mem_set() {}
 
   // Create and insert a memcpy between the specified pointers.
@@ -185,7 +249,12 @@ impl IRBuilder {
   pub fn create_element_unordered_atomic_mem_cpy() {}
   pub fn create_element_unordered_atomic_mem_move() {}
 
-  pub fn get_reduction_intrinsic() {}
+  fn get_reduction_intrinsic(&self, _id: IntrinsicID, src: &dyn Value) {
+    let _m = self.get_insert_block().as_ref().unwrap().
+      get_parent().as_ref().unwrap().get_parent();
+    let _ops = vec![src];
+    let _types = vec![src.get_type()];
+  }
 
   pub fn create_f_add_reduce() {}
   pub fn create_f_mul_reduce() {}
@@ -327,8 +396,17 @@ impl IRBuilder {
   pub fn create_addr_space_cast() {}
   pub fn create_zext_or_bit_cast() {}
   pub fn create_sext_or_bit_cast() {}
-  pub fn create_trunc_or_bit_cast() {} 
-  pub fn create_cast() {}
+  pub fn create_trunc_or_bit_cast() {}
+
+  pub fn create_cast(&self, _op: OpCode, _v: &dyn Value, _dst_t: &dyn Type,
+    _name: Twine) -> Option<&dyn Value>
+  {
+    //if v.get_type().get_type_id() == dst_t.get_type_id() {
+      //return v;
+    //}
+    None
+  }
+
   pub fn create_ptr_cast() {}
   pub fn create_ptr_bit_cast_or_addr_space_cast() {}
   pub fn create_int_cast() {}
@@ -388,4 +466,14 @@ impl IRBuilder {
   pub fn create_preserve_array_access_index() {}
   pub fn create_preserve_union_access_index() {}
   pub fn create_preserve_struct_access_index() {}
+
+
+
+  fn get_casted_int_8_ptr_value(&self, val: &dyn Value) -> Option<PointerType> {
+    let ptr = val.as_any().downcast_ref::<PointerType>().unwrap().clone();
+    if ptr.is_opaque_or_pointee_type_matches(&self.get_int_8_type()) {
+      return Some(ptr);
+    }
+    None
+  }
 }

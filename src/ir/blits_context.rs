@@ -158,7 +158,7 @@ pub struct BlitzContext {
   pub fp128_type: BasicType,
 
   pub half_type: BasicType,
-  //b_float_type: Box<dyn Type>,
+  pub b_float_type: BasicType,
   pub float_type: BasicType,
   pub double_type: BasicType,
   //metadata_type: Box<dyn Type>,
@@ -223,6 +223,7 @@ impl BlitzContext {
       label_type: BasicType::new(TypeID::Label),
       fp128_type: BasicType::new(TypeID::Fp128),
       half_type: BasicType::new(TypeID::Half),
+      b_float_type: BasicType::new(TypeID::BFloat),
       float_type: BasicType::new(TypeID::Float),
       double_type: BasicType::new(TypeID::Double),
       x86_mmx_type: BasicType::new(TypeID::X86Mmx),

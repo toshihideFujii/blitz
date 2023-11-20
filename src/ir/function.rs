@@ -126,7 +126,11 @@ impl Function {
     self
   }
 
-  pub fn get_parent(&mut self) -> &mut Option<Module> {
+  pub fn get_parent(&self) -> &Option<Module> {
+    &self.parent
+  }
+
+  pub fn get_parent_mut(&mut self) -> &mut Option<Module> {
     &mut self.parent
   }
 
