@@ -1,17 +1,4 @@
 pub mod adt;
 pub mod analysis;
-pub mod bitcode;
-pub mod bitstream;
-pub mod code_gen;
-pub mod execution_engine;
 pub mod ir;
-pub mod ir_printer;
-pub mod ir_reader;
-pub mod option;
-pub mod passes;
-pub mod profile_data;
-pub mod remarks;
 pub mod support;
-pub mod target_parser;
-pub mod transforms;
-pub mod xray;

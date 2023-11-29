@@ -108,6 +108,7 @@ impl IITDescriptor {
 // array of IITDescriptors.
 fn get_intrinsic_info_table_entries() {}
 
+#[derive(Debug, Clone, PartialEq)]
 enum IITInfo {
   Done,
   Vararg,
@@ -171,9 +172,11 @@ enum IITInfo {
   BitcastsToInt,
 }
 
-fn decode_iit_type(next_elt: usize, infos: Vec<IITInfo>, _last_info: IITInfo,
+fn decode_iit_type(next_elt: usize, infos: &Vec<IITInfo>, last_info: &IITInfo,
   output_table: &mut Vec<IITDescriptor>)
 {
+  let mut is_scalable_vector = false;
+  if last_info == &IITInfo::ScalableVec { is_scalable_vector = true; }
   let info = infos.get(next_elt).unwrap();
   match info {
     IITInfo::Done => {
@@ -260,6 +263,66 @@ fn decode_iit_type(next_elt: usize, infos: Vec<IITInfo>, _last_info: IITInfo,
       output_table.push(IITDescriptor::get(&IITDescriptorKind::Integer, 128));
       return;
     },
+    IITInfo::V1 => {
+      output_table.push(IITDescriptor::get_vector(1, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    },
+    IITInfo::V2 => {
+      output_table.push(IITDescriptor::get_vector(2, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    },
+    IITInfo::V3 => {
+      output_table.push(IITDescriptor::get_vector(3, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    },
+    IITInfo::V4 => {
+      output_table.push(IITDescriptor::get_vector(4, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    },
+    IITInfo::V8 => {
+      output_table.push(IITDescriptor::get_vector(8, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    },
+    IITInfo::V16 => {
+      output_table.push(IITDescriptor::get_vector(16, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    },
+    IITInfo::V32 => {
+      output_table.push(IITDescriptor::get_vector(32, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    },
+    IITInfo::V64 => {
+      output_table.push(IITDescriptor::get_vector(64, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    },
+    IITInfo::V128 => {
+      output_table.push(IITDescriptor::get_vector(128, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    },
+    IITInfo::V256 => {
+      output_table.push(IITDescriptor::get_vector(256, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    },
+    IITInfo::V512 => {
+      output_table.push(IITDescriptor::get_vector(512, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    },
+    IITInfo::V1024 => {
+      output_table.push(IITDescriptor::get_vector(1024, is_scalable_vector));
+      decode_iit_type(next_elt, infos, info, output_table);
+      return;
+    }
     _ => unreachable!("Unhandled.")
   }
 }

@@ -30,7 +30,7 @@ use crate::{
     tracking_md_ref::TypedTrackingMDRef,
     //function::Function
   },
-  remarks::remark_streamer::RemarkStreamer
+  //remarks::remark_streamer::RemarkStreamer
 };
 
 use super::{function::Function, type_::{FixedVectorType, ScalableVectorType}};
@@ -121,7 +121,7 @@ pub struct BlitzContext {
   // Ir, MIR, frontends, etc.).
   // This should only be used by the specific srreamers, and never
   // directly.
-  main_remark_streamer: Option<RemarkStreamer>,
+  //main_remark_streamer: Option<RemarkStreamer>,
   diag_handler: Option<DiagnositicHandler>,
   respect_diagnostic_filters: bool,
   diagnostics_hotness_requested: bool,
@@ -199,7 +199,7 @@ impl BlitzContext {
   pub fn new() -> Self {
     BlitzContext {
       //p_impl: None,
-      main_remark_streamer: None,
+      //main_remark_streamer: None,
       diag_handler: None,
       respect_diagnostic_filters: false,
       diagnostics_hotness_requested: false,
