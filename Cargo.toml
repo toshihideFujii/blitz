@@ -4,9 +4,6 @@ version = "0.1.0"
 authors = ["toshihidefujii"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-#edition = "2018"
 [dependencies]
 generic-array = "0.14.4"
 num_cpus = "1.13.0"
@@ -16,8 +13,30 @@ rand = "0.8.5"
 
 [workspace]
 members = [
+  "src/ast",
   "src/codegen",
+  "src/common",
+  "src/compiler",
+  "src/compiler_dispatcher",
+  "src/heap",
+  "src/json",
+  "src/logging",
+  "src/objects",
+  "src/parsing",
+  "src/profiler",
+  "src/zone",
 ]
 
 [workspace.dependencies]
+ast = { path = "src/ast" }
 codegen = { path = "src/codegen"}
+common = { path = "src/common" }
+compiler = { path = "src/compiler" }
+compiler_dispatcher = { path = "src/compiler_dispatcher" }
+heap = { path = "src/heap" }
+json = { path = "src/json" }
+logging = { path = "src/logging" }
+objects = { path = "src/objects" }
+parsing = { path = "src/parsing" }
+profiler = { path = "src/profiler" }
+zone = { path = "src/zone" }

@@ -3,6 +3,10 @@
 version = 3
 
 [[package]]
+name = "ast"
+version = "0.1.0"
+
+[[package]]
 name = "blitz"
 version = "0.1.0"
 dependencies = [
@@ -21,6 +25,18 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "codegen"
+version = "0.1.0"
+
+[[package]]
+name = "common"
+version = "0.1.0"
+
+[[package]]
+name = "compiler"
+version = "0.1.0"
+
+[[package]]
+name = "compiler_dispatcher"
 version = "0.1.0"
 
 [[package]]
@@ -45,6 +61,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "heap"
+version = "0.1.0"
+
+[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -60,10 +80,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 
 [[package]]
+name = "json"
+version = "0.1.0"
+
+[[package]]
 name = "libc"
 version = "0.2.137"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc7fcc620a3bff7cdd7a365be3376c97191aeaccc2a603e600951e452615bf89"
+
+[[package]]
+name = "logging"
+version = "0.1.0"
 
 [[package]]
 name = "num_cpus"
@@ -76,6 +104,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "objects"
+version = "0.1.0"
+
+[[package]]
 name = "page_size"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -84,6 +116,10 @@ dependencies = [
  "libc",
  "winapi",
 ]
+
+[[package]]
+name = "parsing"
+version = "0.1.0"
 
 [[package]]
 name = "ppv-lite86"
@@ -99,6 +135,10 @@ checksum = "f0d8caf72986c1a598726adc988bb5984792ef84f5ee5aa50209145ee8077038"
 dependencies = [
  "unicode-xid",
 ]
+
+[[package]]
+name = "profiler"
+version = "0.1.0"
 
 [[package]]
 name = "quote"
@@ -248,3 +288,7 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "zone"
+version = "0.1.0"
