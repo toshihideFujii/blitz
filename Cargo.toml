@@ -5,19 +5,21 @@ authors = ["toshihidefujii"]
 edition = "2021"
 
 [dependencies]
-generic-array = "0.14.4"
-num_cpus = "1.13.0"
-rsys = "0.1.0"
-page_size = "0.5.0"
-rand = "0.8.5"
+#generic-array = "0.14.4"
+#num_cpus = "1.13.0"
+#rsys = "0.1.0"
+#page_size = "0.5.0"
+#rand = "0.8.5"
 
 [workspace]
 members = [
   "src/ast",
+  "src/base",
   "src/codegen",
   "src/common",
   "src/compiler",
   "src/compiler_dispatcher",
+  "src/flags",
   "src/heap",
   "src/json",
   "src/logging",
@@ -29,10 +31,12 @@ members = [
 
 [workspace.dependencies]
 ast = { path = "src/ast" }
+base = { path = "src/base"}
 codegen = { path = "src/codegen"}
 common = { path = "src/common" }
 compiler = { path = "src/compiler" }
 compiler_dispatcher = { path = "src/compiler_dispatcher" }
+flags = { path = "src/flags"}
 heap = { path = "src/heap" }
 json = { path = "src/json" }
 logging = { path = "src/logging" }

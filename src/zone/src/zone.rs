@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+
+use common::blitz_internal::*;
 use crate::accounting_allocator::AccountingAllocator;
 
 pub struct Zone {
@@ -6,9 +8,15 @@ pub struct Zone {
   name: String,
   supports_compression: bool,
   sealed: bool,
+  position: Address,
+  limit: Address,
 }
 
 impl Zone {
+  const  ALIGNMENT_IN_BYTES: usize = 8;
+  const  MINIMUM_SEGMENT_SIZE: usize = 8 * KB;
+  const  MAXIMUM_SEGMENT_SIZE: usize = 32 * KB;
+
   pub fn new(
     allocator: AccountingAllocator,
     name: String,
@@ -18,7 +26,9 @@ impl Zone {
       allocator: allocator,
       name: name,
       supports_compression: supports_compression,
-      sealed: false
+      sealed: false,
+      position: 0,
+      limit: 0,
     }
   }
 
