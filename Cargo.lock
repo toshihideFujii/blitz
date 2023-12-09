@@ -3,19 +3,7 @@
 version = 3
 
 [[package]]
-name = "ast"
-version = "0.1.0"
-
-[[package]]
-name = "base"
-version = "0.1.0"
-
-[[package]]
 name = "blitz"
-version = "0.1.0"
-
-[[package]]
-name = "codegen"
 version = "0.1.0"
 
 [[package]]
@@ -23,48 +11,7 @@ name = "common"
 version = "0.1.0"
 
 [[package]]
-name = "compiler"
-version = "0.1.0"
-
-[[package]]
-name = "compiler_dispatcher"
-version = "0.1.0"
-
-[[package]]
-name = "flags"
-version = "0.1.0"
-
-[[package]]
-name = "heap"
-version = "0.1.0"
-dependencies = [
- "base",
- "common",
- "flags",
-]
-
-[[package]]
-name = "json"
-version = "0.1.0"
-
-[[package]]
-name = "logging"
-version = "0.1.0"
-
-[[package]]
-name = "objects"
-version = "0.1.0"
-
-[[package]]
-name = "parsing"
-version = "0.1.0"
-
-[[package]]
-name = "profiler"
-version = "0.1.0"
-
-[[package]]
-name = "zone"
+name = "core"
 version = "0.1.0"
 dependencies = [
  "common",

@@ -13,34 +13,10 @@ edition = "2021"
 
 [workspace]
 members = [
-  "src/ast",
-  "src/base",
-  "src/codegen",
   "src/common",
-  "src/compiler",
-  "src/compiler_dispatcher",
-  "src/flags",
-  "src/heap",
-  "src/json",
-  "src/logging",
-  "src/objects",
-  "src/parsing",
-  "src/profiler",
-  "src/zone",
+  "src/core",
 ]
 
 [workspace.dependencies]
-ast = { path = "src/ast" }
-base = { path = "src/base"}
-codegen = { path = "src/codegen"}
 common = { path = "src/common" }
-compiler = { path = "src/compiler" }
-compiler_dispatcher = { path = "src/compiler_dispatcher" }
-flags = { path = "src/flags"}
-heap = { path = "src/heap" }
-json = { path = "src/json" }
-logging = { path = "src/logging" }
-objects = { path = "src/objects" }
-parsing = { path = "src/parsing" }
-profiler = { path = "src/profiler" }
-zone = { path = "src/zone" }
+core = { path = "src/core" }
