@@ -1,8 +1,12 @@
 #![allow(dead_code)]
 
-use std::ops::{Add, AddAssign};
+use std::{
+  ops::{Add, AddAssign, SubAssign, Sub},
+  sync::{Mutex, MutexGuard},
+};
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct LongAccumulator {
   sum: u64,
   count: u64,
@@ -47,7 +51,7 @@ impl Add<u64> for LongAccumulator {
   fn add(self, rhs: u64) -> LongAccumulator {
     LongAccumulator {
       sum: self.sum + rhs,
-      count: self.count + 1
+      count: self.count + 1,
     }
   }
 }
@@ -68,6 +72,21 @@ impl Add<LongAccumulator> for LongAccumulator {
   }
 }
 
+impl Sub<u64> for LongAccumulator {
+  type Output = LongAccumulator;
+  fn sub(self, rhs: u64) -> LongAccumulator {
+    LongAccumulator {
+      sum: self.sum - rhs,
+      count: self.count - 1,
+    }
+  }
+}
+
+impl SubAssign<u64> for LongAccumulator {
+  fn sub_assign(&mut self, rhs: u64) {
+    *self = self.sub(rhs);
+  }
+}
 
 pub struct DoubleAccumulator {
   sum: f64,
@@ -134,5 +153,39 @@ impl Add<DoubleAccumulator> for DoubleAccumulator{
       sum: self.sum + rhs.sum,
       count: self.count + rhs.count
     }
+  }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CollectionAccumulator<T> {
+  list: Mutex<Vec<T>>,
+}
+
+impl<T: Clone> CollectionAccumulator<T> {
+  pub fn is_zero(&self) -> bool {
+    self.list.lock().unwrap().is_empty()
+  }
+
+  pub fn reset(&mut self) {
+    self.list.lock().unwrap().clear()
+  }
+
+  pub fn add(&mut self, v: T) {
+    self.list.lock().unwrap().push(v);
+  }
+
+  pub fn merge(&mut self, other: CollectionAccumulator<T>) {
+    let mut other_list = Vec::new();
+    other_list.clone_from(&other.list.lock().unwrap());
+    self.list.lock().unwrap().append(&mut other_list);
+  }
+
+  pub fn value(&self) -> MutexGuard<'_, Vec<T>> {
+    self.list.lock().unwrap()
+  }
+
+  pub fn set_value(&mut self, value: CollectionAccumulator<T>) {
+    self.reset();
+    self.list = value.list;
   }
 }

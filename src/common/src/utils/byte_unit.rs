@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+//#[derive(Debug, Clone, Copy)]
 enum ByteUnitEnum {
   Byte,
   KB,
@@ -9,6 +10,7 @@ enum ByteUnitEnum {
   PB,
 }
 
+//#[derive(Debug, Clone, Copy)]
 pub struct ByteUnit {
   unit: ByteUnitEnum,
   multiplier: u64,
