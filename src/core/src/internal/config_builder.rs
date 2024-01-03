@@ -38,9 +38,9 @@ fn byte_from_string(s: String) -> Vec<u8> {
   s.as_bytes().to_vec()
 }
 
-fn byte_to_string(b: Vec<u8>) -> String {
-  String::from_utf8(b).unwrap()
-}
+//fn byte_to_string(b: &Vec<u8>) -> String {
+  //String::from_utf8(*b).unwrap()
+//}
 
 fn regex_from_string() {}
 
@@ -190,5 +190,14 @@ impl ConfigBuilder {
       time_from_string,
       time_to_string
     )
+  }
+
+  pub fn bytes_conf(&self) -> TypedConfigBuilder<Vec<u8>> {
+    //TypedConfigBuilder {
+      //parent: self.clone(),
+      //converter: byte_from_string,
+      //string_converter: byte_to_string
+    //}
+    TypedConfigBuilder::from_converter(self.clone(), byte_from_string)
   }
 }

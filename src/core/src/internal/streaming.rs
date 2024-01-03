@@ -1,8 +1,10 @@
 #![allow(dead_code)]
 
 use std::time::Duration;
-
-use super::{config_entry::ConfigEntry, config_builder::ConfigBuilder};
+use super::{
+  config_entry::ConfigEntry,
+  config_builder::ConfigBuilder
+};
 
 pub struct Streaming {
   streaming_dyn_allocation_enebled: ConfigEntry<bool>,
