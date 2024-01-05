@@ -13,10 +13,8 @@ edition = "2021"
 
 [workspace]
 members = [
-  "src/common",
-  "src/core",
+  "src/runtime",
 ]
 
 [workspace.dependencies]
-common = { path = "src/common" }
-core = { path = "src/core" }
+runtime = { path = "src/runtime"}
