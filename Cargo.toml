@@ -13,8 +13,14 @@ edition = "2021"
 
 [workspace]
 members = [
+  "src/common",
+  "src/mlir",
   "src/runtime",
+  "src/stream_executor"
 ]
 
 [workspace.dependencies]
-runtime = { path = "src/runtime"}
+common = { path = "src/common" }
+mlir = { path = "src/mlir" }
+runtime = { path = "src/runtime" }
+stream_executor = { path = "src/stream_executor" }
