@@ -14,13 +14,17 @@ edition = "2021"
 [workspace]
 members = [
   "src/common",
+  "src/hlo",
   "src/mlir",
   "src/runtime",
+  "src/service",
   "src/stream_executor"
 ]
 
 [workspace.dependencies]
 common = { path = "src/common" }
+hlo = { path = "src/hlo" }
 mlir = { path = "src/mlir" }
 runtime = { path = "src/runtime" }
+service = { path = "src/service" }
 stream_executor = { path = "src/stream_executor" }

@@ -3,7 +3,8 @@
 use crate::{
   util::DimensionVector,
   layout::Layout,
-  blitz_data::PrimitiveType
+  blitz_data::PrimitiveType,
+  primitive_util,
 };
 
 pub struct Shape {
@@ -15,7 +16,7 @@ pub struct Shape {
 
 impl Shape {
   pub fn new() {}
-  pub fn pkrint() {}
+  pub fn print() {}
   pub fn to_string() {}
 
   pub fn rank(&self) -> usize {
@@ -23,7 +24,9 @@ impl Shape {
     self.dimensions.len()
   }
 
-  pub fn is_array(&self) -> bool { true }
+  pub fn is_array(&self) -> bool {
+    primitive_util::is_array_type(&self.element_type)
+  }
 
   pub fn is_tuple(&self) -> bool {
     self.element_type == PrimitiveType::Tuple
