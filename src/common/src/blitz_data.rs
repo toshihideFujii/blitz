@@ -38,6 +38,14 @@ pub enum PrimitiveType {
 }
 
 #[derive(Clone, PartialEq)]
+pub enum DimLevelType {
+  Dense,
+  Compressed,
+  Singleton,
+  LooseCompressed,
+}
+
+#[derive(Clone, PartialEq)]
 pub enum Precision {
   Default,
   High,

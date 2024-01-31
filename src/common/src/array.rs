@@ -137,6 +137,7 @@ impl Array<bool> {
 
 pub trait Arr<T> {
   fn dim(&self, n: usize) -> usize;
+  fn data(&self) -> &Vec<T>;
   fn value_1(&self, n1: usize) -> T;
   fn value_2(&self, n1: usize, n2: usize) -> T;
   fn set_value_2(&mut self, _n1: usize, _n2: usize, _v: T) {}
@@ -146,32 +147,36 @@ pub trait Arr<T> {
   fn num_elements(&self) -> usize;
 }
 
-pub struct ArrVecI64 {
-  //sizes: Vec<usize>,
-  values: Vec<i64>
+pub struct ArrV1<T> {
+  sizes: Vec<usize>,
+  values: Vec<T>
 }
 
-impl ArrVecI64 {
-  pub fn new(values: Vec<i64>) -> Self {
-    //let mut sizes = Vec::new();
-    //sizes.push(values.len());
-    ArrVecI64 {
-      //sizes: sizes,
+impl<T> ArrV1<T> {
+  pub fn new(values: Vec<T>) -> Self {
+    let mut sizes = Vec::new();
+    sizes.push(values.len());
+    ArrV1 {
+      sizes: sizes,
       values: values
     }
    } 
 }
 
-impl Arr<i64> for ArrVecI64 {
-  fn dim(&self, n: usize) -> usize {
-    self.values[n] as usize
+impl<T> Arr<T> for ArrV1<T> where T: Copy {
+  fn dim(&self, _n: usize) -> usize {
+    self.sizes[0]
   }
 
-  fn value_1(&self, n1: usize) -> i64 {
+  fn data(&self) -> &Vec<T> {
+    &self.values
+  }
+
+  fn value_1(&self, n1: usize) -> T {
     self.values[n1]
   }
 
-  fn value_2(&self, _n1: usize, _n2: usize) -> i64 {
+  fn value_2(&self, _n1: usize, _n2: usize) -> T {
     unimplemented!("Unsupported");
   }
 
@@ -195,23 +200,37 @@ impl Arr<i64> for ArrVecI64 {
 pub struct ArrV2<T> {
   sizes: Vec<usize>,
   values: Vec<Vec<T>>,
+  flat_values: Vec<T>,
 }
 
-impl<T> ArrV2<T> {
+impl<T> ArrV2<T> where T: Clone {
   pub fn new(values: Vec<Vec<T>>) -> Self {
     let mut sizes = Vec::new();
     sizes.push(values.len());
     sizes.push(values[0].len());
+
+    let mut flat_values: Vec<T> = Vec::new();
+    for vec in &values {
+      let mut cloned_vec = Vec::new();
+      cloned_vec.resize(vec.len(), vec[0].clone());
+      cloned_vec.clone_from_slice(vec);
+      flat_values.append(&mut cloned_vec);
+    }
     ArrV2 {
       sizes: sizes,
-      values: values
+      values: values,
+      flat_values: flat_values,
     }
   }
 }
 
-impl<T> Arr<T> for ArrV2<T> where T: Copy + Clone {
+impl<T> Arr<T> for ArrV2<T> where T: Clone + Copy {
   fn dim(&self, n: usize) -> usize {
     self.sizes[n]
+  }
+
+  fn data(&self) -> &Vec<T> {
+    &self.flat_values
   }
 
   fn value_1(&self, _n1: usize) -> T {
@@ -243,34 +262,38 @@ impl<T> Arr<T> for ArrV2<T> where T: Copy + Clone {
   }
 }
 
-pub struct ArrV3F64 {
+pub struct ArrV3<T> {
   sizes: Vec<usize>,
-  values: Vec<Vec<Vec<f64>>>,
+  values: Vec<Vec<Vec<T>>>,
 }
 
-impl ArrV3F64 {
-  pub fn new(values: Vec<Vec<Vec<f64>>>) -> Self {
+impl<T> ArrV3<T> {
+  pub fn new(values: Vec<Vec<Vec<T>>>) -> Self {
     let mut sizes = Vec::new();
     sizes.push(values.len());
     sizes.push(values[0].len());
     sizes.push(values[0][0].len());
-    ArrV3F64 {
+    ArrV3 {
       sizes: sizes,
       values: values
     }
   }
 }
 
-impl Arr<f64> for ArrV3F64 {
+impl<T> Arr<T> for ArrV3<T> {
   fn dim(&self, n: usize) -> usize {
     self.sizes[n]
   }
 
-  fn value_1(&self, _n1: usize) -> f64 {
+  fn data(&self) -> &Vec<T> {
+    unimplemented!();
+  }
+
+  fn value_1(&self, _n1: usize) -> T {
     unimplemented!("Unsupported.");
   }
 
-  fn value_2(&self, _n1: usize, _n2: usize) -> f64 {
+  fn value_2(&self, _n1: usize, _n2: usize) -> T {
     //self.values[n1][n2]
     unimplemented!("Unsupported.");
   }
@@ -288,35 +311,39 @@ impl Arr<f64> for ArrV3F64 {
   }
 }
 
-pub struct ArrV4F64 {
+pub struct ArrV4<T> {
   sizes: Vec<usize>,
-  values: Vec<Vec<Vec<Vec<f64>>>>,
+  values: Vec<Vec<Vec<Vec<T>>>>,
 }
 
-impl ArrV4F64 {
-  pub fn new(values: Vec<Vec<Vec<Vec<f64>>>>) -> Self {
+impl<T> ArrV4<T> {
+  pub fn new(values: Vec<Vec<Vec<Vec<T>>>>) -> Self {
     let mut sizes = Vec::new();
     sizes.push(values.len());
     sizes.push(values[0].len());
     sizes.push(values[0][0].len());
     sizes.push(values[0][0][0].len());
-    ArrV4F64 {
+    ArrV4 {
       sizes: sizes,
       values: values
     }
   }
 }
 
-impl Arr<f64> for ArrV4F64 {
+impl<T> Arr<T> for ArrV4<T> {
   fn dim(&self, n: usize) -> usize {
     self.sizes[n]
   }
 
-  fn value_1(&self, _n1: usize) -> f64 {
+  fn data(&self) -> &Vec<T> {
+    unimplemented!();
+  }
+
+  fn value_1(&self, _n1: usize) -> T {
     unimplemented!("Unsupported.");
   }
 
-  fn value_2(&self, _n1: usize, _n2: usize) -> f64 {
+  fn value_2(&self, _n1: usize, _n2: usize) -> T {
     //self.values[n1][n2]
     unimplemented!("Unsupported.");
   }
@@ -345,7 +372,7 @@ mod tests {
   #[test]
   fn test_uninitialized_dims_ctor() {
     //let uninit = Array::new_i64(vec![2, 3]);
-    let uninit = ArrVecI64::new(vec![2, 3]);
+    let uninit = ArrV1::new(vec![2, 3]);
     assert_eq!(uninit.num_dimensions(), 2);
     assert_eq!(uninit.dim(0), 2);
     assert_eq!(uninit.dim(1), 3);
@@ -391,7 +418,7 @@ mod tests {
     assert_eq!(d2.dim(1), 3);
 
     let d3_vec = vec![vec![vec![1.0],vec![4.0]], vec![vec![1.0], vec![4.0]], vec![vec![1.0], vec![4.0]]];
-    let d3 = ArrV3F64::new(d3_vec);
+    let d3 = ArrV3::new(d3_vec);
     assert_eq!(d3.dim(0), 3);
     assert_eq!(d3.dim(1), 2);
     assert_eq!(d3.dim(2), 1);
@@ -400,7 +427,7 @@ mod tests {
       vec![vec![vec![1.0], vec![4.0]], vec![vec![1.0], vec![4.0]], vec![vec![1.0], vec![4.0]]],
       vec![vec![vec![1.0], vec![4.0]], vec![vec![1.0], vec![4.0]], vec![vec![1.0], vec![4.0]]]
     ];
-    let d4 = ArrV4F64::new(d4_vec);
+    let d4 = ArrV4::new(d4_vec);
     assert_eq!(d4.dim(0), 2);
     assert_eq!(d4.dim(1), 3);
     assert_eq!(d4.dim(2), 2);
@@ -419,5 +446,12 @@ mod tests {
     arr.set_value_2(0, 2, true);
     assert_eq!(arr.value_2(0, 1), false);
     assert_eq!(arr.value_2(0, 2), true);
+  }
+
+  #[test]
+  fn test_data_pointer() {
+    let values = vec![vec![1, 2, 3], vec![4, 5, 6]];
+    let arr = ArrV2::new(values);
+    assert_eq!(arr.data()[0], 1);
   }
 }

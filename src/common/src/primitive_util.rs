@@ -2,15 +2,26 @@
 
 use crate::blitz_data::PrimitiveType;
 
-pub fn significant_width() {}
+pub fn significand_width(_t: &PrimitiveType) -> i64 {
+  0 // TODO
+}
 
-pub fn exponent_width() {}
+pub fn exponent_width(t: &PrimitiveType) -> i64 {
+  let total_bit_width = bit_width(t);
+  let trailing_significand_field_width = significand_width(t) - 1;
+  let sign_bit_width = 1;
+  total_bit_width - (trailing_significand_field_width + sign_bit_width)
+}
 
-pub fn underflow_exponent() {}
+pub fn underflow_exponent(_t: &PrimitiveType) -> i64 {
+  0 // TODO
+}
 
 pub fn overflow_exponent() {}
 
-pub fn exponent_bias() {}
+pub fn exponent_bias(t: &PrimitiveType) -> i64 {
+  (1 - underflow_exponent(t)) + 1
+}
 
 pub fn has_infinity() {}
 
@@ -67,8 +78,12 @@ pub fn bit_width_array_helper() {
     
 }
 
-pub fn bit_width() {
-    
+pub fn bit_width(_t: &PrimitiveType) -> i64 {
+  0 // TODO
+}
+
+pub fn byte_width(_t: &PrimitiveType) -> i64 {
+  0 // TODO
 }
 
 pub fn unsigned_integral_type_for_bit_width(src_bitwidth: i64) -> PrimitiveType {
@@ -110,8 +125,8 @@ pub fn complex_type(base_type: PrimitiveType) -> PrimitiveType {
   PrimitiveType::Invalid
 }
 
-pub fn higher_precision_type() {
-    
+pub fn higher_precision_type(a: &PrimitiveType, _b: &PrimitiveType) -> PrimitiveType {
+  a.clone() // TODO
 }
 
 pub fn cast_preserves_values() {

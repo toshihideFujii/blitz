@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 pub trait Printer {
-  fn append() {}
+  fn append(&self) {}
 }
 
 pub struct StringPrinter {}
