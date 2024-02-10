@@ -1,9 +1,25 @@
 
+pub mod hlo_alias_analysis;
+pub mod hlo_buffer;
+pub mod hlo_computation_deduplicator;
 pub mod hlo_computation;
+pub mod hlo_constant_folding;
+pub mod hlo_cost_analysis;
+pub mod hlo_creation_utils;
+pub mod hlo_cse;
+pub mod hlo_dataflow_analysis;
+pub mod hlo_dce;
+pub mod hlo_domain_isolator;
+pub mod hlo_domain_map;
+pub mod hlo_domain_remover;
 pub mod hlo_instruction;
 pub mod hlo_module_config;
 pub mod hlo_module_group;
 pub mod hlo_module_metadata;
 pub mod hlo_module;
 pub mod hlo_opcode;
+pub mod hlo_ordering;
+pub mod hlo_parser;
+pub mod hlo_phi_graph;
 pub mod hlo_sharding;
+pub mod hlo_value;

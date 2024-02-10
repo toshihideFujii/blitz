@@ -1,14 +1,18 @@
 #![allow(dead_code)]
 
 use crate::{
-  blitz_data::PrimitiveType,
-  shape::Shape,
-  primitive_util, overflow_util, layout_util::LayoutUtil,
+  blitz_data::{PrimitiveType, DimLevelType},
+  shape::{Shape, ProgramShape, ShapeEqual,},
+  primitive_util, overflow_util,
+  layout_util::LayoutUtil,
+  printer::{StringPrinter, Printer}, layout::Tile, util::DimensionVector,
 };
 
 pub struct ShapeUtil {}
 
 impl ShapeUtil {
+  const ANNOTATION_PRINT_INTERVAL: usize = 5;
+
   pub fn elements_in() {}
   pub fn elements_in_recursive() {}
 
@@ -53,11 +57,136 @@ impl ShapeUtil {
   }
 
   pub fn byte_size_of_elements(_shape: &Shape) -> i64 { 0 }
-  pub fn print_human_string() {}
-  pub fn print_human_string_with_layout() {}
-  pub fn human_string() {}
-  pub fn human_string_with_layout() {}
 
+  fn print_tuple_shapes(printer: &mut dyn Printer, tuple_shapes: &Vec<Shape>, print_layout: bool) {
+    if tuple_shapes.is_empty() {
+      printer.append(&"()".to_string());
+      return;
+    }
+    printer.append(&"(".to_string());
+    ShapeUtil::print_shape(printer, &tuple_shapes[0], print_layout);
+    for i in 1..tuple_shapes.len() {
+      if i % ShapeUtil::ANNOTATION_PRINT_INTERVAL == 0 {
+        let mut str = ", /*index=".to_string();
+        str.push_str(&i.to_string());
+        str.push_str(&"*/".to_string());
+        printer.append(&str);
+      } else {
+        printer.append(&", ".to_string());
+      }
+      ShapeUtil::print_shape(printer, &tuple_shapes[i], print_layout);
+    }
+    printer.append(&")".to_string());
+  }
+
+  fn print_shape(printer: &mut dyn Printer, shape: &Shape, print_layout: bool) {
+    if print_layout {
+      ShapeUtil::print_human_string_with_layout(printer, shape);
+    } else {
+      ShapeUtil::print_human_string(printer, shape);
+    }
+  }
+
+  pub fn print_human_string(printer: &mut dyn Printer, shape: &Shape) {
+    if shape.is_tuple() {
+      ShapeUtil::print_tuple_shapes(printer, &shape.tuple_shapes_vec(), false);
+      return;
+    }
+    let primtive_type_name =
+      primitive_util::lowercase_primitive_type_name(&shape.element_type());
+    printer.append(&primtive_type_name);
+    if shape.dimensions_vec().is_empty() {
+      printer.append(&"[]".to_string());
+      return;
+    }
+    printer.append(&"[".to_string());
+    let print_one = |printer: &mut dyn Printer, i| {
+      if shape.is_dynamic_dimension(i) {
+        if shape.dimensions(i) != Shape::UNBOUNDED_SIZE {
+          let mut str = "<=".to_string();
+          str.push_str(&shape.dimensions(i).to_string());
+          printer.append(&str);
+        } else {
+          printer.append(&"?".to_string());
+        }
+      } else {
+        printer.append(&shape.dimensions(i).to_string())
+      }
+    };
+    print_one(printer, 0);
+    for i in 1..shape.dimensions_vec().len() {
+      printer.append(&",".to_string());
+      print_one(printer, i);
+    }
+    printer.append(&"]".to_string());
+  }
+
+  pub fn print_human_string_with_layout(printer: &mut dyn Printer, shape: &Shape) {
+    if shape.is_tuple() {
+      ShapeUtil::print_tuple_shapes(printer, shape.tuple_shapes_vec(), true);
+      return;
+    }
+    ShapeUtil::print_human_string(printer, shape);
+    if !shape.has_layout() {
+      return;
+    }
+    if ShapeUtil::is_scalar(shape) {
+      let layout_str =
+        LayoutUtil::human_string(shape.layout().as_ref().unwrap());
+      if layout_str != "{}".to_string() {
+        printer.append(&layout_str);
+      }
+    } else if shape.is_array() {
+      LayoutUtil::print_human_string(printer, shape.layout().as_ref().unwrap());
+    }
+  }
+
+  pub fn print_human_string_for_program_shape(
+    printer: &mut dyn Printer,
+    program_shape: &ProgramShape)
+  {
+    printer.append(&"(".to_string());
+    let shape_params = program_shape.parameters_vec();
+    if !shape_params.is_empty() {
+      let print_one = |printer: &mut dyn Printer, i| {
+        if i < program_shape.parameter_names_size() {
+          printer.append(&program_shape.parameter_names(i));
+        } else {
+          printer.append(&"(unknown)".to_string());
+        }
+        printer.append(&": ".to_string());
+        ShapeUtil::print_human_string(printer, &shape_params[i])
+      };
+      print_one(printer, 0);
+      for i in 1..shape_params.len() {
+        printer.append(&", ".to_string());
+        print_one(printer, i);
+      }
+    }
+    printer.append(&") -> ".to_string());
+    ShapeUtil::print_human_string(printer, program_shape.result());
+  }
+
+  pub fn human_string(shape: &Shape) -> String {
+    let mut printer = StringPrinter::new();
+    ShapeUtil::print_human_string(&mut printer, shape);
+    printer.to_string()
+  }
+
+  pub fn human_string_with_layout(shape: &Shape) -> String {
+    let mut printer = StringPrinter::new();
+    ShapeUtil::print_human_string_with_layout(&mut printer, shape);
+    printer.to_string()
+  }
+
+  pub fn human_string_for_program_shape(program_shape: &ProgramShape) -> String {
+    let mut printer = StringPrinter::new();
+    ShapeUtil::print_human_string_for_program_shape(&mut printer, program_shape);
+    printer.to_string()
+  }
+
+  // Returns whether the lhs and rhs shapes have the same dimensions, ignoring
+  // the unbounded dimension sizes; note: does not check element type.
   pub fn same_dimensions(lhs: &Shape, rhs: &Shape) -> bool {
     assert!(lhs.is_array());
     assert!(rhs.is_array());
@@ -66,8 +195,8 @@ impl ShapeUtil {
     }
     for i in 0..lhs.rank() {
       if !lhs.is_unbounded_dynamic_dimension(i) &&
-        !rhs.is_unbounded_dynamic_dimension(i) &&
-        !lhs.dimensions(i) != rhs.dimensions(i) {
+         !rhs.is_unbounded_dynamic_dimension(i) &&
+          lhs.dimensions(i) != rhs.dimensions(i) {
           return false;
         }
     }
@@ -96,10 +225,71 @@ impl ShapeUtil {
     primitive_util::higher_precision_type(&a.element_type(), &b.element_type())
   }
 
-  pub fn compatible() {}
-  pub fn compatible_ignoring_element_type() {}
-  pub fn compatible_kind() {}
-  pub fn compatible_ignoring_fp_precision() {}
+  // Return true if the rank, dimension sizes, and element type are identical.
+  // Layout is ignored. Tuple elements are compared recursively for compatibility.
+  pub fn compatible(lhs: &Shape, rhs: &Shape) -> bool {
+    ShapeEqual::new()
+      .ignore_dynamic_dimension()
+      .ignore_layout()
+      .equal(lhs, rhs)
+  }
+
+  // Return true if the rank and dimension sizes are identical.
+  // Element type and layout is ignored.
+  // Tuple elements are compared recursively for compatibility.
+  pub fn compatible_ignoring_element_type(lhs: &Shape, rhs: &Shape) -> bool {
+    ShapeEqual::new()
+      .ignore_dynamic_dimension()
+      .ignore_element_type()
+      .ignore_layout()
+      .equal(lhs, rhs)
+  }
+
+  // Return true if the tuple tree shapes and leaf ranks are identical.
+  // Leaf dimensions, element type, and layout are ignored.
+  // Tuple elements are compared recursively for compatibility.
+  pub fn compatible_kind(lhs: &Shape, rhs: &Shape) -> bool {
+    ShapeEqual::new()
+      .ignore_element_type()
+      .ignore_layout()
+      .ignore_dimensions()
+      .ignore_dynamic_dimension()
+      .equal(lhs, rhs)
+  }
+
+  // As compatible, but allow one of lhs and rhs to be BF16 while the other being F32.
+  // Tuple elements are compared recursively for compatibility.
+  pub fn compatible_ignoring_fp_precision(lhs: &Shape, rhs: &Shape) -> bool {
+    ShapeEqual::new()
+      .ignore_dynamic_dimension()
+      .ignore_fp_precision()
+      .ignore_layout()
+      .equal(lhs, rhs)
+  }
+
+  pub fn equal() {}
+
+  // As equal, but does not compare the element type.
+  pub fn equal_ignoring_element_type(lhs: &Shape, rhs: &Shape) -> bool {
+    let result = ShapeEqual::new().ignore_element_type().equal(lhs, rhs);
+    if !result {
+      println!("ShapeUtil::equal_ignoring_element_type differ.");
+      println!("lhs={:?}, rhs={:?}", lhs.element_type(), rhs.element_type());
+    }
+    result
+  }
+
+  // As equal, but allow one of lhs and rhs to be F16 while the other is F32.
+  pub fn equal_ignoring_fp_precision(lhs: &Shape, rhs: &Shape) -> bool {
+    let result = ShapeEqual::new().ignore_fp_precision().equal(lhs, rhs);
+    if !result {
+      println!("ShapeUtil::equal_ignoring_fp_precision differ.");
+      println!("lhs={:?}, rhs={:?}", lhs.element_type(), rhs.element_type());
+    }
+    result
+  }
+
+  pub fn equal_structure() {}
 
   pub fn true_rank(shape: &Shape) -> i64 {
     let mut acum: i64 = 0;
@@ -126,12 +316,27 @@ impl ShapeUtil {
     ShapeUtil::is_scalar(shape) && shape.element_type() == elt_t
   }
 
-  pub fn create_dimension_vector_from_shape() {}
+  // Creates a DimensionVector by copying dimensions from a given shape.
+  pub fn create_dimension_vector_from_shape(shape: &Shape) -> DimensionVector {
+    let mut dimensions: DimensionVector = Vec::new();
+    dimensions.reserve(shape.dimensions_size());
+    for i in 0..shape.dimensions_size() {
+      dimensions.push(shape.dimensions(i));
+    }
+    dimensions
+  }
 
+  // Extracts the size of the shape's dimension at the dimension number.
   pub fn get_dimension(shape: &Shape, dimension_number: i64) -> i64 {
     shape.dimensions(ShapeUtil::get_dimension_number(shape, dimension_number) as usize)
   }
 
+  // Resolves a dimension number, supporting negative indexing.
+  // Negative indexing has similar semantics to Python.
+  // For an N-dimensional array, dimension -1 is equivalent to dimension N-1,
+  // -2 is equivalent to N-2, and so on.
+  // This function always returns a positive dimension number for any given
+  // dimension number (which itself can be negative).
   pub fn get_dimension_number(shape: &Shape, dimension_number: i64) -> i64 {
     let mut result = dimension_number;
     if result < 0 {
@@ -166,8 +371,15 @@ impl ShapeUtil {
     result
   }
 
-  pub fn make_tuple_shape(_shapes: Vec<Shape>) -> Shape {
-    Shape::new_default() // TODO
+  pub fn make_tuple_shape(shapes: Vec<Shape>) -> Shape {
+    let mut result = Shape::new_default();
+    result.set_element_type(PrimitiveType::Tuple);
+    result.tuple_shapes_vec_mut().reserve(shapes.len());
+    for shape in shapes {
+      ShapeUtil::append_shape_to_tuple(shape, &mut result)
+    }
+    ShapeUtil::validate_shape_with_optional_layout(&result);
+    result
   }
 
   pub fn make_tuple_shape_with_ptrs() {}
@@ -183,6 +395,8 @@ impl ShapeUtil {
     result
   }
 
+  // Creates a token shape.
+  // Values of this shape are used for ordering side-effecting operations.
   pub fn make_token_shape() -> Shape {
     let mut result = Shape::new_default();
     result.set_element_type(PrimitiveType::Token);
@@ -233,7 +447,7 @@ impl ShapeUtil {
 
   pub fn copy_dynamic_dimensions() {}
 
-  pub fn is_eeffectively_most_major_dimension(shape: &Shape, dimension: i64) -> bool {
+  pub fn is_effectively_most_major_dimension(shape: &Shape, dimension: i64) -> bool {
     for i in 0..shape.dimensions_size() {
       let major_dimension =
         LayoutUtil::major(shape.layout().as_ref().unwrap(),
@@ -256,26 +470,128 @@ impl ShapeUtil {
     shape.element_type() != PrimitiveType::Invalid
   }
 
+  // Constructs a new shape with the given element type and sequence of dimensions.
   pub fn make_shape(elt_t: &PrimitiveType, dimensions: Vec<i64>) -> Shape {
     let mut shape = Shape::new_default();
     assert!(ShapeUtil::fill_new_shape(elt_t, &dimensions, &mut shape));
     shape
   }
 
+  pub fn make_shape_dynamic(
+    elt_t: &PrimitiveType,
+    dimensions: Vec<i64>,
+    dynamic_dimensions: Vec<bool>) -> Shape
+  {
+    ShapeUtil::make_validated_shape_dynamic(elt_t, dimensions, dynamic_dimensions)
+  }
+
   pub fn make_scalar_shape(elt_t: &PrimitiveType) -> Shape {
     ShapeUtil::make_shape(elt_t, vec![])
   }
 
+  // Constructs a new shape with the given element type and sequence of
+  // dimensions. Method checks the element type is valid, the shape's
+  // size fits in i64::max(), and dynamic size is not marked static.
   pub fn make_validated_shape(elt_t: &PrimitiveType, dimensions: Vec<i64>) -> Shape {
     let mut shape = Shape::new_default();
     if !ShapeUtil::fill_new_shape(elt_t, &dimensions, &mut shape) {
-      panic!("Invalid shape type, dims.");
+      assert!(false, "Invalid shape type={:?}, dims={:?}.", elt_t, dimensions);
+    }
+    shape
+  }
+
+  pub fn make_validated_shape_dynamic(
+    elt_t: &PrimitiveType,
+    dimensions: Vec<i64>,
+    dynamic_dimensions: Vec<bool>) -> Shape
+  {
+    if dynamic_dimensions.len() != dimensions.len() {
+      assert!(false, "Dynamic dimensions size {} did not match number of dimensions {}.",
+        dynamic_dimensions.len(), dimensions.len());
+    }
+    let mut shape = Shape::new_default();
+    if !ShapeUtil::fill_new_shape(elt_t, &dimensions, &mut shape) {
+      assert!(false, "Invalid shape type={:?}, dims={:?}.",
+        elt_t, dimensions);
+    }
+    for i in 0..dimensions.len() {
+      shape.set_dynamic_dimension(i, dynamic_dimensions[i]);
+      if shape.dimensions(i) == Shape::UNBOUNDED_SIZE && !dynamic_dimensions[i] {
+        assert!(false, "Cannot make a dynamic dimension at dim={} as static.", i);
+      }
     }
     shape
   }
 
   pub fn make_shape_with_type() {}
-  pub fn make_shape_with_dense_layout() {}
+
+  fn make_shape_with_layout_internal(
+    elt_t: &PrimitiveType,
+    dimensions: Vec<i64>,
+    minor_to_major: Vec<i64>,
+    dim_level_types: Vec<DimLevelType>,
+    dim_unique: Vec<bool>,
+    dim_ordered: Vec<bool>,
+    tiles: Vec<Tile>,
+    index_primitive_t: &PrimitiveType,
+    pointer_primitive_t: &PrimitiveType,
+    mut elt_size_in_bits: i64,
+    memory_space: i64,
+    physical_shape: Option<Shape>) -> Shape
+  {
+    if dimensions.len() != minor_to_major.len() {
+      assert!(false, "Dimensions size is {}, but layout size is {}",
+        dimensions.len(), minor_to_major.len());
+    }
+    if *elt_t == PrimitiveType::OpaqueType || *elt_t == PrimitiveType::Tuple ||
+      *elt_t == PrimitiveType::Token {
+      assert!(false, "Unsupported element type.");
+    }
+    let mut shape = ShapeUtil::make_validated_shape(elt_t, dimensions);
+    if elt_size_in_bits == (ShapeUtil::byte_size_of_primitive_type(elt_t) * 8) {
+      elt_size_in_bits = 0;
+    }
+    let layout = LayoutUtil::make_layout(
+      minor_to_major,
+      dim_level_types,
+      dim_unique,
+      dim_ordered,
+      tiles,
+      index_primitive_t.clone(),
+      pointer_primitive_t.clone(),
+      elt_size_in_bits,
+      memory_space,
+      physical_shape,
+      0
+    );
+    shape.set_layout(layout);
+    shape
+  }
+
+  pub fn make_shape_with_dense_layout(
+    elt_t: &PrimitiveType,
+    dimensions: Vec<i64>,
+    minor_to_major: Vec<i64>,
+    tiles: Vec<Tile>,
+    elt_size_in_bits: i64,
+    memory_space: i64) -> Shape
+  {
+    ShapeUtil::make_shape_with_layout_internal(
+      elt_t,
+      dimensions,
+      minor_to_major,
+      Vec::new(),
+      Vec::new(),
+      Vec::new(),
+      tiles,
+      &PrimitiveType::Invalid,
+      &PrimitiveType::Invalid,
+      elt_size_in_bits,
+      memory_space,
+      None
+    )
+  }
+
   pub fn move_dim_to_major() {}
 
   pub fn make_shape_with_static_dimensions(shape: &Shape) -> Shape {
@@ -380,6 +696,15 @@ impl ShapeUtil {
     for i in index_vec {
       assert!(return_shape.is_tuple(), "Invalid index for shape.");
       return_shape = return_shape.tuple_shapes(i as usize);
+    }
+    return_shape
+  }
+
+  pub fn get_mutable_subshape(shape: &mut Shape, index_vec: Vec<i64>) -> &mut Shape {
+    let mut return_shape: &mut Shape = shape;
+    for i in index_vec {
+      assert!(return_shape.is_tuple(), "Invalid index for shape.");
+      return_shape = return_shape.mutable_tuple_shapes(i as usize);
     }
     return_shape
   }
@@ -548,5 +873,169 @@ impl ShapeUtil {
     }
 
     true
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_get_dimension_helper_can_negative_index() {
+    let matrix =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![2, 3]);
+    assert_eq!(ShapeUtil::get_dimension(&matrix, -1), 3);
+    assert_eq!(ShapeUtil::get_dimension(&matrix, -2), 2);
+  }
+
+  #[test]
+  fn test_get_dimension_helper_example_in_documentation() {
+    let shape =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![1, 2, 3, 4]);
+    assert_eq!(ShapeUtil::get_dimension(&shape, -1), 4);
+  }
+
+  fn test_negative_index_oob_fails() {
+    // TODO
+  }
+
+  #[test]
+  fn test_create_rank3_dimension_vector_from_shape() {
+    let shape =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![3, 2, 7]);
+    let dimensions = ShapeUtil::create_dimension_vector_from_shape(&shape);
+    assert_eq!(dimensions, vec![3, 2, 7]);
+  }
+
+  #[test]
+  fn test_rank1_dimension_indexing() {
+    let shape =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![3]);
+    assert_eq!(shape.dimensions(0), 3);
+  }
+
+  #[test]
+  fn test_rank2_dimension_indexing() {
+    let shape =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![3, 2]);
+    assert_eq!(shape.dimensions(1), 2);
+    assert_eq!(shape.dimensions(0), 3);
+  }
+
+  #[test]
+  fn test_rank3_dimension_indexing() {
+    let shape =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![3, 2, 7]);
+    assert_eq!(shape.dimensions(2), 7);
+    assert_eq!(shape.dimensions(1), 2);
+    assert_eq!(shape.dimensions(0), 3);
+  }
+
+  #[test]
+  fn test_rank4_dimension_indexing() {
+    let shape =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![3, 2, 7, 8]);
+    assert_eq!(shape.dimensions(3), 8);  
+    assert_eq!(shape.dimensions(2), 7);
+    assert_eq!(shape.dimensions(1), 2);
+    assert_eq!(shape.dimensions(0), 3);
+  }
+
+  #[test]
+  fn test_compatible_identical_shapes() {
+    let shape1 =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![3, 2]);
+    let shape2 =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![3, 2]);
+    assert_eq!(ShapeUtil::compatible(&shape1, &shape2), true);
+  }
+
+  #[test]
+  fn test_token_compatibility() {
+    let token1 = ShapeUtil::make_token_shape();
+    let token2 = ShapeUtil::make_token_shape();
+    assert_eq!(ShapeUtil::compatible(&token1, &token2), true);
+
+    let f32 = ShapeUtil::make_shape(&PrimitiveType::F32, vec![]);
+    assert_eq!(ShapeUtil::compatible(&token1, &f32), false);
+    assert_eq!(ShapeUtil::compatible(&f32, &token1), false);
+
+    let tuple1 = ShapeUtil::make_tuple_shape(vec![token1]);
+    let tuple2 = ShapeUtil::make_tuple_shape(vec![token2]);
+    assert_eq!(ShapeUtil::compatible(&tuple1, &tuple2), true);
+  }
+
+  fn test_tokens_equal_shapes() {}
+
+  fn test_compatible_not_identical_shapes() {}
+
+  #[test]
+  fn test_compatible_ignoring_fp_precision() {
+    let shape1 =
+      ShapeUtil::make_shape(&PrimitiveType::BF16, vec![3, 2]);
+    let shape2 =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![3, 2]);
+    assert_eq!(ShapeUtil::compatible_ignoring_fp_precision(&shape1, &shape2), true);
+  }
+
+  #[test]
+  fn test_incompatible_ignoring_fp_precision() {
+    let shape1 =
+      ShapeUtil::make_shape(&PrimitiveType::BF16, vec![3, 2]);
+    let shape2 =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![2, 2]);
+    assert_eq!(ShapeUtil::compatible_ignoring_fp_precision(&shape1, &shape2), false);
+  }
+
+  #[test]
+  fn test_incompatible_different_element_shapes() {
+    let shape1
+      = ShapeUtil::make_shape(&PrimitiveType::F32, vec![3, 2]);
+    let shape2
+      = ShapeUtil::make_shape(&PrimitiveType::Pred, vec![3, 2]);
+    assert_eq!(ShapeUtil::compatible(&shape1, &shape2), false);
+  }
+
+  #[test]
+  fn test_equal_ignoring_fp_precision() {
+    let shape1 = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::F32,
+      vec![4, 3], vec![0, 1],
+      Vec::new(), 0, 0);
+    
+    let shape2 = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::F16,
+      vec![4, 3], vec![0, 1],
+      Vec::new(), 0, 0);
+
+    assert_eq!(ShapeUtil::equal_ignoring_fp_precision(&shape1, &shape2), true);
+  }
+
+  #[test]
+  fn test_unequal_ignoring_fp_precision() {
+    let shape1 = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::F32,
+      vec![4, 3], vec![0, 1],
+      Vec::new(), 0, 0);
+
+    let shape2 = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::F16,
+      vec![3, 4], vec![0, 1],
+      Vec::new(), 0, 0);
+
+    assert_eq!(ShapeUtil::equal_ignoring_fp_precision(&shape1, &shape2), false);
+    /*
+    let shape3 = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::F32,
+      vec![3, 4], vec![0, 1],
+      Vec::new(), 0, 0);
+
+    let shape4 = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::F16,
+      vec![3, 4], vec![1, 0],
+      Vec::new(), 0, 0);
+
+    assert_eq!(ShapeUtil::equal_ignoring_fp_precision(&shape3, &shape4), false);
+    */
   }
 }

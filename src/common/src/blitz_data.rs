@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PrimitiveType {
   Invalid,
   Pred,
@@ -37,7 +37,9 @@ pub enum PrimitiveType {
   OpaqueType,
 }
 
-#[derive(Clone, PartialEq)]
+pub const PRIMITIVE_TYPE_ARRAYSIZE: usize = 100;
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum DimLevelType {
   Dense,
   Compressed,

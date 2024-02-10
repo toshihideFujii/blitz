@@ -2,10 +2,10 @@
 
 use crate::{
   blitz_data::{DimLevelType, PrimitiveType},
-  util::DimensionVector, shape::Shape, printer::Printer
+  util::DimensionVector, shape::Shape, printer::{Printer, StringPrinter}, primitive_util, layout_util::LayoutUtil
 };
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Tile {
   dimensions: Vec<i64>,
 }
@@ -25,8 +25,44 @@ impl Tile {
     }
   }
 
-  pub fn print() {}
-  pub fn to_string() {}
+  pub fn print(&self, printer: &mut dyn Printer) {
+    printer.append(&"(".to_string());
+    let print_dim = |dim: i64, printer: &mut dyn Printer| {
+      if dim >= 0 {
+        printer.append(&dim.to_string());
+      } else {
+        if dim == Tile::COMBINE_DIMENSION {
+          printer.append(&"*".to_string());
+        } else {
+          printer.append(&"Invalid value ".to_string());
+          printer.append(&dim.to_string());
+        }
+      }
+    };
+    let last_index = self.dimensions.len();
+    let mut loop_count = 1;
+    let mut iter = self.dimensions.iter();
+    loop {
+      let dim = iter.next();
+      if dim != None && loop_count < last_index {
+        print_dim(dim.unwrap().clone(), printer);
+        printer.append(&",".to_string());
+        loop_count += 1;
+      } else if dim != None && loop_count == last_index {
+        print_dim(dim.unwrap().clone(), printer);
+        break;
+      } else {
+        break;
+      }
+    }
+    printer.append(&")".to_string());
+  }
+
+  pub fn to_string(&self) -> String {
+    let mut printer = StringPrinter::new();
+    self.print(&mut printer);
+    printer.to_string()
+  }
 
   pub fn dimension(&self, i: usize) -> i64 {
     self.dimensions[i]
@@ -47,7 +83,7 @@ impl Tile {
   pub fn absl_hash_value() {}
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DimInfo {
   dim_level_type: DimLevelType,
   dim_unique: bool,
@@ -64,7 +100,7 @@ impl DimInfo {
   }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Layout {
   dim_attributes: Vec<DimInfo>,
   n_dim_level_types: usize,
@@ -78,6 +114,7 @@ pub struct Layout {
   minor_to_major: DimensionVector,
   tiles: Vec<Tile>,
   physical_shape: Option<Box<Shape>>,
+  tail_padding_alignment_in_elements: i64,
 }
 
 impl Layout {
@@ -97,13 +134,96 @@ impl Layout {
       minor_to_major: Vec::new(),
       tiles: Vec::new(),
       physical_shape: None,
+      tail_padding_alignment_in_elements: 0,
     }
   }
 
-  pub fn print(&self, _printer: &dyn Printer) {}
+  pub fn print(&self, printer: &mut dyn Printer) {
+    printer.append(&"{".to_string());
+    self.append_join_minor_to_major(printer);
+
+    let mut colon_printed = false;
+    let mut print_colon = |printer: &mut dyn Printer| {
+      if colon_printed { return; }
+      printer.append(&":".to_string());
+      colon_printed = true;
+    };
+    if self.n_dim_level_types > 0 {
+      let print_one = |i: i64, printer: &mut dyn Printer| {
+        printer.append(&Layout::dim_level_type_abbrev(&self.dim_level_type(i as usize)));
+        if self.n_dim_unique > 0 && !self.dim_unique(i as usize) {
+          printer.append(&"+".to_string());
+        }
+        if self.n_dim_ordered > 0 && !self.dim_ordered(i as usize) {
+          printer.append(&"~".to_string());
+        }
+      };
+      print_colon(printer);
+      printer.append(&"D(".to_string());
+      print_one(0, printer);
+      for i in 1..self.n_dim_level_types {
+        printer.append(&",".to_string());
+        print_one(i as i64, printer);
+      }
+      printer.append(&")".to_string());
+    }
+    if !self.tiles.is_empty() {
+      print_colon(printer);
+      printer.append(&"T".to_string());
+      for tile in &self.tiles {
+        tile.print(printer);
+      }
+    }
+    if self.index_primitive_type() != PrimitiveType::Invalid {
+      print_colon(printer);
+      if primitive_util::is_integral_type(&self.index_primitive_type) {
+        printer.append(&"#(".to_string());
+        let primitive_type_name =
+          primitive_util::lowercase_primitive_type_name(&self.index_primitive_type);
+        printer.append(&primitive_type_name);
+        printer.append(&")".to_string());
+      } else {
+        printer.append(&"#(invalid)".to_string());
+      }
+    }
+    if self.pointer_primitive_type != PrimitiveType::Invalid {
+      print_colon(printer);
+      if primitive_util::is_integral_type(&self.pointer_primitive_type) {
+        printer.append(&"*(".to_string());
+        let primitive_type_name =
+          primitive_util::lowercase_primitive_type_name(&self.index_primitive_type);
+        printer.append(&primitive_type_name);
+        printer.append(&")".to_string());
+      } else {
+        printer.append(&"*(invalid".to_string());
+      }
+    }
+    if self.element_size_in_bits != 0 {
+      print_colon(printer);
+      printer.append(&"E(".to_string());
+      printer.append(&self.element_size_in_bits.to_string());
+      printer.append(&")".to_string());
+    }
+    if self.memory_space != 0 {
+      print_colon(printer);
+      printer.append(&"S(".to_string());
+      printer.append(&self.memory_space.to_string());
+      printer.append(&")".to_string());
+    }
+    if self.has_physical_shape() {
+      print_colon(printer);
+      printer.append(&"P{".to_string());
+      printer.append(&self.dynamic_shape_metadata_prefix_bytes.to_string());
+      printer.append(&")".to_string());
+    }
+
+    printer.append(&"}".to_string())
+  }
 
   pub fn to_string(&self) -> String {
-    "".to_string() // TODO
+    let mut printer = StringPrinter::new();
+    self.print(&mut printer);
+    printer.to_string()
   }
 
   pub fn dim_level_types_size(&self) -> usize {
@@ -208,7 +328,6 @@ impl Layout {
   }
 
   pub fn add_tiles(&mut self, tile: Tile) {
-    //self.tiles.push(Tile::new_default());
     self.tiles.push(tile);
   }
 
@@ -222,6 +341,14 @@ impl Layout {
 
   pub fn set_element_size_in_bits(&mut self, value: i64) {
     self.element_size_in_bits = value;
+  }
+
+  pub fn tail_padding_alignment_in_elements(&self) -> i64 {
+    self.tail_padding_alignment_in_elements
+  }
+
+  pub fn set_tail_padding_alignment_in_elements(&mut self, value: i64) {
+    self.tail_padding_alignment_in_elements = value;
   }
 
   pub fn index_primitive_type(&self) -> PrimitiveType {
@@ -272,4 +399,171 @@ impl Layout {
   pub fn swap() {}
   pub fn clear() {}
   pub fn absl_hash_value() {}
+
+  fn dim_level_type_abbrev(t: &DimLevelType) -> String {
+    match *t {
+      DimLevelType::Dense => "D".to_string() ,
+      DimLevelType::Compressed => "C".to_string(),
+      DimLevelType::Singleton => "S".to_string(),
+      DimLevelType::LooseCompressed => "H".to_string(),
+    }
+  }
+
+  fn append_join_minor_to_major(&self, printer: &mut dyn Printer) {
+    let last_index = self.minor_to_major.len();
+    let mut loop_count = 1;
+    let mut iter = self.minor_to_major.iter();
+    loop {
+      let elt = iter.next();
+      if elt != None && loop_count < last_index {
+        printer.append(&elt.unwrap().to_string());
+        printer.append(&",".to_string());
+        loop_count += 1;
+      } else if elt != None && loop_count == last_index {
+        printer.append(&elt.unwrap().to_string());
+        return;
+      } else {
+        return;
+      }
+    }
+  }
+}
+
+pub struct LayoutEqual {
+  ignore_tiles: bool,
+  ignore_tail_padding_alignment_in_elements: bool,
+  ignore_element_size: bool,
+  ignore_index_primitive_type: bool,
+  ignore_pointer_primitive_type: bool,
+  ignore_memory_space: bool,
+  ignore_physical_shape: bool,
+}
+
+impl LayoutEqual {
+  pub fn new() -> Self {
+    LayoutEqual {
+      ignore_tiles: false,
+      ignore_tail_padding_alignment_in_elements: false,
+      ignore_element_size: false,
+      ignore_index_primitive_type: false,
+      ignore_pointer_primitive_type: false,
+      ignore_memory_space: false,
+      ignore_physical_shape: false,
+    }
+  }
+
+  pub fn equal(&self, lhs: &Layout, rhs: &Layout) -> bool {
+    if !LayoutUtil::is_dense(lhs) || !LayoutUtil::is_dense(rhs) {
+      // dim_level_types
+      if lhs.dim_level_types_size() != rhs.dim_level_types_size() {
+        return false;
+      }
+      for i in 0..lhs.dim_level_types_size() {
+        if lhs.dim_level_type(i) != rhs.dim_level_type(i) {
+          return false;
+        }
+      }
+      // dim_unique
+      if lhs.dim_unique_size() != rhs.dim_unique_size() {
+        return false;
+      }
+      for i in 0..lhs.dim_unique_size() {
+        if lhs.dim_unique(i as usize) != rhs.dim_unique(i as usize) {
+          return false;
+        }
+      }
+      // dim_ordered
+      if lhs.dim_ordered_size() != rhs.dim_ordered_size() {
+        return false;
+      }
+      for i in 0..lhs.dim_ordered_size() {
+        if lhs.dim_ordered(i as usize) != rhs.dim_ordered(i as usize) {
+          return false;
+        }
+      }
+      if lhs.minor_to_major_vec() != rhs.minor_to_major_vec() {
+        return false;
+      }
+      if !self.ignore_tiles && lhs.tiles != rhs.tiles {
+        return false;
+      }
+      if !self.ignore_tail_padding_alignment_in_elements &&
+        lhs.tail_padding_alignment_in_elements() != rhs.tail_padding_alignment_in_elements() {
+          return false;
+      }
+      if !self.ignore_index_primitive_type &&
+        lhs.index_primitive_type() != rhs.index_primitive_type() {
+        return false;
+      }
+      if !self.ignore_pointer_primitive_type &&
+        lhs.pointer_primitive_type() != rhs.pointer_primitive_type() {
+        return false;
+      }
+      if !self.ignore_element_size &&
+        lhs.element_size_in_bits() != rhs.element_size_in_bits() {
+        return false;
+      }
+      if !self.ignore_memory_space &&
+        lhs.memory_space() != rhs.memory_space() {
+        return false;
+      }
+      if !self.ignore_physical_shape {
+        if lhs.has_physical_shape() || rhs.has_physical_shape() {
+          if !lhs.has_physical_shape() || !rhs.has_physical_shape() {
+            return false;
+          }
+          //if lhs.physical_shape() != rhs.physical_shape() {
+            //return false;
+          //}
+        }
+      }
+    }
+    true
+  }
+
+  pub fn ignore_tiles(&mut self) -> &Self {
+    self.ignore_tiles = true;
+    self
+  }
+
+  pub fn ignore_tail_padding_alignment_in_elements(&mut self) -> &Self {
+    self.ignore_tail_padding_alignment_in_elements = true;
+    self
+  }
+
+  pub fn ignore_index_primitive_type(&mut self) -> &Self {
+    self.ignore_index_primitive_type = true;
+    self
+  }
+
+  pub fn ignore_pointer_primitive_type(&mut self) -> &Self {
+    self.ignore_pointer_primitive_type = true;
+    self
+  }
+
+  pub fn ignore_memory_space(&mut self) -> &Self {
+    self.ignore_memory_space = true;
+    self
+  }
+
+  pub fn ignore_physical_shape(&mut self) -> &Self {
+    self.ignore_physical_shape = true;
+    self
+  }
+
+  pub fn ignore_element_size(&mut self) -> &Self {
+    self.ignore_element_size = true;
+    self
+  }
+
+  pub fn minor_to_major_only(&mut self) -> &Self {
+    self.ignore_tiles = true;
+    self.ignore_index_primitive_type = true;
+    self.ignore_pointer_primitive_type = true;
+    self.ignore_memory_space = true;
+    self.ignore_physical_shape = true;
+    self.ignore_element_size = true;
+    self.ignore_tail_padding_alignment_in_elements = true;
+    self
+  }
 }

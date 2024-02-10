@@ -138,6 +138,7 @@ impl LayoutUtil {
   pub fn is_coo_array() {}
   pub fn is_csr_array() {}
 
+  // Returns whether the given layout has a dense in-memory representation.
   pub fn is_dense(layout: &Layout) -> bool {
     for i in 0..layout.dim_level_types_size() {
       if layout.dim_level_type(i) != DimLevelType::Dense {
@@ -233,12 +234,12 @@ impl LayoutUtil {
 
   pub fn make_logical_to_physical() {}
 
-  pub fn print_human_string(printer: &dyn Printer, layout: &Layout) {
+  pub fn print_human_string(printer: &mut dyn Printer, layout: &Layout) {
     layout.print(printer)
   }
 
   pub fn human_string(layout: &Layout) -> String {
-    layout.to_string()    
+    layout.to_string()
   }
 
   pub fn copy_layout_between_sjapes() {}

@@ -2,12 +2,15 @@
 
 use crate::{
   util::DimensionVector,
-  layout::Layout,
+  layout::{Layout, LayoutEqual},
   blitz_data::PrimitiveType,
-  primitive_util, layout_util::LayoutUtil,
+  primitive_util,
+  layout_util::LayoutUtil,
+  shape_util::ShapeUtil,
+  printer::Printer,
 };
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Shape {
   element_type: PrimitiveType,
   dimensions: DimensionVector,
@@ -46,7 +49,14 @@ impl Shape {
   }
 
   pub fn print() {}
-  pub fn to_string() {}
+
+  pub fn to_string(&self, print_layout: bool) -> String {
+    if print_layout {
+      ShapeUtil::human_string_with_layout(self)
+    } else {
+      ShapeUtil::human_string(self)
+    }
+  }
 
   pub fn rank(&self) -> usize {
     debug_assert!(self.is_array(), "Non-arrays do not have a rank.");
@@ -79,13 +89,37 @@ impl Shape {
     false
   }
 
-  pub fn is_static(&self) -> bool { false}
+  // Returns true if no array dimension in the shape is dynamically sized.
+  // Tuple shapes are traversed recursively.
+  pub fn is_static(&self) -> bool {
+    if self.is_tuple() {
+      for subshape in &self.tuple_shapes {
+        if !subshape.is_static() { return false; }
+      }
+    }
+    for dyn_dim in &self.dynamic_dimensions {
+      if *dyn_dim { return false; }
+    }
+    true
+  }
 
   pub fn is_dynamic(&self) -> bool {
     !self.is_static()
   }
 
-  pub fn is_unbounded_dynamic() {}
+  // Returns true if the shape has one or more dimensions with unbounded sizes.
+  // Tuple shapes are traversed recursively.
+  pub fn is_unbounded_dynamic(&self) -> bool {
+    if self.is_tuple() {
+      for subshape in &self.tuple_shapes {
+        if subshape.is_unbounded_dynamic() { return true; }
+      }
+    }
+    for dim in &self.dimensions {
+      if *dim == Shape::UNBOUNDED_SIZE { return true; }
+    }
+    false
+  }
 
   pub fn is_unbounded_dynamic_dimension(&self, dimension: usize) -> bool {
     self.dimensions[dimension] == Shape::UNBOUNDED_SIZE
@@ -105,6 +139,7 @@ impl Shape {
     self.dynamic_dimensions[dimension]
   }
 
+  // Sets whether or not the given dimension is dynamically-sized.
   pub fn set_dynamic_dimension(&mut self, dimension: usize, is_dynamic: bool) {
     self.dynamic_dimensions[dimension] = is_dynamic;
   }
@@ -177,12 +212,15 @@ impl Shape {
     &self.tuple_shapes[index]
   }
 
+  pub fn mutable_tuple_shapes(&mut self, index: usize) -> &mut Shape {
+    &mut self.tuple_shapes[index]
+  }
+
   pub fn set_tuple_shapes(&mut self, index: usize, shape: Shape) {
     self.tuple_shapes[index] = shape;
   }
 
   pub fn add_tuple_shapes(&mut self, shape: Shape) {
-    //self.tuple_shapes.push(Shape::new_default());
     self.tuple_shapes.push(shape);
   }
 
@@ -206,8 +244,16 @@ impl Shape {
     &self.layout
   }
 
-  pub fn mutable_lauout(&mut self) -> &mut Option<Layout>{
+  pub fn mutable_lauout(&mut self) -> &mut Option<Layout> {
+    assert!(self.is_array());
+    if !self.has_layout() {
+      self.layout = Some(Layout::new());
+    }
     &mut self.layout
+  }
+
+  pub fn set_layout(&mut self, layout: Layout) {
+    self.layout = Some(layout);
   }
 
   pub fn clear_layout(&mut self) {
@@ -247,6 +293,171 @@ impl Shape {
   }
 }
 
+pub struct ShapeEqual {
+  ignore_layout: bool,
+  ignore_tiles_in_layout: bool,
+  ignore_element_size_in_layout: bool,
+  ignore_memory_space_in_layout: bool,
+  ignore_element_type: bool,
+  ignore_fp_precision: bool,
+  ignore_dynamic_dimension: bool,
+  ignore_dimensions: bool,
+  ignore_tail_padding_alignment_in_elements_in_layout: bool,
+}
+
+impl ShapeEqual {
+  pub fn new() -> Self {
+    ShapeEqual {
+      ignore_layout: false,
+      ignore_tiles_in_layout: false,
+      ignore_element_size_in_layout: false,
+      ignore_memory_space_in_layout: false,
+      ignore_element_type: false,
+      ignore_fp_precision: false,
+      ignore_dynamic_dimension: false,
+      ignore_dimensions: false,
+      ignore_tail_padding_alignment_in_elements_in_layout: false,
+    }
+  }
+
+  pub fn equal(&self, lhs: &Shape, rhs: &Shape) -> bool {
+    if lhs.is_tuple() {
+      if rhs.is_tuple() {
+        let mut l_iter = lhs.tuple_shapes.iter();
+        let mut r_iter = rhs.tuple_shapes.iter();
+        loop {
+          let l = l_iter.next();
+          let r = r_iter.next();
+          if l.is_none() && r.is_none() { return true; }
+          if !self.equal(l.as_ref().unwrap(), r.as_ref().unwrap()) {
+            return false;
+          }
+        }
+      }
+    } else if !lhs.is_array() {
+      return lhs.element_type() == rhs.element_type();
+    }
+
+    if !rhs.is_array() {
+      return false;
+    }
+
+    if !self.ignore_element_type {
+      if (self.ignore_fp_precision &&
+        !ShapeUtil::same_element_type_ignoring_fp_precision(lhs, rhs)) ||
+        (!self.ignore_fp_precision &&
+        !ShapeUtil::same_element_type(lhs, rhs))
+      {
+        println!("compare_shapes: lhs element type != rhs element type.");
+        return false;
+      }
+    }
+
+    if !self.ignore_dimensions {
+      if !ShapeUtil::same_dimensions(lhs, rhs) {
+        println!("compare_shapes: lhs dimensions != rhs dimensions.");
+        return false;
+      }
+    } else {
+      if !ShapeUtil::same_rank(lhs, rhs) {
+        println!("compare_shapes: lhs rank != rhs rank.");
+        return false;
+      }
+    }
+
+    if !self.ignore_layout {
+      if lhs.is_array() {
+        let mut layout_equal = LayoutEqual::new();
+        if lhs.has_layout() || rhs.has_layout() {
+          if !lhs.has_layout() || !rhs.has_layout() {
+            return false;
+          }
+          if self.ignore_tiles_in_layout {
+            layout_equal.ignore_tiles();
+          }
+          if self.ignore_element_size_in_layout {
+            layout_equal.ignore_element_size();
+          }
+          if self.ignore_memory_space_in_layout {
+            layout_equal.ignore_memory_space();
+          }
+          if self.ignore_tail_padding_alignment_in_elements_in_layout {
+            layout_equal.ignore_tail_padding_alignment_in_elements();
+          }
+          let lhs_layout = lhs.layout().as_ref().unwrap();
+          let rhs_layout = rhs.layout().as_ref().unwrap();
+          if !layout_equal.equal(lhs_layout, rhs_layout) {
+            return false;
+          }
+        }
+      }
+    }
+
+    if !self.ignore_dynamic_dimension {
+      for i in 0..lhs.rank() {
+        if lhs.is_dynamic_dimension(i) != rhs.is_dynamic_dimension(i) {
+          return false;
+        }
+      }
+    }
+
+    true
+  }
+
+  pub fn ignore_layout(&mut self) -> &mut Self {
+    self.ignore_layout = true;
+    self
+  }
+
+  pub fn ignore_tiles_in_layout(&mut self) -> &mut Self {
+    self.ignore_tiles_in_layout = true;
+    self
+  }
+
+  pub fn ignore_element_size_in_layout(&mut self) -> &mut Self {
+    self.ignore_element_size_in_layout = true;
+    self
+  }
+
+  pub fn ignore_memory_space_in_layout(&mut self) -> &mut Self {
+    self.ignore_memory_space_in_layout = true;
+    self
+  }
+
+  pub fn minor_to_major_only_in_layout(&mut self) -> &mut Self {
+    self.ignore_tiles_in_layout = true;
+    self.ignore_element_size_in_layout = true;
+    self.ignore_memory_space_in_layout = true;
+    self.ignore_tail_padding_alignment_in_elements_in_layout = true;
+    self
+  }
+
+  pub fn ignore_element_type(&mut self) -> &mut Self {
+    self.ignore_element_type = true;
+    self
+  }
+
+  pub fn ignore_fp_precision(&mut self) -> &mut Self {
+    self.ignore_fp_precision = true;
+    self
+  }
+
+  pub fn ignore_dynamic_dimension(&mut self) -> &mut Self {
+    self.ignore_dynamic_dimension = true;
+    self
+  }
+
+  pub fn ignore_dimensions(&mut self) -> &mut Self {
+    self.ignore_dimensions = true;
+    self
+  }
+
+  pub fn ignore_tail_padding_alignment_in_elements_in_elements(&mut self) -> &mut Self {
+    self.ignore_tail_padding_alignment_in_elements_in_layout = true;
+    self
+  }
+}
+
 pub struct ProgramShape {
   parameters: Vec<Shape>,
   parameter_names: Vec<String>,
@@ -254,20 +465,255 @@ pub struct ProgramShape {
 }
 
 impl ProgramShape {
-  pub fn new() {}
-  pub fn print() {}
-  pub fn to_string() {}
+  pub fn new() -> Self {
+    ProgramShape {
+      parameters: Vec::new(),
+      parameter_names: Vec::new(),
+      result: Shape::new_default(),
+    }
+  }
 
-  pub fn parameters_size() {}
-  pub fn parameters() {}
-  pub fn add_parameters() {}
-  pub fn clear_parameters() {}
-  pub fn result() {}
-  pub fn parameter_names_size() {}
-  pub fn parameter_names() {}
-  pub fn set_parameter_names() {}
-  pub fn add_parameter_names() {}
-  pub fn clear_parameter_names() {}
+  pub fn print(&self, printer: &mut dyn Printer) {
+    ShapeUtil::print_human_string_for_program_shape(printer, self);
+  }
+
+  pub fn to_string(&self) -> String {
+    ShapeUtil::human_string_for_program_shape(self)
+  }
+
+  pub fn parameters_size(&self) -> usize {
+    self.parameters.len()
+  }
+
+  pub fn parameters(&self, index: usize) -> &Shape {
+    &self.parameters[index]
+  }
+
+  pub fn add_parameters(&mut self, shape: Shape) {
+    self.parameters.push(shape);
+  }
+
+  pub fn clear_parameters(&mut self) {
+    self.parameters.clear();
+  }
+
+  pub fn parameters_vec(&self) -> &Vec<Shape> {
+    &self.parameters
+  }
+
+  pub fn result(&self) -> &Shape {
+    &self.result
+  }
+
+  pub fn parameter_names_size(&self) -> usize {
+    self.parameter_names.len()
+  }
+
+  pub fn parameter_names(&self, index: usize) -> String {
+    self.parameter_names[index].clone()
+  }
+
+  pub fn set_parameter_names(&mut self, index: usize, value: String) {
+    self.parameter_names[index] = value;
+  }
+
+  pub fn add_parameter_names(&mut self, value: String) {
+    self.parameter_names.push(value);
+  }
+
+  pub fn clear_parameter_names(&mut self) {
+    self.parameter_names.clear();
+  }
+
   pub fn short_debug_string() {}
   pub fn debug_string() {}
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::layout::Tile;
+  use super::*;
+
+  fn make_tuple() -> Shape {
+    let opaque = ShapeUtil::make_opaque_shape();
+    let scalar = ShapeUtil::make_shape(&PrimitiveType::F32, vec![]);
+    let matrix = ShapeUtil::make_shape(&PrimitiveType::U32, vec![1, 2]);
+    let matrix2 =
+      ShapeUtil::make_shape_with_dense_layout(
+        &PrimitiveType::S32,
+        vec![3, 4],
+        vec![0, 1],
+        Vec::new(),
+        0,
+        0
+      );
+    
+    let tuple_vec = vec![opaque.clone(), scalar.clone(), matrix.clone(), matrix2.clone()];
+    ShapeUtil::make_tuple_shape(tuple_vec)
+  }
+
+  #[test]
+  fn test_shape_to_string() {
+    let opaque = ShapeUtil::make_opaque_shape();
+    let token = ShapeUtil::make_token_shape();
+    let scalar = ShapeUtil::make_shape(&PrimitiveType::F32, vec![]);
+    let matrix = ShapeUtil::make_shape(&PrimitiveType::U32, vec![1, 2]);
+    let matrix2 =
+      ShapeUtil::make_shape_with_dense_layout(
+        &PrimitiveType::S32,
+        vec![3, 4],
+        vec![0, 1],
+        Vec::new(),
+        0,
+        0
+      );
+    let scalar_with_tile = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::F32,
+      Vec::new(),
+      Vec::new(),
+      vec![Tile::new(vec![256])],
+      0,
+      0
+    );
+
+    assert_eq!(opaque.to_string(false), "opaque[]".to_string());
+    assert_eq!(token.to_string(false), "token[]".to_string());
+    assert_eq!(scalar.to_string(false), "f32[]".to_string());
+    assert_eq!(matrix.to_string(false), "u32[1,2]".to_string());
+    assert_eq!(matrix2.to_string(false), "s32[3,4]".to_string());
+
+    assert_eq!(opaque.to_string(true), "opaque[]".to_string());
+    assert_eq!(scalar.to_string(true), "f32[]".to_string());
+    assert_eq!(scalar_with_tile.to_string(true), "f32[]{:T(256)}".to_string());
+    assert_eq!(matrix.to_string(true), "u32[1,2]{1,0}".to_string());
+    assert_eq!(matrix2.to_string(true), "s32[3,4]{0,1}".to_string());
+
+    let tuple_vec = vec![opaque.clone(), scalar.clone(), matrix.clone(), matrix2.clone()];
+    let tuple = ShapeUtil::make_tuple_shape(tuple_vec);
+    assert_eq!(tuple.to_string(false), "(opaque[], f32[], u32[1,2], s32[3,4])".to_string());
+    assert_eq!(tuple.to_string(true), "(opaque[], f32[], u32[1,2]{1,0}, s32[3,4]{0,1})".to_string());
+
+    let nested_tuple_vec = vec![tuple.clone(), matrix.clone(), token.clone()];
+    let nested_tuple = ShapeUtil::make_tuple_shape(nested_tuple_vec);
+    assert_eq!(nested_tuple.to_string(false),
+      "((opaque[], f32[], u32[1,2], s32[3,4]), u32[1,2], token[])".to_string());
+    assert_eq!(nested_tuple.to_string(true),
+      "((opaque[], f32[], u32[1,2]{1,0}, s32[3,4]{0,1}), u32[1,2]{1,0}, token[])".to_string());
+  }
+
+  #[test]
+  fn test_dynamic_shape_to_string() {
+    let mut array_shape = ShapeUtil::make_shape_dynamic(
+      &PrimitiveType::F32,
+      vec![23, 44, 55],
+      vec![true, false, true]);
+    assert_eq!(array_shape.to_string(false), "f32[<=23,44,<=55]".to_string());
+
+    array_shape.set_dynamic_dimension(2, false);
+    assert_eq!(array_shape.to_string(false), "f32[<=23,44,55]".to_string());
+
+    let unbounded = ShapeUtil::make_shape_dynamic(
+      &PrimitiveType::F32,
+      vec![Shape::UNBOUNDED_SIZE, 784],
+      vec![true, false]);
+    assert_eq!(unbounded.to_string(false), "f32[?,784]".to_string());
+  }
+
+  #[test]
+  fn test_is_static() {
+    let opaque = ShapeUtil::make_opaque_shape();
+    let token = ShapeUtil::make_token_shape();
+    let scalar = ShapeUtil::make_shape(&PrimitiveType::F32, vec![]);
+    let matrix = ShapeUtil::make_shape(&PrimitiveType::U32, vec![1, 2]);
+    let matrix2 =
+    ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::S32,
+      vec![3, 4],
+      vec![0, 1],
+      Vec::new(),
+      0,
+      0
+    );
+
+    let tuple_vec = vec![opaque.clone(), scalar.clone(), matrix.clone(), matrix2.clone()];
+    let tuple = ShapeUtil::make_tuple_shape(tuple_vec);
+
+    let nested_tuple_vec = vec![tuple.clone(), matrix.clone(), token.clone()];
+    let nested_tuple = ShapeUtil::make_tuple_shape(nested_tuple_vec);
+
+    assert_eq!(opaque.is_static(), true);
+    assert_eq!(token.is_static(), true);
+    assert_eq!(matrix.is_static(), true);
+    assert_eq!(tuple.is_static(), true);
+    assert_eq!(nested_tuple.is_static(), true);
+
+    let mut dynamic_matrix = matrix.clone();
+    assert_eq!(dynamic_matrix.is_static(), true);
+    dynamic_matrix.set_dynamic_dimension(1, true);
+    assert_eq!(dynamic_matrix.is_static(), false);
+
+    let mut dynamic_tuple = tuple.clone();
+    assert_eq!(dynamic_tuple.is_static(), true);
+    ShapeUtil::get_mutable_subshape(&mut dynamic_tuple, vec![2])
+      .set_dynamic_dimension(1, true);
+    assert_eq!(dynamic_tuple.is_static(), false);
+
+    let unbounded = ShapeUtil::make_shape_dynamic(
+      &PrimitiveType::F32,
+      vec![Shape::UNBOUNDED_SIZE, 784],
+      vec![true, false]);
+    assert_eq!(unbounded.is_static(), false);
+  }
+
+  #[test]
+  fn test_is_dynamic() {
+    let matrix = ShapeUtil::make_shape(&PrimitiveType::U32, vec![1, 2]);
+    assert_eq!(matrix.is_dynamic(), false);
+    assert_eq!(matrix.is_unbounded_dynamic(), false);
+
+    let dynamic_matrix = ShapeUtil::make_shape_dynamic(
+      &PrimitiveType::S32,
+      vec![5, 2],
+      vec![true, false]);
+    assert_eq!(dynamic_matrix.is_dynamic(), true);
+    assert_eq!(dynamic_matrix.is_unbounded_dynamic(), false);
+
+    let unbounded = ShapeUtil::make_shape_dynamic(
+      &PrimitiveType::F32,
+      vec![Shape::UNBOUNDED_SIZE, 784],
+      vec![true, false]);
+    assert_eq!(unbounded.is_dynamic(), true);
+    assert_eq!(unbounded.is_unbounded_dynamic(), true);
+
+    let mut unbounded_tuple = make_tuple();
+    assert_eq!(unbounded_tuple.is_unbounded_dynamic(), false);
+    ShapeUtil::get_mutable_subshape(&mut unbounded_tuple, vec![2])
+      .set_dynamic_dimension(1, true);
+    assert_eq!(unbounded_tuple.is_unbounded_dynamic(), false);
+    ShapeUtil::get_mutable_subshape(&mut unbounded_tuple, vec![2])
+      .set_dimensions(1, Shape::UNBOUNDED_SIZE);
+    assert_eq!(unbounded_tuple.is_unbounded_dynamic(), true);
+  }
+
+  #[test]
+  fn test_is_dynamic_dimension() {
+    let mut dynamic_matrix =
+      ShapeUtil::make_shape(&PrimitiveType::U32, vec![1, 2]);
+    dynamic_matrix.set_dynamic_dimension(1, true);
+    assert_eq!(dynamic_matrix.is_dynamic_dimension(0), false);
+    assert_eq!(dynamic_matrix.is_dynamic_dimension(1), true);
+
+    let mut dynamic_tuple = make_tuple();
+    assert_eq!(dynamic_tuple.is_static(), true);
+    ShapeUtil::get_mutable_subshape(&mut dynamic_tuple, vec![2])
+      .set_dynamic_dimension(1, true);
+    assert_eq!(dynamic_tuple.is_static(), false);
+
+    let unbounded = ShapeUtil::make_shape_dynamic(
+      &PrimitiveType::F32,
+      vec![Shape::UNBOUNDED_SIZE, 784],
+      vec![true, false]);
+    assert_eq!(unbounded.is_dynamic_dimension(0), true);
+    assert_eq!(unbounded.is_dynamic_dimension(1), false);
+  }
 }

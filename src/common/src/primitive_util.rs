@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
 use crate::blitz_data::PrimitiveType;
 
 pub fn significand_width(_t: &PrimitiveType) -> i64 {
@@ -65,8 +66,9 @@ pub fn is_4bit_type(t: &PrimitiveType) -> bool {
 }
 
 pub fn is_array_type(t: &PrimitiveType) -> bool {
+  *t != PrimitiveType::Invalid &&
   *t != PrimitiveType::Tuple &&
-  *t!= PrimitiveType::OpaqueType &&
+  *t != PrimitiveType::OpaqueType &&
   *t != PrimitiveType::Token
 }
 
@@ -82,8 +84,18 @@ pub fn bit_width(_t: &PrimitiveType) -> i64 {
   0 // TODO
 }
 
-pub fn byte_width(_t: &PrimitiveType) -> i64 {
-  0 // TODO
+pub fn byte_width(t: &PrimitiveType) -> i64 {
+  match t {
+    PrimitiveType::S32 => return 4, // 32 / 8
+    PrimitiveType::U32 => return 4, // 32 / 8
+    PrimitiveType::BF16 => return 2, // 16 / 8
+    PrimitiveType::F16 => return 2, // 16 / 8
+    PrimitiveType::F32 => return 4, // 32 / 8
+    PrimitiveType::Token => return 0,
+    PrimitiveType::Tuple => unreachable!("Tuple is an invalid type for bit_width."),
+    PrimitiveType::OpaqueType => unreachable!("OpaqueType is an invalid type for bit_width."),
+    _ => return 0,   
+  };
 }
 
 pub fn unsigned_integral_type_for_bit_width(src_bitwidth: i64) -> PrimitiveType {
@@ -133,10 +145,6 @@ pub fn cast_preserves_values() {
     
 }
 
-pub fn lowercase_primitive_type_name() {
-    
-}
-
 pub fn string_to_primitive_type() {
     
 }
@@ -151,4 +159,31 @@ pub fn is_canonical_representation() {
 
 pub fn fits_in_integral_type() {
     
+}
+
+struct PrimitiveTypeNameGenerator {
+  lowercase_name: HashMap<PrimitiveType, String>,
+}
+
+impl PrimitiveTypeNameGenerator {
+  pub fn new() -> Self {
+    let mut generator = PrimitiveTypeNameGenerator {
+      lowercase_name: HashMap::new()
+    };
+    generator.lowercase_name.insert(PrimitiveType::S32, "s32".to_string());
+    generator.lowercase_name.insert(PrimitiveType::U32, "u32".to_string());
+    generator.lowercase_name.insert(PrimitiveType::F32, "f32".to_string());
+    generator.lowercase_name.insert(PrimitiveType::OpaqueType, "opaque".to_string());
+    generator.lowercase_name.insert(PrimitiveType::Token, "token".to_string());
+    generator
+  }
+
+  pub fn lowercase_name(&self, t: &PrimitiveType) -> String {
+    self.lowercase_name.get(t).unwrap().clone()
+  }
+}
+
+pub fn lowercase_primitive_type_name(t: &PrimitiveType) -> String {
+  let gen = PrimitiveTypeNameGenerator::new();
+  gen.lowercase_name(t)
 }
