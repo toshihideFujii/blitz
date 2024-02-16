@@ -86,6 +86,7 @@ pub fn bit_width(_t: &PrimitiveType) -> i64 {
 
 pub fn byte_width(t: &PrimitiveType) -> i64 {
   match t {
+    PrimitiveType::Pred => return 2, // ?
     PrimitiveType::S32 => return 4, // 32 / 8
     PrimitiveType::U32 => return 4, // 32 / 8
     PrimitiveType::BF16 => return 2, // 16 / 8

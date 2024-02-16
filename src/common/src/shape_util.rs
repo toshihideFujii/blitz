@@ -533,6 +533,7 @@ impl ShapeUtil {
     dim_unique: Vec<bool>,
     dim_ordered: Vec<bool>,
     tiles: Vec<Tile>,
+    tail_padding_alignment_in_elements: i64,
     index_primitive_t: &PrimitiveType,
     pointer_primitive_t: &PrimitiveType,
     mut elt_size_in_bits: i64,
@@ -557,6 +558,7 @@ impl ShapeUtil {
       dim_unique,
       dim_ordered,
       tiles,
+      tail_padding_alignment_in_elements,
       index_primitive_t.clone(),
       pointer_primitive_t.clone(),
       elt_size_in_bits,
@@ -573,6 +575,7 @@ impl ShapeUtil {
     dimensions: Vec<i64>,
     minor_to_major: Vec<i64>,
     tiles: Vec<Tile>,
+    tail_padding_alignment_in_elements: i64,
     elt_size_in_bits: i64,
     memory_space: i64) -> Shape
   {
@@ -584,6 +587,7 @@ impl ShapeUtil {
       Vec::new(),
       Vec::new(),
       tiles,
+      tail_padding_alignment_in_elements,
       &PrimitiveType::Invalid,
       &PrimitiveType::Invalid,
       elt_size_in_bits,
@@ -666,6 +670,7 @@ impl ShapeUtil {
     shape.is_tuple() && shape.tuple_shapes_vec().is_empty()
   }
 
+  // Returns the number of elements in the given tuple shape.
   pub fn tuple_element_count(shape: &Shape) -> usize {
     shape.tuple_shapes_size()
   }
@@ -740,7 +745,14 @@ impl ShapeUtil {
   pub fn get_leaf_shapes() {}
   pub fn for_each_subshape() {}
   pub fn for_each_leaf_shape() {}
-  pub fn for_each_subshape_with_status() {}
+
+  // Variants of for_each_subshape wchich propagate status from the
+  // visitor functions.
+  pub fn for_each_subshape_with_status<T>(shape: &Shape, func: T)
+    where T: Fn(&Shape, usize) {
+    ShapeUtil::for_each_subshape_with_status_helper(shape, &func, 0);
+  }
+
   pub fn for_each_subshape_post_order() {}
   pub fn for_each_subshape_post_order_with_status() {}
 
@@ -874,6 +886,22 @@ impl ShapeUtil {
 
     true
   }
+
+  // Helper for for_each_subshape which visits the subshapes of the given shape
+  // in DFS pre-order starting with the index.
+  fn for_each_subshape_with_status_helper<T>(
+    shape: &Shape,
+    func: &T,
+    index: usize) where T: Fn(&Shape, usize)
+  {
+    func(shape, index);
+    if shape.is_tuple() {
+      for i in 0..ShapeUtil::tuple_element_count(shape) {
+        ShapeUtil::for_each_subshape_with_status_helper(
+          shape.tuple_shapes(i), func, i);
+      }
+    }
+  }
 }
 
 #[cfg(test)]
@@ -1001,12 +1029,12 @@ mod tests {
     let shape1 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F32,
       vec![4, 3], vec![0, 1],
-      Vec::new(), 0, 0);
+      Vec::new(), 1, 0, 0);
     
     let shape2 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F16,
       vec![4, 3], vec![0, 1],
-      Vec::new(), 0, 0);
+      Vec::new(), 1, 0, 0);
 
     assert_eq!(ShapeUtil::equal_ignoring_fp_precision(&shape1, &shape2), true);
   }
@@ -1016,12 +1044,12 @@ mod tests {
     let shape1 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F32,
       vec![4, 3], vec![0, 1],
-      Vec::new(), 0, 0);
+      Vec::new(), 1, 0, 0);
 
     let shape2 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F16,
       vec![3, 4], vec![0, 1],
-      Vec::new(), 0, 0);
+      Vec::new(), 1, 0, 0);
 
     assert_eq!(ShapeUtil::equal_ignoring_fp_precision(&shape1, &shape2), false);
     /*

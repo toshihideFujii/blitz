@@ -544,6 +544,7 @@ mod tests {
         vec![3, 4],
         vec![0, 1],
         Vec::new(),
+        1,
         0,
         0
       );
@@ -564,6 +565,7 @@ mod tests {
         vec![3, 4],
         vec![0, 1],
         Vec::new(),
+        1,
         0,
         0
       );
@@ -572,6 +574,7 @@ mod tests {
       Vec::new(),
       Vec::new(),
       vec![Tile::new(vec![256])],
+      1,
       0,
       0
     );
@@ -631,6 +634,7 @@ mod tests {
       vec![3, 4],
       vec![0, 1],
       Vec::new(),
+      1,
       0,
       0
     );

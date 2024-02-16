@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::cmp::max;
+
 use crate::{
   blitz_data::{DimLevelType, PrimitiveType},
   util::DimensionVector, shape::Shape, printer::{Printer, StringPrinter}, primitive_util, layout_util::LayoutUtil
@@ -104,8 +106,8 @@ impl DimInfo {
 pub struct Layout {
   dim_attributes: Vec<DimInfo>,
   n_dim_level_types: usize,
-  n_dim_unique: i64,
-  n_dim_ordered: i64,
+  n_dim_unique: usize,
+  n_dim_ordered: usize,
   element_size_in_bits: i64,
   index_primitive_type: PrimitiveType,
   pointer_primitive_type: PrimitiveType,
@@ -134,8 +136,75 @@ impl Layout {
       minor_to_major: Vec::new(),
       tiles: Vec::new(),
       physical_shape: None,
-      tail_padding_alignment_in_elements: 0,
+      tail_padding_alignment_in_elements: 1,
     }
+  }
+
+  pub fn new_from_minor_to_major(minor_to_major: Vec<i64>) -> Self {
+    Layout {
+      dim_attributes: Vec::new(),
+      n_dim_level_types: 0,
+      n_dim_unique: 0,
+      n_dim_ordered: 0,
+      element_size_in_bits: 0,
+      index_primitive_type: PrimitiveType::Invalid,
+      pointer_primitive_type: PrimitiveType::Invalid,
+      memory_space: 0,
+      dynamic_shape_metadata_prefix_bytes: 0,
+      minor_to_major: minor_to_major,
+      tiles: Vec::new(),
+      physical_shape: None,
+      tail_padding_alignment_in_elements: 1,
+    }
+  }
+
+  pub fn new_from(
+    minor_to_major: Vec<i64>,
+    dim_level_types: Vec<DimLevelType>,
+    dim_unique: Vec<bool>,
+    dim_orered: Vec<bool>,
+    tiles: Vec<Tile>,
+    tail_padding_alignment_in_elements: i64,
+    index_primitive_type: PrimitiveType,
+    element_primitive_type: PrimitiveType,
+    element_size_in_bits: i64,
+    memory_space: i64,
+    physical_shape: Option<Box<Shape>>,
+    dynamic_shape_metadata_prefix_bytes: i64
+  ) -> Self
+  {
+    let mut result = Layout {
+      dim_attributes: Vec::new(),
+      n_dim_level_types: dim_level_types.len(),
+      n_dim_unique: dim_unique.len(),
+      n_dim_ordered: dim_orered.len(),
+      element_size_in_bits: element_size_in_bits,
+      index_primitive_type: index_primitive_type,
+      pointer_primitive_type: element_primitive_type,
+      memory_space: memory_space,
+      dynamic_shape_metadata_prefix_bytes: dynamic_shape_metadata_prefix_bytes,
+      minor_to_major: minor_to_major,
+      tiles: tiles,
+      physical_shape: physical_shape,
+      tail_padding_alignment_in_elements: tail_padding_alignment_in_elements
+    };
+
+    let n_attributes = max(result.n_dim_level_types, 
+      max(result.n_dim_unique, result.n_dim_ordered));
+    result.dim_attributes.resize(n_attributes, DimInfo::new());
+    for i in 0..n_attributes {
+      if i < result.n_dim_level_types {
+        result.dim_attributes[i].dim_level_type = dim_level_types[i].clone();
+      }
+      if i < result.n_dim_unique {
+        result.dim_attributes[i].dim_unique = dim_unique[i];
+      }
+      if i < result.n_dim_ordered {
+        result.dim_attributes[i].dim_orderd = dim_orered[i];
+      }
+    }
+
+    result
   }
 
   pub fn print(&self, printer: &mut dyn Printer) {
@@ -173,6 +242,12 @@ impl Layout {
       for tile in &self.tiles {
         tile.print(printer);
       }
+    }
+    if self.tail_padding_alignment_in_elements() != 1 {
+      print_colon(printer);
+      printer.append(&"L(".to_string());
+      printer.append(&self.tail_padding_alignment_in_elements.to_string());
+      printer.append(&")".to_string());
     }
     if self.index_primitive_type() != PrimitiveType::Invalid {
       print_colon(printer);
@@ -250,7 +325,7 @@ impl Layout {
     self.n_dim_level_types = 0;
   }
 
-  pub fn dim_unique_size(&self) -> i64 {
+  pub fn dim_unique_size(&self) -> usize {
     self.n_dim_unique
   }
 
@@ -270,7 +345,7 @@ impl Layout {
     self.n_dim_unique += 1;
   }
 
-  pub fn dim_ordered_size(&self) -> i64 {
+  pub fn dim_ordered_size(&self) -> usize {
     self.n_dim_ordered
   }
 
@@ -325,6 +400,10 @@ impl Layout {
 
   pub fn tiles(&self, index: usize) -> &Tile {
     &self.tiles[index]
+  }
+
+  pub fn tiles_vec(&self) -> &Vec<Tile> {
+    &self.tiles
   }
 
   pub fn add_tiles(&mut self, tile: Tile) {
@@ -384,6 +463,10 @@ impl Layout {
 
   pub fn physical_shape(&self) -> &Option<Box<Shape>> {
     &self.physical_shape
+  }
+
+  pub fn mutable_physical_shape(&mut self) -> &mut Option<Box<Shape>> {
+    &mut self.physical_shape
   }
 
   pub fn clear_physical_shape() {}
@@ -481,41 +564,41 @@ impl LayoutEqual {
           return false;
         }
       }
-      if lhs.minor_to_major_vec() != rhs.minor_to_major_vec() {
+    }
+    if lhs.minor_to_major_vec() != rhs.minor_to_major_vec() {
+      return false;
+    }
+    if !self.ignore_tiles && lhs.tiles != rhs.tiles {
+      return false;
+    }
+    if !self.ignore_tail_padding_alignment_in_elements &&
+      lhs.tail_padding_alignment_in_elements() != rhs.tail_padding_alignment_in_elements() {
         return false;
-      }
-      if !self.ignore_tiles && lhs.tiles != rhs.tiles {
-        return false;
-      }
-      if !self.ignore_tail_padding_alignment_in_elements &&
-        lhs.tail_padding_alignment_in_elements() != rhs.tail_padding_alignment_in_elements() {
+    }
+    if !self.ignore_index_primitive_type &&
+      lhs.index_primitive_type() != rhs.index_primitive_type() {
+      return false;
+    }
+    if !self.ignore_pointer_primitive_type &&
+      lhs.pointer_primitive_type() != rhs.pointer_primitive_type() {
+      return false;
+    }
+    if !self.ignore_element_size &&
+      lhs.element_size_in_bits() != rhs.element_size_in_bits() {
+      return false;
+    }
+    if !self.ignore_memory_space &&
+      lhs.memory_space() != rhs.memory_space() {
+      return false;
+    }
+    if !self.ignore_physical_shape {
+      if lhs.has_physical_shape() || rhs.has_physical_shape() {
+        if !lhs.has_physical_shape() || !rhs.has_physical_shape() {
           return false;
-      }
-      if !self.ignore_index_primitive_type &&
-        lhs.index_primitive_type() != rhs.index_primitive_type() {
-        return false;
-      }
-      if !self.ignore_pointer_primitive_type &&
-        lhs.pointer_primitive_type() != rhs.pointer_primitive_type() {
-        return false;
-      }
-      if !self.ignore_element_size &&
-        lhs.element_size_in_bits() != rhs.element_size_in_bits() {
-        return false;
-      }
-      if !self.ignore_memory_space &&
-        lhs.memory_space() != rhs.memory_space() {
-        return false;
-      }
-      if !self.ignore_physical_shape {
-        if lhs.has_physical_shape() || rhs.has_physical_shape() {
-          if !lhs.has_physical_shape() || !rhs.has_physical_shape() {
-            return false;
-          }
-          //if lhs.physical_shape() != rhs.physical_shape() {
-            //return false;
-          //}
         }
+        //if lhs.physical_shape() != rhs.physical_shape() {
+          //return false;
+        //}
       }
     }
     true
@@ -565,5 +648,140 @@ impl LayoutEqual {
     self.ignore_element_size = true;
     self.ignore_tail_padding_alignment_in_elements = true;
     self
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_to_string() {
+    assert_eq!(Layout::new().to_string(), "{}");
+    assert_eq!(Layout::new_from_minor_to_major(vec![4, 5, 6]).to_string(), "{4,5,6}");
+
+    let layout = Layout::new_from(
+      vec![3, 2, 1, 0],
+      vec![], vec![], vec![],
+      vec![Tile::new(vec![42, 123]), Tile::new(vec![4, 5])],
+      1,
+      PrimitiveType::Invalid,
+      PrimitiveType::Invalid,
+      0, 0, None,
+      0);
+    assert_eq!(layout.to_string(), "{3,2,1,0:T(42,123)(4,5)}");
+
+    let mut layout1 = layout.clone();
+    layout1.set_tail_padding_alignment_in_elements(100);
+    layout1.set_element_size_in_bits(42);
+    assert_eq!(layout1.to_string(), "{3,2,1,0:T(42,123)(4,5)L(100)E(42)}");
+
+    let mut layout2 = layout.clone();
+    layout2.set_memory_space(3);
+    assert_eq!(layout2.to_string(), "{3,2,1,0:T(42,123)(4,5)S(3)}");
+  }
+
+  #[test]
+  fn test_equality() {
+    assert_eq!(LayoutEqual::new().equal(
+      &Layout::new(),
+      &Layout::new()),
+      true);
+    assert_eq!(LayoutEqual::new().equal(
+      &Layout::new_from_minor_to_major(vec![]),
+      &Layout::new_from_minor_to_major(vec![])),
+      true);
+    assert_eq!(LayoutEqual::new().equal(
+      &Layout::new(),
+      &Layout::new_from_minor_to_major(vec![])),
+      true);
+    assert_eq!(LayoutEqual::new().equal(
+      &Layout::new_from_minor_to_major(vec![0, 1, 2, 3]),
+      &Layout::new_from_minor_to_major(vec![0, 1, 2, 3])),
+      true);
+    assert_eq!(LayoutEqual::new().equal(
+      &Layout::new_from_minor_to_major(vec![0, 1, 2, 3]),
+      &Layout::new_from_minor_to_major(vec![0, 1, 2])),
+      false);
+
+    let mut l1 = Layout::new_from(vec![0, 1, 2],
+      vec![], vec![], vec![],
+      vec![Tile::new(vec![42, 44])],
+      1, PrimitiveType::Invalid,
+      PrimitiveType::Invalid, 0, 0,
+      None, 0);
+
+    let mut l2 = Layout::new_from(vec![0, 1, 2],
+      vec![], vec![], vec![],
+      vec![Tile::new(vec![42, 44])],
+      1, PrimitiveType::Invalid,
+      PrimitiveType::Invalid, 0, 0,
+      None, 0);
+    assert_eq!(LayoutEqual::new().equal(&l1, &l2), true);
+
+    l2 = Layout::new_from(vec![0, 1, 2],
+      vec![], vec![], vec![],
+      vec![Tile::new(vec![42, 45])],
+      1, PrimitiveType::Invalid,
+      PrimitiveType::Invalid, 0, 0,
+      None, 0);
+    assert_eq!(LayoutEqual::new().equal(&l1, &l2), false);
+    assert_eq!(LayoutEqual::new().equal(&l1,
+      &Layout::new_from_minor_to_major(vec![0, 1, 2, 3])),
+      false);
+
+    l1 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
+    l1.set_element_size_in_bits(33);
+    l2 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
+    l2.set_element_size_in_bits(33);
+    assert_eq!(LayoutEqual::new().equal(&l1, &l2), true);
+
+    l2 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
+    l2.set_element_size_in_bits(7);
+    assert_eq!(LayoutEqual::new().equal(&l1, &l2), false);
+
+    l1 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
+    l1.set_memory_space(3);
+    l2 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
+    l2.set_memory_space(3);
+    assert_eq!(LayoutEqual::new().equal(&l1, &l2), true);
+
+    l1 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
+    l1.set_memory_space(1);
+    assert_eq!(LayoutEqual::new().equal(&l1, &l2), false);
+
+    l1 = Layout::new_from(vec![0, 1, 2],
+      vec![], vec![], vec![],
+      vec![Tile::new(vec![42, 44])],
+      1, PrimitiveType::Invalid,
+      PrimitiveType::Invalid, 0, 0,
+      None, 0);
+    l2 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
+    assert_eq!(LayoutEqual::new().ignore_tiles().equal(&l1, &l2), true);
+
+    l1 = Layout::new_from(vec![0, 1, 2],
+      vec![], vec![], vec![],vec![],
+      1, PrimitiveType::Invalid,
+      PrimitiveType::Invalid, 32, 0,
+      None, 0);
+
+    l2 = Layout::new_from(vec![0, 1, 2],
+      vec![], vec![], vec![], vec![],
+      1, PrimitiveType::Invalid,
+      PrimitiveType::Invalid, 1, 0,
+      None, 0);
+    assert_eq!(LayoutEqual::new().equal(&l1, &l2), false);
+
+    l1 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
+    l1.set_element_size_in_bits(32);
+    l2 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
+    l2.set_element_size_in_bits(1);
+    assert_eq!(LayoutEqual::new().ignore_element_size().equal(&l1, &l2), true);
+
+    l1 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
+    l1.set_memory_space(1);
+    l2 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
+    l2.set_memory_space(3);
+    assert_eq!(LayoutEqual::new().ignore_memory_space().equal(&l1, &l2), true);
   }
 }
