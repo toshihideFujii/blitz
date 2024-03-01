@@ -48,6 +48,16 @@ impl Shape {
     }
   }
 
+  pub fn new_from_type(t: &PrimitiveType) -> Self {
+    Shape {
+      element_type: t.clone(),
+      dimensions: Vec::new(),
+      dynamic_dimensions: Vec::new(),
+      tuple_shapes: Vec::new(),
+      layout: None,
+    }
+  }
+
   pub fn print() {}
 
   pub fn to_string(&self, print_layout: bool) -> String {
@@ -244,7 +254,7 @@ impl Shape {
     &self.layout
   }
 
-  pub fn mutable_lauout(&mut self) -> &mut Option<Layout> {
+  pub fn mutable_layout(&mut self) -> &mut Option<Layout> {
     assert!(self.is_array());
     if !self.has_layout() {
       self.layout = Some(Layout::new());
@@ -263,7 +273,7 @@ impl Shape {
   pub fn clear_dynamic_dimensions(&mut self) {
     if !self.is_tuple() {
       if self.is_dynamic() {
-        self.mutable_lauout().as_mut().unwrap()
+        self.mutable_layout().as_mut().unwrap()
           .set_dynamic_shape_metadata_prefix_bytes(0);
       }
       return;
@@ -288,7 +298,7 @@ impl Shape {
 
   pub fn add_minor_to_major(&mut self, value: i64) {
     let minor_to_major =
-      self.mutable_lauout().as_mut().unwrap().minor_to_major_vec_mut();
+      self.mutable_layout().as_mut().unwrap().minor_to_major_vec_mut();
     minor_to_major.push(value);
   }
 }
@@ -333,6 +343,8 @@ impl ShapeEqual {
             return false;
           }
         }
+      } else {
+        return false;
       }
     } else if !lhs.is_array() {
       return lhs.element_type() == rhs.element_type();

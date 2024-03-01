@@ -84,6 +84,7 @@ pub fn bit_width(_t: &PrimitiveType) -> i64 {
   0 // TODO
 }
 
+// Returns the number of bytes in the representation for a given type.
 pub fn byte_width(t: &PrimitiveType) -> i64 {
   match t {
     PrimitiveType::Pred => return 2, // ?
@@ -92,10 +93,13 @@ pub fn byte_width(t: &PrimitiveType) -> i64 {
     PrimitiveType::BF16 => return 2, // 16 / 8
     PrimitiveType::F16 => return 2, // 16 / 8
     PrimitiveType::F32 => return 4, // 32 / 8
+    PrimitiveType::F64 => return 8, // 64 / 8
+    PrimitiveType::C64 => return 8, // 64 / 8
+    PrimitiveType::C128 => return 16, // 128 / 8
     PrimitiveType::Token => return 0,
     PrimitiveType::Tuple => unreachable!("Tuple is an invalid type for bit_width."),
     PrimitiveType::OpaqueType => unreachable!("OpaqueType is an invalid type for bit_width."),
-    _ => return 0,   
+    _ => unreachable!("Unhandled primitive type."),   
   };
 }
 
@@ -187,4 +191,69 @@ impl PrimitiveTypeNameGenerator {
 pub fn lowercase_primitive_type_name(t: &PrimitiveType) -> String {
   let gen = PrimitiveTypeNameGenerator::new();
   gen.lowercase_name(t)
+}
+
+pub fn integral_type_switch<R, F>(f: F, t: &PrimitiveType) -> R
+  where F: Fn(&PrimitiveType) -> R
+{
+  match t {
+    PrimitiveType::S4 => return f(&PrimitiveType::S4),
+    PrimitiveType::S8 => return f(&PrimitiveType::S8),
+    PrimitiveType::S16 => return f(&PrimitiveType::S16),
+    PrimitiveType::S32 => return f(&PrimitiveType::S32),
+    PrimitiveType::S64 => return f(&PrimitiveType::S64),
+    PrimitiveType::U4 => return f(&PrimitiveType::U4),
+    PrimitiveType::U8 => return f(&PrimitiveType::U8),
+    PrimitiveType::U16 => return f(&PrimitiveType::U16),
+    PrimitiveType::U32 => return f(&PrimitiveType::U32),
+    PrimitiveType::U64 => return f(&PrimitiveType::U64),
+    _ => unreachable!("Not an integral data type: {:?}.", t)
+  }
+}
+
+pub fn floating_point_type_switch<R, F>(f: F, t: &PrimitiveType) -> R
+  where F: Fn(&PrimitiveType) -> R
+{
+  match t {
+    PrimitiveType::F8E4M3FN => return f(&PrimitiveType::F8E4M3FN),
+    PrimitiveType::F8E4M3B11FNUZ => return f(&PrimitiveType::F8E4M3B11FNUZ),
+    PrimitiveType::F8E4M3FNUZ => return f(&PrimitiveType::F8E4M3FNUZ),
+    PrimitiveType::F8E5M2 => return f(&PrimitiveType::F8E5M2),
+    PrimitiveType::F8E5M2FNUZ => return f(&PrimitiveType::F8E5M2FNUZ),
+    PrimitiveType::F16 => return f(&PrimitiveType::F16),
+    PrimitiveType::BF16 => return f(&PrimitiveType::BF16),
+    PrimitiveType::F32 => return f(&PrimitiveType::F32),
+    PrimitiveType::F64 => return f(&PrimitiveType::F64),
+    _ => unreachable!("Not an floating point data type: {:?}.", t)
+  }
+}
+
+pub fn complex_type_switch<R, F>(f: F, t: &PrimitiveType) -> R
+  where F: Fn(&PrimitiveType) -> R
+{
+  match t {
+    PrimitiveType::C64 => return f(&PrimitiveType::C64),
+    PrimitiveType::C128 => return f(&PrimitiveType::C128),
+    _ => unreachable!("Not a complex data type: {:?}.", t)
+  }
+}
+
+pub fn array_type_switch<R, F>(f: F, t: &PrimitiveType) -> R
+  where F: Fn(&PrimitiveType) -> R
+{
+  if is_array_type(t) {
+    if is_floating_point_type(t) {
+      return floating_point_type_switch(f, t);
+    }
+    if is_integral_type(t) {
+      return integral_type_switch(f, t);
+    }
+    if is_complex_type(t) {
+      return complex_type_switch(f, t);
+    }
+    if *t == PrimitiveType::Pred {
+      return f(&PrimitiveType::Pred);
+    }
+  }
+  unreachable!("Not an array data type.");
 }

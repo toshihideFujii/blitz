@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::result::Result;
 use crate::{
   blitz_data::{DimLevelType, PrimitiveType},
   layout::{Tile, Layout, LayoutEqual},
@@ -151,7 +152,7 @@ impl LayoutUtil {
     } else if shape.is_array() {
       let dim_size = shape.dimensions_size();
       let minor_to_major =
-        shape.mutable_lauout().as_mut().unwrap().minor_to_major_vec_mut();
+        shape.mutable_layout().as_mut().unwrap().minor_to_major_vec_mut();
       minor_to_major.resize(dim_size, 0);
       set_default_layout_to_container(minor_to_major);
     } else {
@@ -165,111 +166,100 @@ impl LayoutUtil {
   // Theh check is performed for all subshapes as well.
   // If missing layouts are allowed the check does not fail on array shapes
   // without layouts.
-  pub fn validate_layout_in_shape(shape: &Shape, allow_missing_layouts: bool) {
+  pub fn validate_layout_in_shape(
+    shape: &Shape,
+    allow_missing_layouts: bool) -> Result<(), String>
+  {
     if shape.is_tuple() {
       if shape.has_layout() {
-        assert!(false, "Tuple should not have a layout field.");
-        return;
+        return Err("Tuple should not have a layout field.".to_string());
       }
       for subshape in shape.tuple_shapes_vec() {
-        LayoutUtil::validate_layout_in_shape(subshape, allow_missing_layouts);  
+        let result =
+          LayoutUtil::validate_layout_in_shape(subshape, allow_missing_layouts);  
+        if result != Ok(()) { return result; }
       }
+      return Ok(());
     } else if shape.is_array() {
       if !shape.has_layout() {
         if allow_missing_layouts {
-          return;
+          return Ok(());
         }
-        assert!(false, "shape:{:?} does not have a layout.", shape);
-        return;
+        return Err("Shape does not have a layout.".to_string());
       }
-      LayoutUtil::validate_layout_for_shape(
+      return LayoutUtil::validate_layout_for_shape(
         shape.layout().as_ref().unwrap(), shape);
     } else {
       // Token, opaque, etc.
       if shape.has_layout() {
-        assert!(false, "Shape of primitive type should not have a layout.");
-        return;
+        return Err("Shape of primitive type should not have a layout.".to_string());
       }
+      return Ok(());
     }
   }
 
   // Validates that the provided layout satisfies invariants for the given shape.
-  pub fn validate_layout_for_shape(layout: &Layout, shape: &Shape) {
+  pub fn validate_layout_for_shape(
+    layout: &Layout,
+    shape: &Shape) -> Result<(), String>
+  {
     if shape.is_tuple() {
-      assert!(false, "A single layout is not valid for thple shapes.");
-      return;
+      return Err("A single layout is not valid for thple shapes.".to_string());
     }
     if !shape.is_array() {
       if layout.minor_to_major_size() != 0 {
-        assert!(false, "Shape of primitive type should not have a non-trivial lauout.");
+        return Err("Shape of primitive type should not have a non-trivial layout.".to_string());
       }
-      return;
+      return Ok(());
     }
     if layout.minor_to_major_size() != shape.rank() {
-      assert!(false, "Layout minor_to_major field contains {:?} elements,
-        but shape is rank {:?}: {:?}; shape: {:?}",
-        layout.minor_to_major_size(), shape.rank(), layout.minor_to_major_vec(), shape);
-      return;
+      return Err("Layout minor_to_major size is not same as shape's rank.".to_string());
     }
     let mut dimensions_in_layout = vec![false; shape.rank()];
     for i in 0..shape.rank() {
       let dim = layout.minor_to_major(i);
       if dim < 0 || dim >= shape.rank() as i64 {
-        assert!(false, "Layout minor_to_major field has out-of-bounds value: {:?};
-          shape: {:?}.", layout.minor_to_major_vec(), shape);
-        return;
+        return Err("Layout minor_to_major field has out-of-bounds value.".to_string());
       }
       if dimensions_in_layout[dim as usize] {
-        assert!(false, "Layout minor_to_major field has duplicate values: {:?};
-          shape: {:?}.", layout.minor_to_major_vec(), shape);
-        return;
+        return Err("Layout minor_to_major field has duplicate alues.".to_string());
       }
       dimensions_in_layout[dim as usize] = true;
     }
     if layout.dim_level_types_size() > 0 {
       if layout.dim_level_types_size() != shape.rank() {
-        assert!(false, "Layout dim_level_types field contains {:?} elements, but
-          shape is rank {:?}; shape: {:?}", layout.dim_level_types_size(), shape.rank(), shape);
-        return;
+        return Err("Layout dim_level_types size is not same as shape's rank.".to_string());
       }
     }
     if layout.dim_unique_size() > 0 {
       if layout.dim_unique_size() != shape.rank() {
-        assert!(false, "Layout dim_unique field contains {:?} elements, but
-          shape is rank {:?}; shape: {:?}", layout.dim_unique_size(), shape.rank(), shape);
-        return;
+        return Err("Layout dim_unique size is not same as shape's rank.".to_string());
       }
     }
     if layout.dim_ordered_size() > 0 {
       if layout.dim_ordered_size() != shape.rank() {
-        assert!(false, "Layout dim_ordered field contains {:?} elements, but
-          shape is rank {:?}; shape: {:?}", layout.dim_ordered_size(), shape.rank(), shape);
-        return;
+        return Err("Layout dim_ordered size is not same as shape's rank.".to_string());
       }
     }
     if layout.tail_padding_alignment_in_elements() <= 0 {
-      assert!(false, "Layout tail_padding_alignment_in_elements field is <= 0: {:?}.",
-        layout.tail_padding_alignment_in_elements());
-      return;
+      return Err("Layout tail_padding_alignment_in_elements field is <= 0.".to_string());
     }
-
     if LayoutUtil::is_sparse(layout) {
       if layout.tiles_size() > 0 {
-        assert!(false, "Layout has tiles, but the shape is a sparse array: {:?}", shape);
-        return;
+        return Err("Layout has tiles, but the shape is a sparse array.".to_string());
       }
       if layout.has_physical_shape() {
-        ShapeUtil::validate_shape(layout.physical_shape().as_ref().unwrap());
-        // TODO: for each subshape
-        let shape_fn = |subshape: &Shape, _index: usize| {
+        let err =
+          ShapeUtil::validate_shape(layout.physical_shape().as_ref().unwrap());
+        if !err.is_ok() { return err; }
+        let shape_fn =
+          |subshape: &Shape, _index: usize| -> Result<(), String> {
           if subshape.has_layout() &&
             subshape.layout().as_ref().unwrap().has_physical_shape()
           {
-            assert!(false, "Layout has a physical shape, whose layout also has
-              a physical shape: {:?}.", shape);
-            return;
+            return Err("Layout has a physical shape, whose layout also has a physical shape.".to_string());
           }
-          return;
+          return Ok(());
         };
         ShapeUtil::for_each_subshape_with_status(
           &mut layout.physical_shape().as_ref().unwrap(),
@@ -277,38 +267,31 @@ impl LayoutUtil {
         if layout.index_primitive_type() != PrimitiveType::Invalid &&
           !primitive_util::is_unsigned_integral_type(&layout.index_primitive_type())
         {
-          assert!(false, "Index_primitive_type is not an unsigned integer type: {:?}.", shape);
-          return;
+          return Err("Index_primitive_type is not an unsigned integer type.".to_string());
         }
         if layout.pointer_primitive_type() != PrimitiveType::Invalid &&
           !primitive_util::is_unsigned_integral_type(&layout.index_primitive_type())
         {
-          assert!(false, "Pointer_primitive_type is not an unsigned integer type: {:?}.", shape);
-          return;
+          return Err("Pointer_primitive_type is not an unsigned integer type.".to_string());
         }
       }
     } else {
       if layout.index_primitive_type() != PrimitiveType::Invalid {
-        assert!(false, "Layout has a index_primitive_type, but is not a sparse array: {:?}.", shape);
-        return;
+        return Err("Layout has a index_primitive_type, but is not a sparse array.".to_string());
       }
       if layout.pointer_primitive_type() != PrimitiveType::Invalid {
-        assert!(false, "Layout has a pointer_primitive_type, but is not a sparse array: {:?}.", shape);
-        return;
+        return Err("Layout has a pointer_primitive_type, but is not a sparse array.".to_string());
       }
       if layout.has_physical_shape() {
-        assert!(false, "Layout has a physical_shape, but is not a sparse array: {:?}.", shape);
-        return;
+        return Err("Layout has a physical_shape, but is not a sparse array.".to_string());
       }
       for tile in layout.tiles_vec() {
         if tile.dimensions().is_empty() {
-          assert!(false, "Layout has invalid tiles: {:?}.", shape);
-          return;
+          return Err("Layout has invalid tiles.".to_string());
         }
         for dim in tile.dimensions() {
           if *dim == 0 {
-            assert!(false, "Layout has invalid tiles: {:?}.", shape);
-            return;
+            return Err("Layout has invalid tiles.".to_string());
           }
         }
       }
@@ -318,11 +301,10 @@ impl LayoutUtil {
       let dim_unique = LayoutUtil::dim_unique(layout, dim as i64);
       let dim_ordered = LayoutUtil::dim_ordered(layout, dim as i64);
       if !LayoutUtil::validate_dim_level(dim_level_type, dim_unique, dim_ordered) {
-        assert!(false, "Layout dimension {:?} has invalid level encoding;
-          dim_unique: {:?}, dim_ordered: {:?}. {:?}.", dim, dim_unique, dim_ordered, shape);
-        return;
+        return Err("Layout dimension has invalid level encoding.".to_string());
       }
     }
+    Ok(())
   }
 
   // Clears the layout in the given shape. After this function is called,
@@ -508,7 +490,7 @@ impl LayoutUtil {
           assert!(false, "Cannot copy layout from shape: ranks differs.");
           return;
         }
-        LayoutUtil::validate_layout_for_shape(
+        let _ = LayoutUtil::validate_layout_for_shape(
           src.layout().as_ref().unwrap(),
           &dst);
         dst.set_layout(src.layout().as_ref().unwrap().clone());
@@ -1042,15 +1024,178 @@ mod tests {
       vec![], 1,
       0, 0);
 
-    LayoutUtil::validate_layout_in_shape(&shape, false);
-    LayoutUtil::validate_layout_in_shape(&shape, true);
+    assert_eq!(LayoutUtil::validate_layout_in_shape(&shape, false), Ok(()));
+    assert_eq!(LayoutUtil::validate_layout_in_shape(&shape, true), Ok(()));
   }
 
-  fn test_validate_layout_invalid_array_layout() {}
-  fn test_validate_layout_invalid_dim_level_types() {}
-  fn test_validate_layout_missing_array_layout() {}
-  fn test_validate_layout_sparse() {}
-  fn test_validate_layout_tuple_subshapes_with_missing_layouts() {}
+  #[test]
+  fn test_validate_layout_invalid_array_layout() {
+    let mut shape =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![2, 3]);
+    let layout = LayoutUtil::make_layout(
+      vec![0, 1, 2], vec![], vec![],
+      vec![], vec![], 1,
+      PrimitiveType::Invalid,
+      PrimitiveType::Invalid,
+      0, 0,
+      None, 0);
+
+    shape.set_layout(layout);
+    let result =
+      LayoutUtil::validate_layout_in_shape(&shape, false);
+    assert_eq!(result.err(),
+      Some("Layout minor_to_major size is not same as shape's rank.".to_string()));
+
+    let result =
+      LayoutUtil::validate_layout_in_shape(&shape, true);
+    assert_eq!(result.err(),
+      Some("Layout minor_to_major size is not same as shape's rank.".to_string()));
+  }
+
+  #[test]
+  fn test_validate_layout_invalid_dim_level_types() {
+    let mut shape =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![2, 3]);
+    let layout = LayoutUtil::make_layout(
+      vec![0, 1], vec![], vec![],
+      vec![], vec![], 1,
+      PrimitiveType::Invalid,
+      PrimitiveType::Invalid,
+      0, 0,
+      None, 0);
+    
+    shape.set_layout(layout);
+    let l = shape.mutable_layout().as_mut().unwrap();
+    l.add_dim_level_type(DimLevelType::Dense);
+    l.add_dim_level_type(DimLevelType::Dense);
+    l.add_dim_level_type(DimLevelType::Dense);
+
+    let result =
+      LayoutUtil::validate_layout_in_shape(&shape, false);
+    assert_eq!(result.err(),
+      Some("Layout dim_level_types size is not same as shape's rank.".to_string()));
+
+    let result =
+      LayoutUtil::validate_layout_in_shape(&shape, true);
+    assert_eq!(result.err(),
+      Some("Layout dim_level_types size is not same as shape's rank.".to_string()));
+  }
+
+  #[test]
+  fn test_validate_layout_missing_array_layout() {
+    let mut shape =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![2, 3]);
+    LayoutUtil::clear_layout(&mut shape);
+
+    let result =
+      LayoutUtil::validate_layout_in_shape(&shape, false);
+    assert_eq!(result.err(), Some("Shape does not have a layout.".to_string()));
+
+    let result =
+      LayoutUtil::validate_layout_in_shape(&shape, true);
+    assert_eq!(result.err(), None);
+  }
+
+  #[test]
+  fn test_validate_layout_sparse() {
+    let mut shape =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![2, 3]);
+    let layout =
+      LayoutUtil::make_layout(vec![1, 0],
+      vec![DimLevelType::Dense, DimLevelType::Compressed],
+      vec![], vec![],
+      vec![Tile::new(vec![10, 10])], 1, 
+      PrimitiveType::Invalid, 
+      PrimitiveType::Invalid,
+      0, 0,
+      None, 0);
+    shape.set_layout(layout);
+    
+    let result =
+      LayoutUtil::validate_layout_in_shape(&shape, false);
+    assert_eq!(result.err(),
+      Some("Layout has tiles, but the shape is a sparse array.".to_string()));
+    shape.mutable_layout().as_mut().unwrap()
+      .clear_tiles();
+    assert_eq!(LayoutUtil::validate_layout_in_shape(&shape, false), Ok(()));
+
+    let s1 = ShapeUtil::make_shape(&PrimitiveType::F32, vec![6]);
+    shape.mutable_layout().as_mut().unwrap()
+      .set_physical_shape(s1);
+    assert_eq!(LayoutUtil::validate_layout_in_shape(&shape, false), Ok(()));
+
+    let s2 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![10]);
+    shape.mutable_layout().as_mut().unwrap()
+      .mutable_physical_shape().as_mut().unwrap()
+      .mutable_layout().as_mut().unwrap()
+      .set_physical_shape(s2);
+    let result =
+      LayoutUtil::validate_layout_in_shape(&shape, false);
+    assert_eq!(result.err(),
+      Some("Layout has a physical_shape, but is not a sparse array.".to_string()));
+
+    shape.mutable_layout().as_mut().unwrap()
+      .mutable_physical_shape().as_mut().unwrap()
+      .clear_layout();
+    shape.mutable_layout().as_mut().unwrap()
+      .clear_dim_level_types();
+    let result =
+    LayoutUtil::validate_layout_in_shape(&shape, false);
+    assert_eq!(result.err(),
+      Some("Layout has a physical_shape, but is not a sparse array.".to_string()));
+
+    let layout2 =
+      LayoutUtil::make_layout(vec![1, 0],
+      vec![DimLevelType::Dense, DimLevelType::Dense],
+      vec![true, false], vec![],
+      vec![], 1, 
+      PrimitiveType::Invalid, 
+      PrimitiveType::Invalid,
+      0, 0,
+      None, 0);
+    shape.set_layout(layout2);
+
+    let result =
+    LayoutUtil::validate_layout_in_shape(&shape, false);
+    assert_eq!(result.err(),
+      Some("Layout dimension has invalid level encoding.".to_string()));
+  }
+
+  #[test]
+  fn test_validate_layout_tuple_subshapes_with_missing_layouts() {
+    let sub_1_1_1 =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![1, 2]);
+    let sub_1_1 = ShapeUtil::make_tuple_shape(vec![sub_1_1_1]);
+    let mut sub_1_2 =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![1, 2]);
+    LayoutUtil::clear_layout(&mut sub_1_2);
+    let sub_1 = ShapeUtil::make_tuple_shape(vec![sub_1_1, sub_1_2]);
+    let mut sub_2_1 =
+      ShapeUtil::make_shape(&PrimitiveType::F32, vec![9]);
+    LayoutUtil::clear_layout(&mut sub_2_1);
+    let sub_2 = ShapeUtil::make_tuple_shape(vec![sub_2_1]);
+    let mut shape = ShapeUtil::make_tuple_shape(vec![sub_1, sub_2]);
+
+    let mut result =
+      LayoutUtil::validate_layout_in_shape(&shape, false);
+    assert_eq!(result.err(), Some("Shape does not have a layout.".to_string()));
+
+    result = LayoutUtil::validate_layout_in_shape(&shape, true);
+    assert_eq!(result, Ok(()));
+
+    shape.mutable_tuple_shapes(1).mutable_tuple_shapes(0)
+      .set_layout(LayoutUtil::make_layout(vec![0, 2, 3],
+        vec![], vec![], vec![],
+        vec![], 1,
+        PrimitiveType::Invalid,
+        PrimitiveType::Invalid,
+        0, 0,
+        None, 0));
+
+    result = LayoutUtil::validate_layout_in_shape(&shape, true);
+    assert_eq!(result.err(),
+      Some("Layout minor_to_major size is not same as shape's rank.".to_string()));
+  }
 
   #[test]
   fn test_move_dim_to_major() {
@@ -1103,10 +1248,10 @@ mod tests {
       ShapeUtil::make_shape(&PrimitiveType::F32, vec![1, 2]);
     assert_eq!(LayoutUtil::has_custom_element_size_in_bits(&shape), false);
 
-    shape.mutable_lauout().as_mut().unwrap().set_element_size_in_bits(0);
+    shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(0);
     assert_eq!(LayoutUtil::has_custom_element_size_in_bits(&shape), false);
 
-    shape.mutable_lauout().as_mut().unwrap().set_element_size_in_bits(32);
+    shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(32);
     assert_eq!(LayoutUtil::has_custom_element_size_in_bits(&shape), true);
 
     let s1 = ShapeUtil::make_shape(&PrimitiveType::F32, vec![1, 2]);
@@ -1117,7 +1262,7 @@ mod tests {
     assert_eq!(LayoutUtil::has_custom_element_size_in_bits(&tuple_shape), false);
 
     ShapeUtil::get_mutable_subshape(&mut tuple_shape, vec![0, 1])
-      .mutable_lauout().as_mut().unwrap()
+      .mutable_layout().as_mut().unwrap()
       .set_element_size_in_bits(32);
     assert_eq!(LayoutUtil::has_custom_element_size_in_bits(&tuple_shape), true);
   }
