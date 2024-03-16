@@ -44,6 +44,7 @@ impl ShapeUtil {
 
   pub fn elements_in_recursive() {}
 
+  // Returns true if shape has the primitive type, recurses through tuples.
   pub fn has_primitive_type(shape: &Shape, primitive_type: &PrimitiveType) -> bool {
     if &shape.element_type() == primitive_type {
       return true;
@@ -56,7 +57,16 @@ impl ShapeUtil {
     false
   }
 
-  pub fn is_zero_element_array() {}
+  // Returns true if shape is an array with zero elements.
+  pub fn is_zero_element_array(shape: &Shape) -> bool {
+    if !shape.is_array() { return false; }
+    if shape.dimensions_size() == 0 { return false; }
+
+    for i in shape.dimensions_vec() {
+      if *i == 0 { return true; }
+    }
+    false
+  }
 
   // Returns the number of bytes required for an allocation of shape.
   // The 'pointer_size' parameter is used for calculating the size of
@@ -440,8 +450,6 @@ impl ShapeUtil {
     result
   }
 
-  pub fn make_tuple_shape_with_ptrs() {}
-
   // Creates a tuple from a slice of element shapes within the tuple.
   // If only one shape is passed, returns that.
   pub fn make_maybe_tuple_shape(shapes: Vec<Shape>) -> Shape {
@@ -801,6 +809,7 @@ impl ShapeUtil {
     true
   }
 
+  // Returns a particular nested shape within the given shape argument.s
   pub fn get_subshape(shape: &Shape, index_vec: Vec<i64>) -> &Shape {
     let mut return_shape: &Shape = shape;
     for i in index_vec {
@@ -1596,5 +1605,215 @@ use super::*;
     let t7_2 = ShapeUtil::make_tuple_shape(vec![]);
     let t7 = ShapeUtil::make_tuple_shape(vec![t7_1, t7_2]);
     assert_eq!(ShapeUtil::is_nested_tuple(&t7), true);
+  }
+
+  #[test]
+  fn test_elements_in() {
+    let s1 = ShapeUtil::elements_in(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![]));
+    assert_eq!(s1, 1);
+
+    let s2 = ShapeUtil::elements_in(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![0]));
+    assert_eq!(s2, 0);
+
+    let s3 = ShapeUtil::elements_in(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![1]));
+    assert_eq!(s3, 1);
+
+    let s4 = ShapeUtil::elements_in(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![1, 1]));
+    assert_eq!(s4, 1);
+
+    let s5 = ShapeUtil::elements_in(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![2]));
+    assert_eq!(s5, 2);
+
+    let s6 = ShapeUtil::elements_in(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![2, 1]));
+    assert_eq!(s6, 2);
+
+    let s7 = ShapeUtil::elements_in(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![3, 5]));
+    assert_eq!(s7, 15);
+
+    let s8 = ShapeUtil::elements_in(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![3, 0, 5]));
+    assert_eq!(s8, 0);
+
+    let s9 = ShapeUtil::elements_in(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![0, 3, 0]));
+    assert_eq!(s9, 0);
+
+    let s10 = ShapeUtil::elements_in(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![1, 3, 5]));
+    assert_eq!(s10, 15);
+
+    let s11 = ShapeUtil::elements_in(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![13, 17]));
+    assert_eq!(s11, 221);
+  }
+
+  #[test]
+  fn test_has_primitive_type() {
+    let s1 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![]);
+    assert_eq!(ShapeUtil::has_primitive_type(&s1, &PrimitiveType::S32), true);
+
+    let s2 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![]);
+    assert_eq!(ShapeUtil::has_primitive_type(&s2, &PrimitiveType::S16), false);
+
+    let s3 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![0]);
+    assert_eq!(ShapeUtil::has_primitive_type(&s3, &PrimitiveType::S32), true);
+
+    let s4 = ShapeUtil::make_tuple_shape(vec![]);
+    assert_eq!(ShapeUtil::has_primitive_type(&s4, &PrimitiveType::S32), false);
+
+    let s5_1 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![]);
+    let s5_2 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![]);
+    let s5 = ShapeUtil::make_tuple_shape(vec![s5_1, s5_2]);
+    assert_eq!(ShapeUtil::has_primitive_type(&s5, &PrimitiveType::S32), true);
+
+    let s6_1 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![]);
+    let s6_2_1 = ShapeUtil::make_shape(&PrimitiveType::S16, vec![]);
+    let s6_2 = ShapeUtil::make_tuple_shape(vec![s6_2_1]);
+    let s6 = ShapeUtil::make_tuple_shape(vec![s6_1, s6_2]);
+    assert_eq!(ShapeUtil::has_primitive_type(&s6, &PrimitiveType::S16), true);
+  }
+
+  #[test]
+  fn test_is_zero_element_array() {
+    let s1 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s1), false);
+
+    let s2 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![0]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s2), true);
+
+    let s3 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![1]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s3), false);
+
+    let s4 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![1, 1]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s4), false);
+
+    let s5 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![2]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s5), false);
+
+    let s6 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![2, 1]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s6), false);
+
+    let s7 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![3, 5]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s7), false);
+
+    let s8 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![3, 0, 5]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s8), true);
+
+    let s9 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![0, 3, 0]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s9), true);
+
+    let s10 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![1, 3, 5]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s10), false);
+
+    let s11 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![13, 17]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s11), false);
+
+    let s12 = ShapeUtil::make_nil();
+    assert_eq!(ShapeUtil::is_zero_element_array(&s12), false);
+
+    let s13 = ShapeUtil::make_tuple_shape(vec![]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s13), false);
+
+    let s14_1 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![0, 3, 0]);
+    let s14 = ShapeUtil::make_tuple_shape(vec![s14_1]);
+    assert_eq!(ShapeUtil::is_zero_element_array(&s14), false);
+  }
+
+  #[test]
+  fn test_same_dimensions() {
+    assert_eq!(ShapeUtil::same_dimensions(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![]),
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![])), true);
+
+    assert_eq!(ShapeUtil::same_dimensions(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![]),
+      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![])), true);
+
+    assert_eq!(ShapeUtil::same_dimensions(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![1]),
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![1])), true);
+
+    assert_eq!(ShapeUtil::same_dimensions(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![0]),
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![0])), true);
+
+    assert_eq!(ShapeUtil::same_dimensions(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![2]),
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![2])), true);
+
+    assert_eq!(ShapeUtil::same_dimensions(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![1]),
+      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![2])), false);
+
+    assert_eq!(ShapeUtil::same_dimensions(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![0, 0]),
+      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![0])), false);
+
+    assert_eq!(ShapeUtil::same_dimensions(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![1]),
+      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![1, 1])), false);
+
+    assert_eq!(ShapeUtil::same_dimensions(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![]),
+      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![1])), false);
+
+    assert_eq!(ShapeUtil::same_dimensions(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![1]),
+      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![1, 0])), false);
+
+    assert_eq!(ShapeUtil::same_dimensions(
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![1, 1]),
+      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![1, 2])), false);
+  }
+
+  #[test]
+  fn test_get_subshape() {
+    let mut array_shape = ShapeUtil::make_shape(
+      &PrimitiveType::S32, vec![42, 42, 123]);
+    assert_eq!(ShapeEqual::new().equal(&array_shape,
+      &ShapeUtil::get_subshape(&array_shape, vec![])), true);
+    
+    let original = array_shape.clone();
+    let sub = ShapeUtil::get_mutable_subshape(&mut array_shape, vec![]);
+    assert_eq!(ShapeEqual::new().equal(&original, sub), true);
+
+    let tuple_shape = ShapeUtil::make_tuple_shape(
+      vec![array_shape.clone(), array_shape.clone(), array_shape.clone()]);
+    assert_eq!(ShapeEqual::new().equal(
+      ShapeUtil::get_subshape(&tuple_shape, vec![]), &tuple_shape), true);
+    assert_eq!(ShapeEqual::new().equal(
+      ShapeUtil::get_subshape(&tuple_shape, vec![0]), &array_shape), true);
+    assert_eq!(ShapeEqual::new().equal(
+      ShapeUtil::get_subshape(&tuple_shape, vec![1]), &array_shape), true);
+    assert_eq!(ShapeEqual::new().equal(
+      ShapeUtil::get_subshape(&tuple_shape, vec![2]), &array_shape), true);
+
+    let nested_tuple_shape = ShapeUtil::make_tuple_shape(vec![
+      array_shape.clone(),
+      ShapeUtil::make_tuple_shape(vec![array_shape.clone(), array_shape.clone()]),
+      ShapeUtil::make_tuple_shape(vec![
+        ShapeUtil::make_tuple_shape(vec![
+          array_shape.clone(), array_shape.clone()
+        ]),
+        array_shape.clone()
+      ])
+    ]);
+    assert_eq!(ShapeEqual::new().equal(&nested_tuple_shape,
+      &ShapeUtil::get_subshape(&nested_tuple_shape, vec![])), true);
+    assert_eq!(ShapeEqual::new().equal(&array_shape,
+      &ShapeUtil::get_subshape(&nested_tuple_shape, vec![0])), true);
+    assert_eq!(ShapeEqual::new().equal(
+      &ShapeUtil::make_tuple_shape(vec![array_shape.clone(), array_shape.clone()]),
+      &ShapeUtil::get_subshape(&nested_tuple_shape, vec![1])), true);
+    assert_eq!(ShapeEqual::new().equal(
+      &ShapeUtil::make_tuple_shape(vec![array_shape.clone(), array_shape.clone()]),
+      &ShapeUtil::get_subshape(&nested_tuple_shape, vec![2, 0])), true);
   }
 }

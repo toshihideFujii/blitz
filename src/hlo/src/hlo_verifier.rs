@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use crate::hlo_instruction::HloInstruction;
+
 pub struct HloVerifierOpts {
   layout_sensitive: bool,
   allow_mixed_precision: bool,
@@ -92,5 +94,87 @@ impl HloVerifierOpts {
 pub struct ShapeVerifier {}
 
 impl ShapeVerifier {
-    
+  pub fn new() {}
+  pub fn verify_entry_computation_layout() {}
+  pub fn preprocess(_hlo: HloInstruction) {}
+
+  pub fn handle_elementwise_unary() {}
+  pub fn handle_elementwise_bynary() {}
+  pub fn handle_clamp() {}
+  pub fn handle_select() {}
+  pub fn handle_concatenate() {}
+  pub fn handle_iota() {}
+  pub fn handle_convert() {}
+  pub fn handle_bitcast_convert() {}
+  pub fn handle_stochastic_convert() {}
+  pub fn handle_copy() {}
+  pub fn handle_dot() {}
+  pub fn handle_convolution() {}
+  pub fn handle_fft() {}
+  pub fn handle_cholsky() {}
+  pub fn handle_triangular_solve() {}
+  pub fn handle_all_gather() {}
+  pub fn handle_all_gather_start() {}
+  pub fn handle_all_gather_done() {}
+  pub fn handle_all_reduce() {}
+  pub fn handle_all_reduce_start() {}
+  pub fn handle_all_reduce_done() {}
+  pub fn handle_all_to_all() {}
+  pub fn handle_collective_permute() {}
+  pub fn handle_collective_permute_start() {}
+  pub fn handle_collective_permute_done() {}
+  pub fn handle_partition_id() {}
+  pub fn handle_replica_id() {}
+  pub fn handle_reduce_precision() {}
+  pub fn handle_infeed() {}
+  pub fn handle_optimization_barrier() {}
+  pub fn handle_outfeed() {}
+  pub fn handle_rng() {}
+  pub fn handle_rng_bit_generator() {}
+  pub fn handle_rng_get_and_update_state() {}
+  pub fn handle_reverse() {}
+  pub fn handle_sort() {}
+  pub fn handle_top_k() {}
+  pub fn handle_constant() {}
+  pub fn handle_get_tuple_element() {}
+  pub fn handle_reduce() {}
+  pub fn handle_bitcast() {}
+  pub fn handle_broadcast() {}
+  pub fn handle_reshape() {}
+  pub fn handle_dynamic_reshape() {}
+  pub fn handle_transpose() {}
+  pub fn handle_parameter() {}
+  pub fn handle_fusion() {}
+  pub fn handle_call() {}
+  pub fn handle_custom_call() {}
+  pub fn handle_slice() {}
+  pub fn handle_dynamic_slice() {}
+  pub fn handle_dynamic_update_slice() {}
+  pub fn handle_tuple() {}
+  pub fn handle_map() {}
+  pub fn handle_reduce_scatter() {}
+  pub fn handle_reduce_window() {}
+  pub fn handle_select_and_scatter() {}
+  pub fn handle_while() {}
+  pub fn handle_cinditional() {}
+  pub fn handle_pad() {}
+  pub fn handle_async_start() {}
+  pub fn handle_async_update() {}
+  pub fn handle_done() {}
+  pub fn handle_copy_start() {}
+  pub fn handle_copy_done() {}
+  pub fn handle_send() {}
+  pub fn handle_send_done() {}
+  pub fn handle_recv() {}
+  pub fn handle_recv_done() {}
+  pub fn handle_batch_norm_training() {}
+  pub fn handle_batch_norm_inference() {}
+  pub fn handle_batch_norm_grad() {}
+  pub fn handle_gather() {}
+  pub fn handle_scatter() {}
+  pub fn handle_after_all() {}
+  pub fn handle_get_dimension_size() {}
+  pub fn handle_set_dimension_size() {}
+  pub fn handle_add_dependency() {}
+  pub fn finish_visit() {}
 }

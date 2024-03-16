@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum HloOpcode {
   Abs,
   Add,
@@ -51,6 +51,7 @@ pub enum HloOpcode {
   DynamicReshape,
   DynamicSlice,
   DynamicUpdateSlice,
+  Erf,
   Exp,
   Expm1,
   Fft,
@@ -101,6 +102,7 @@ pub enum HloOpcode {
   Select,
   SelectAndScatter,
   Send,
+  SendDone,
   SetDimensionSize,
   ShiftLeft,
   ShiftRightArithmetic,
@@ -173,6 +175,7 @@ pub fn hlo_opcode_string(opcode: &HloOpcode) -> String {
     HloOpcode::DynamicReshape => "dynamic-reshape".to_string(),
     HloOpcode::DynamicSlice => "dynamic-slice".to_string(),
     HloOpcode::DynamicUpdateSlice => "dynamic-update-slice".to_string(),
+    HloOpcode::Erf => "erf".to_string(),
     HloOpcode::Exp => "exponential".to_string(),
     HloOpcode::Expm1 => "exponential-minus-one".to_string(),
     HloOpcode::Fft => "fft".to_string(),
@@ -223,6 +226,7 @@ pub fn hlo_opcode_string(opcode: &HloOpcode) -> String {
     HloOpcode::Select => "select".to_string(),
     HloOpcode::SelectAndScatter => "select-and-scatter".to_string(),
     HloOpcode::Send => "send".to_string(),
+    HloOpcode::SendDone => "send-done".to_string(),
     HloOpcode::SetDimensionSize => "set-dimension-size".to_string(),
     HloOpcode::ShiftLeft => "shift-left".to_string(),
     HloOpcode::ShiftRightArithmetic => "shift-right-arithmetic".to_string(),

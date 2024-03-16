@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
-use crate::hlo_instruction::{HloInstruction, self};
+use crate::{hlo_instruction::{self, HloInstruction}, hlo_module::HloModule, hlo_opcode::HloOpcode};
 
+#[derive(PartialEq)]
 pub struct HloComputation {
   name: String,
   unique_id: i64,
@@ -17,29 +18,79 @@ pub struct HloComputation {
   async_instructions: Vec<HloInstruction>,
   execution_thread: String,
   //parent
-  //instructions
+  instructions: Vec<HloInstruction>,
   to_be_deleted: Vec<HloInstruction>,
-  //param_instructions
+  param_instructions: Vec<HloInstruction>,
 }
 
 impl HloComputation {
   pub fn new() {}
-  pub fn add_instruction() {}
+
+  // Add an instruction to the computation.
+  // The computation takes ownership of the instruction.
+  pub fn add_instruction(&mut self, mut instruction: HloInstruction, name: String) {
+    assert!(instruction.opcode() != HloOpcode::Parameter,
+      "Parameter insstructions cannot be added to a computation after it has been built.");
+    if !name.is_empty() { instruction.set_and_sanitize_name(name); }
+    self.add_instruction_internal(instruction);
+  }
+
+  fn add_instruction_internal(&mut self, _instruction: HloInstruction) {}
+
   pub fn replace_parameter() {}
   pub fn remove_parameter() {}
   pub fn remove_unused_parameters_from_fused_computation() {}
   pub fn remove_unused_parameters_from_any_computation() {}
-  pub fn add_parameter() {}
+
+  // Adds a new parameter instruction to a fusion computation.
+  pub fn add_parameter(&mut self, instruction: HloInstruction) {
+    assert!(instruction.opcode() == HloOpcode::Parameter);
+    assert!(!self.is_fusion_computation() ||
+      self.fusion_instruction().as_ref().unwrap().operand_count() ==
+      self.param_instructions.len());
+    
+    // TODO
+    //instruction.set_parent(self);
+    //self.param_instructions.push(instruction);
+    self.add_instruction_internal(instruction);
+  }
+
   pub fn add_entry_computation_parameter() {}
   pub fn replace_entry_computation_parameter() {}
   pub fn remove_instruction() {}
   pub fn force_remove_instruction() {}
   pub fn remove_instruction_and_unused_operands() {}
-  pub fn set_root_instruction() {}
-  pub fn root_instruction() {}
-  pub fn num_parameters() {}
-  pub fn parameter_instruction() {}
-  pub fn parameter_instructions() {}
+
+  // Set the root of the computation to the given instruction. The instruction
+  // must have already been added to the computation.
+  pub fn set_root_instruction(
+    &mut self,
+    _root_instruction: HloInstruction,
+    _accept_different_shape: bool)
+  {
+
+  }
+
+  // Return the root instruction of the computation. The root instruction is the
+  // instruction which produces the output of the computation.
+  pub fn root_instruction(&self) -> &HloInstruction {
+    &self.root_instruction
+  }
+
+  // Returns the number of parameters for this computation.
+  pub fn num_parameters(&self) -> usize {
+    self.param_instructions.len()
+  }
+
+  // Returns the parameter instruction for the given parameter number.
+  pub fn parameter_instruction(&self, param_no: usize) -> Option<&HloInstruction> {
+    assert!(param_no < self.param_instructions.len());
+    self.param_instructions.get(param_no)
+  }
+
+  pub fn parameter_instructions(&self) -> &Vec<HloInstruction> {
+    &self.param_instructions
+  }
 
   pub fn name(&self) -> String {
     self.name.clone()
@@ -69,21 +120,54 @@ impl HloComputation {
   pub fn replace_instruction() {}
   pub fn replace_instruction_with_defferent_shape() {}
   pub fn set_parent() {}
-  pub fn parent() {}
+
+  pub fn parent(&self) -> &Option<HloModule> {
+    unimplemented!()
+  }
+
   pub fn accept() {}
   pub fn accept_ordered() {}
-  pub fn is_safely_removable() {}
-  pub fn compute_channel_dependencies() {}
-  pub fn has_side_effect() {}
 
+  // Returns true if the given instruction can be removed from the computation.
+  // Paarameter instructions cannot ne removed without violating invariants of
+  // the HLO computation with the exception of fusion computation.
+  pub fn is_safely_removable(
+    &self,
+    instruction: &HloInstruction,
+    ignore_control_dependency: bool) -> bool
+  {
+    if !ignore_control_dependency && instruction.has_control_dependencies() {
+      return false;
+    }
+    if instruction.opcode() == HloOpcode::Parameter && !self.is_fusion_computation() {
+      return false;
+    }
+    true
+  }
+
+  pub fn compute_channel_dependencies() {}
+
+  // Returns true if this computation has a side effect.
+  // A computation has a side effect if it contains one or more instruction with
+  // a side effect.
+  pub fn has_side_effect(&self) -> bool {
+    for instruction in &self.instructions {
+      if instruction.has_side_effect() { return true; }
+    }
+    false
+  }
+
+  // Returns if this computation is a fusion computation.
   pub fn is_fusion_computation(&self) -> bool {
-    self.is_fusion_computation
+    false //self.is_fusion_computation
   }
 
   pub fn is_entry_computation() {}
 
-  pub fn fusion_instruction(&self) -> &HloInstruction {
-    &self.fusion_instruction
+  // Returns the owning fusion instruction, or nullptr if this is not a fusion
+  // computation.
+  pub fn fusion_instruction(&self) -> Option<&HloInstruction> {
+    Some(&self.fusion_instruction)
   }
 
   pub fn set_fusion_instruction() {}

@@ -85,7 +85,7 @@ impl Tile {
   pub fn absl_hash_value() {}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DimInfo {
   dim_level_type: DimLevelType,
   dim_unique: bool,
@@ -102,7 +102,7 @@ impl DimInfo {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Layout {
   dim_attributes: Vec<DimInfo>,
   n_dim_level_types: usize,

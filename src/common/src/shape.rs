@@ -10,7 +10,7 @@ use crate::{
   printer::Printer,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Shape {
   element_type: PrimitiveType,
   dimensions: DimensionVector,

@@ -17,6 +17,7 @@ pub mod hlo_element_type_converter;
 pub mod hlo_execution_profile;
 pub mod hlo_graph_dumper;
 pub mod hlo_instruction;
+pub mod hlo_instructions;
 pub mod hlo_lexer;
 pub mod hlo_liveness_analysis;
 pub mod hlo_memory_scheduler;

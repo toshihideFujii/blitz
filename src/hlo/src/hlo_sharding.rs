@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+#[derive(Clone, PartialEq)]
 pub struct HloSharding {}
 
 impl HloSharding {
@@ -40,7 +41,7 @@ impl HloSharding {
   pub fn device_for_tile_index() {}
   pub fn tile_offset_for_device() {}
   pub fn tile_limit_for_device() {}
-  pub fn unique_device() {}
+  pub fn unique_device(&self) -> Option<i64> { None }
   pub fn get_unique_device() {}
   pub fn has_unique_device() {}
   pub fn as_shape_tree() {}

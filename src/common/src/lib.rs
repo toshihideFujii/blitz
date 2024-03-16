@@ -4,6 +4,7 @@ pub mod array2d;
 pub mod array3d;
 pub mod array4d;
 pub mod blitz_data;
+pub mod comparison_util;
 pub mod device_util;
 pub mod error_spec;
 pub mod executable_run_options;
