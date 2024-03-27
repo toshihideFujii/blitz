@@ -123,3 +123,15 @@ pub enum FftType {
   RFFT,
   IRFFT,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OpShardingType {
+  Replicated,
+  Maximal,
+  Tuple,
+  Other,
+  Manual,
+  Unknown,
+}
+
+pub struct OpSharding {}

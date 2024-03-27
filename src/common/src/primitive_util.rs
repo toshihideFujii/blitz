@@ -1,7 +1,41 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::OnceLock};
 use crate::blitz_data::PrimitiveType;
+
+static PRIMITIVE_TYPE_MAP:
+  OnceLock<HashMap<&'static str, PrimitiveType>> = OnceLock::new();
+
+fn get_or_create_map() -> &'static HashMap<&'static str, PrimitiveType> {
+  let primitive_type_map = PRIMITIVE_TYPE_MAP.get_or_init(|| {
+    let mut map = HashMap::new();
+    map.insert("pred", PrimitiveType::Pred);
+    map.insert("s4", PrimitiveType::S4);
+    map.insert("s8", PrimitiveType::S8);
+    map.insert("s16", PrimitiveType::S16);
+    map.insert("s32", PrimitiveType::S32);
+    map.insert("s64", PrimitiveType::S64);
+    map.insert("u4", PrimitiveType::U4);
+    map.insert("u8", PrimitiveType::U8);
+    map.insert("u16", PrimitiveType::U16);
+    map.insert("u32", PrimitiveType::U32);
+    map.insert("u64", PrimitiveType::U64);
+    map.insert("f16", PrimitiveType::F16);
+    map.insert("f32", PrimitiveType::F32);
+    map.insert("bf16", PrimitiveType::BF16);
+    map.insert("f64", PrimitiveType::F64);
+    map.insert("f8e5m2", PrimitiveType::F8E5M2);
+    map.insert("f8e4m3fn", PrimitiveType::F8E4M3FN);
+    map.insert("f8e4m3b11fnuz", PrimitiveType::F8E4M3B11FNUZ);
+    map.insert("c64", PrimitiveType::C64);
+    map.insert("c128", PrimitiveType::C128);
+    map.insert("tuple", PrimitiveType::Tuple);
+    map.insert("token", PrimitiveType::Token);
+    map.insert("opaque", PrimitiveType::OpaqueType);
+    map
+  });
+  primitive_type_map
+}
 
 pub fn significand_width(_t: &PrimitiveType) -> i64 {
   0 // TODO
@@ -151,12 +185,21 @@ pub fn cast_preserves_values() {
     
 }
 
-pub fn string_to_primitive_type() {
-    
+// Returns the PrimitiveType matching the given name. The given name is expected
+// to be lower-case.
+pub fn string_to_primitive_type(name: &String) -> Option<&PrimitiveType> {
+  let map = get_or_create_map();
+  map.get(name.as_str())
 }
 
-pub fn is_primitive_type_name() {
-    
+// Returns true if the given name is a primitive type string (lower-case).
+pub fn is_primitive_type_name(name: &String) -> bool {
+  let map = get_or_create_map();
+  if map.get(&name.as_str()).is_some() {
+    true
+  } else {
+    false
+  }
 }
 
 pub fn is_canonical_representation() {

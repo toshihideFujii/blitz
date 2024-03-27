@@ -108,7 +108,11 @@ impl HloComputation {
   pub fn make_instruction_post_order_from() {}
   pub fn make_instruction_post_order_with_reshape_first() {}
   pub fn for_each_instruction_post_order() {}
-  pub fn instruction_count() {}
+
+  pub fn instruction_count(&self) -> usize {
+    self.instructions.len()
+  }
+
   pub fn make_embedded_computations_list() {}
   pub fn create_fusion_instruction() {}
   pub fn create_async_instructions() {}
@@ -245,10 +249,15 @@ impl HloComputation {
     self.execution_thread.as_str() == hlo_instruction::MAIN_EXECUTION_THREAD
   }
 
+  // Deallocate instructions that are marked by 'remove_instruction'.
   pub fn cleanup(&mut self) {
     self.to_be_deleted.clear()
   }
 
-  pub fn is_marked_as_dead() {}
+  // Returns true if a given instruction is marked dead in this computation.
+  pub fn is_marked_as_dead(_inst: &HloInstruction) -> bool {
+    false
+  }
+
   pub fn can_expand_into_single_instruction() {}
 }

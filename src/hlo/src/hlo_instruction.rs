@@ -107,6 +107,10 @@ impl HloPrintOptions {
     }
   }
 
+  pub fn default() -> Self {
+    HloPrintOptions::new()
+  }
+
   pub fn short_parsable() -> Self {
     let mut hlo_print_options = HloPrintOptions::new();
     hlo_print_options
@@ -1655,7 +1659,10 @@ impl HloInstruction {
   fn remove_user() {}
   fn get_backend_config_internal() {}
   fn mark_as_dead() {}
-  fn is_marked_as_dead() {}
+
+  fn is_marked_as_dead(&self) -> bool {
+    false
+  }
 
   fn has_rare(&self) -> bool {
     self.rare.is_some()
