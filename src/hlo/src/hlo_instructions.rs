@@ -469,3 +469,10 @@ impl HloFftInstruction {
     self.fft_type.clone()
   }
 }
+
+pub struct HloCollectiveInstruction {}
+
+impl HloCollectiveInstruction {
+  pub fn replica_groups() {}
+  pub fn constrain_layout() {}
+}

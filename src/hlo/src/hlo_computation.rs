@@ -2,7 +2,7 @@
 
 use crate::{hlo_instruction::{self, HloInstruction}, hlo_module::HloModule, hlo_opcode::HloOpcode};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 pub struct HloComputation {
   name: String,
   unique_id: i64,
@@ -98,12 +98,18 @@ impl HloComputation {
 
   pub fn uniquify_name() {}
   pub fn print() {}
-  pub fn to_string() {}
+
+  pub fn to_string(&self) -> String { "".to_string() }
+
   pub fn to_cord() {}
   pub fn to_proto() {}
   pub fn new_from_proto() {}
   pub fn absl_hash_values() {}
-  pub fn instructions() {}
+
+  pub fn instructions(&self) -> &Vec<HloInstruction> {
+    &self.instructions
+  }
+
   pub fn make_instruction_post_order() {}
   pub fn make_instruction_post_order_from() {}
   pub fn make_instruction_post_order_with_reshape_first() {}

@@ -1,10 +1,16 @@
 #![allow(dead_code)]
 
-pub struct HloPassInterface {}
+use std::collections::HashSet;
 
-impl HloPassInterface {
-    
+use crate::hlo_module::HloModule;
+
+// Base class for HLO passes.
+// These are used with the HloPassPipeline to organize a sequence of passes.
+pub trait HloPassInterface {
+  // Run the pass on the given HLOmodule with specified execution_threads.
+  fn run(module: &HloModule, execution_threads: HashSet<String>) -> Result<(), String>;
 }
+
 
 pub struct HloModulePass {}
 

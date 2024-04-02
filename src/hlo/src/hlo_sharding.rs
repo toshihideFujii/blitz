@@ -7,7 +7,7 @@ use common::{
 
 use crate::tile_assignment::TileAssignment;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ShardGroup {
   shard_group_id: i64,
   shard_as: bool,
@@ -26,7 +26,7 @@ impl ShardGroup {
   pub fn to_string() {}
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct HloSharding {
   tile_assignment: TileAssignment,
   tuple_elements: Vec<HloSharding>,

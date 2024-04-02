@@ -14,7 +14,7 @@ impl IotaTileAssignment {
   pub fn ndims(&self) -> i64 {
     self.ndims
   }
-  
+
   pub fn dims() {}
   pub fn dim() {}
   pub fn reshape_dims() {}
@@ -26,7 +26,7 @@ impl IotaTileAssignment {
 }
 
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct TileAssignment {}
 
 impl TileAssignment {

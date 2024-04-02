@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::hash::Hash;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PrimitiveType {
@@ -41,7 +41,7 @@ pub enum PrimitiveType {
 
 pub const PRIMITIVE_TYPE_ARRAYSIZE: usize = 100;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DimLevelType {
   Dense,
   Compressed,
@@ -57,7 +57,7 @@ pub enum Precision {
   PackedNibble,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct OpMetadata {}
 
 impl OpMetadata {
@@ -71,28 +71,28 @@ impl OpMetadata {
   pub fn set_preserve_layout(&mut self, _preserve_layout: bool) {}
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 pub struct FrontendAttributes {
-  map: HashMap<String, String>
+  //map: HashMap<String, String>
 }
 
 impl FrontendAttributes {
-  pub fn map(&self) -> &HashMap<String, String> {
-    &self.map
-  }
+  //pub fn map(&self) -> &HashMap<String, String> {
+    //&self.map
+  //}
 
-  pub fn mutable_map(&mut self) -> &mut HashMap<String, String> {
-    &mut self.map
-  }
+  //pub fn mutable_map(&mut self) -> &mut HashMap<String, String> {
+    //&mut self.map
+  //}
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 pub struct Statisitic {
   stat_name: String,
-  stat_val: f64,
+  stat_val: i64, // TODO: f64
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 pub struct StatisticsVis {
   stat_index_to_viaualize: i64,
   statiscics: Vec<Statisitic>
@@ -124,7 +124,7 @@ pub enum FftType {
   IRFFT,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OpShardingType {
   Replicated,
   Maximal,

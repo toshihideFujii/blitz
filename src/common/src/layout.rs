@@ -7,7 +7,7 @@ use crate::{
   util::DimensionVector, shape::Shape, printer::{Printer, StringPrinter}, primitive_util, layout_util::LayoutUtil
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Tile {
   dimensions: Vec<i64>,
 }
@@ -85,7 +85,7 @@ impl Tile {
   pub fn absl_hash_value() {}
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DimInfo {
   dim_level_type: DimLevelType,
   dim_unique: bool,
@@ -102,7 +102,7 @@ impl DimInfo {
   }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Layout {
   dim_attributes: Vec<DimInfo>,
   n_dim_level_types: usize,

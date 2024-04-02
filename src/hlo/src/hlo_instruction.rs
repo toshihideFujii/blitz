@@ -373,7 +373,7 @@ pub enum FusionKind {
 
 pub const MAIN_EXECUTION_THREAD: &'static str = "main";
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 struct Rare {
   called_computations: Vec<HloComputation>,
   control_predecessors: Vec<HloInstruction>,
@@ -382,7 +382,7 @@ struct Rare {
   statistics_vis: StatisticsVis,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 struct Users {
   users: Vec<HloInstruction>
 }
@@ -432,7 +432,7 @@ const SCATTER_COMPUTATION_INDEX: usize = 1;
 const TRUE_COMPUTATION_INDEX: usize = 0;
 const FALSE_COMPUTATION_INDEX: usize = 1;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 pub struct HloInstruction {
   unique_id: i64,
   index_in_parent: u32,
@@ -1410,18 +1410,18 @@ impl HloInstruction {
   pub fn copy_backend_config_from() {}
 
   pub fn set_frontend_attributes(&mut self, frontend_attributes: FrontendAttributes) {
-    if !self.has_rare() && frontend_attributes.map().is_empty() { return; }
+    //if !self.has_rare() && frontend_attributes.map().is_empty() { return; }
     self.mutable_rare().frontend_attributes = frontend_attributes;
   }
 
-  pub fn add_frontend_attributes(&mut self, frontend_attributes: FrontendAttributes) {
-    if !frontend_attributes.map().is_empty() {
-      let map =
-        self.mutable_rare().frontend_attributes.mutable_map();
-      for (k, v) in frontend_attributes.map().iter() {
-        map.insert(k.clone(), v.clone());
-      }
-    }
+  pub fn add_frontend_attributes(&mut self, _frontend_attributes: FrontendAttributes) {
+    //if !frontend_attributes.map().is_empty() {
+      //let map =
+        //self.mutable_rare().frontend_attributes.mutable_map();
+      //for (k, v) in frontend_attributes.map().iter() {
+        //map.insert(k.clone(), v.clone());
+      //}
+    //}
   }
 
   pub fn frontend_attributes(&self) -> &FrontendAttributes {
