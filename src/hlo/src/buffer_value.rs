@@ -7,7 +7,9 @@ pub struct BufferValue {
 }
 
 impl BufferValue {
-  pub fn new() {}
+  pub fn new() -> Self {
+    BufferValue { id: 0, is_array: false, is_tuple: false }
+  }
 
   pub fn id(&self) -> i64 {
     self.id

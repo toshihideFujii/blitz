@@ -58,8 +58,18 @@ impl Shape {
     }
   }
 
-  pub fn print() {}
+  // Returns a human-readable string that represents the given shape, with or
+  // without layout.
+  pub fn print(&self, printer: &mut dyn Printer, print_layout: bool) {
+    if print_layout {
+      ShapeUtil::print_human_string_with_layout(printer, self);
+    } else {
+      ShapeUtil::print_human_string(printer, self);
+    }
+  }
 
+  // Returns a human-readable string that represents the given shape, with or
+  // without layout.
   pub fn to_string(&self, print_layout: bool) -> String {
     if print_layout {
       ShapeUtil::human_string_with_layout(self)

@@ -4,12 +4,19 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
   hlo_computation::HloComputation,
+  hlo_instruction::HloInstruction,
   hlo_module::HloModule,
+  hlo_opcode::HloOpcode,
   hlo_pass_interface::HloPassInterface
 };
 
 // HLO pass which removes dead instructions from each computation in
 // the module and removes dead computations from the module.
+// An instruction is dead if it is not reachable from the root.
+// A computation is dead if it is not the entry computation of the module and
+// it is not reachable from the entry computation.
+// This pass does not remove dead parameter instructions, as parameter instructions
+// cannot be deleted.
 pub struct HloDCE {
   remove_cross_partition_collective_ops: bool
 }
@@ -28,18 +35,37 @@ impl HloDCE {
   // Run DCE on a computation.
   pub fn run_on_computation(
     &mut self,
-    computation: &HloComputation,
-    _remove_cross_partition_collective_ops: bool) -> bool
+    computation: &mut HloComputation,
+    remove_cross_partition_collective_ops: bool) -> bool
   {
-    let changed = false;
+    let mut changed = false;
     println!("Before dce:");
     println!("{:?}", computation.to_string());
 
     // Remove any dead roots and their dead transitive operands.
     // Collect them into a separate list first to avoid problems with iterating
     // through the computation's instruction while simultaneously removing instructions.
-    for _instruction in computation.instructions() {
-      
+    let mut dead_roots = Vec::new();
+    for instruction in computation.instructions() {
+      if instruction.is_dead() &&
+         computation.is_safely_removable(instruction, false) &&
+         (!instruction.is_custom_call("Sharding".to_string()) ||
+          (!instruction.operand(0).is_root() &&
+            instruction.opcode() != HloOpcode::Parameter &&
+            instruction.operand(0).user_count() == 1) &&
+          (!instruction.has_side_effect() ||
+           (remove_cross_partition_collective_ops &&
+            instruction.is_collective_instruction() && !instruction.constrain_layout()) ||
+          HloDCE::is_removable_while(instruction, remove_cross_partition_collective_ops)))
+      {
+        dead_roots.push(instruction);
+      }
+    }
+
+    for _dead_root in dead_roots {
+      // TODO
+      //computation.remove_instruction_and_unused_operands(dead_root);
+      changed = true;
     }
 
     if changed {
@@ -151,6 +177,13 @@ impl HloDCE {
     println!("Removing dead computation {:?}.", computation.name());
     // After looping called subcomputations, now safe to delete the computation.
     module.remove_embedded_computation(computation)
+  }
+
+  fn is_removable_while(
+    _instruction: &HloInstruction,
+    _remove_cross_partition_collective_ops: bool) -> bool
+  {
+    false
   }
 }
 

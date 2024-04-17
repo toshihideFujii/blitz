@@ -2,7 +2,7 @@
 
 use crate::{hlo_instruction::{self, HloInstruction}, hlo_module::HloModule, hlo_opcode::HloOpcode};
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct HloComputation {
   name: String,
   unique_id: i64,
@@ -57,9 +57,12 @@ impl HloComputation {
 
   pub fn add_entry_computation_parameter() {}
   pub fn replace_entry_computation_parameter() {}
-  pub fn remove_instruction() {}
+
+  pub fn remove_instruction(&mut self, _instruction: &HloInstruction) {}
+
   pub fn force_remove_instruction() {}
-  pub fn remove_instruction_and_unused_operands() {}
+
+  pub fn remove_instruction_and_unused_operands(&mut self, _instruction: &HloInstruction) {}
 
   // Set the root of the computation to the given instruction. The instruction
   // must have already been added to the computation.
@@ -110,7 +113,14 @@ impl HloComputation {
     &self.instructions
   }
 
-  pub fn make_instruction_post_order() {}
+  pub fn mutable_instructions(&mut self) -> &mut Vec<HloInstruction> {
+    &mut self.instructions
+  }
+
+  pub fn make_instruction_post_order(&self) -> &mut Vec<HloInstruction> {
+    unimplemented!()
+  }
+
   pub fn make_instruction_post_order_from() {}
   pub fn make_instruction_post_order_with_reshape_first() {}
   pub fn for_each_instruction_post_order() {}

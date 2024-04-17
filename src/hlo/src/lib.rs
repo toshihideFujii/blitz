@@ -1,4 +1,5 @@
 
+pub mod buffer_value;
 pub mod hlo_alias_analysis;
 pub mod hlo_buffer;
 pub mod hlo_computation_deduplicator;
@@ -30,6 +31,7 @@ pub mod hlo_module_group;
 pub mod hlo_module_metadata;
 pub mod hlo_module_util;
 pub mod hlo_module;
+pub mod hlo_op_metadata;
 pub mod hlo_opcode;
 pub mod hlo_ordering;
 pub mod hlo_parser;
@@ -37,6 +39,7 @@ pub mod hlo_pass_interface;
 pub mod hlo_pass_pipeline;
 pub mod hlo_phi_graph;
 pub mod hlo_profile_printer;
+pub mod hlo_reachability;
 pub mod hlo_rematerialization;
 pub mod hlo_replication_analysis;
 pub mod hlo_runner_interface;

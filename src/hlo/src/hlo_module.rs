@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::collections::HashSet;
+
 use common::{
   blitz_data::FrontendAttributes,
   printer::Printer,
@@ -137,7 +139,11 @@ impl HloModule {
   pub fn set_layout_canonicalization_callback() {}
   pub fn layout_canonicalization_callback() {}
   pub fn absl_hash_value() {}
-  pub fn computations() {}
+
+  pub fn computations(&self, _execution_threads: &HashSet<String>) -> &Vec<HloComputation> {
+    unimplemented!()
+  }
+
   pub fn get_computation_with_name() {}
 
   // Gets the number of computations in this module.
@@ -161,7 +167,7 @@ impl HloModule {
     }
   }
 
-  pub fn make_computation_post_order(&self) -> Vec<&HloComputation> {
+  pub fn make_computation_post_order(&self) -> Vec<&mut HloComputation> {
     unimplemented!()
   }
 

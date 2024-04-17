@@ -857,14 +857,44 @@ impl ShapeUtil {
   }
 
   pub fn get_leaf_shapes() {}
-  pub fn for_each_subshape() {}
+
+  // Calls the given visitor function for each subshape of the given shape.
+  pub fn for_each_subshape<T>(shape: &Shape, func:  &T)
+    where T: Fn(&Shape, usize)
+  {
+    let pass_func =
+      |subshape: &Shape, index: usize| -> Result<(), String> {
+      func(subshape, index);
+      Ok(())
+    };
+    ShapeUtil::for_each_subshape_with_status(shape, &pass_func)
+  }
+
+  pub fn for_each_mutable_subshape<T>(shape: &Shape, func: &mut T)
+    where T: FnMut(&Shape, usize)
+  {
+    let mut pass_func =
+      |subshape: &Shape, index: usize| -> Result<(), String> {
+      func(subshape, index);
+      Ok(())
+    };
+    ShapeUtil::for_each_mutable_subshape_with_status(shape, &mut pass_func)
+  }
+
   pub fn for_each_leaf_shape() {}
 
   // Variants of for_each_subshape wchich propagate status from the
   // visitor functions.
-  pub fn for_each_subshape_with_status<T>(shape: &Shape, func: T)
-    where T: Fn(&Shape, usize) -> Result<(), String> {
-    ShapeUtil::for_each_subshape_with_status_helper(shape, &func, 0);
+  pub fn for_each_subshape_with_status<T>(shape: &Shape, func: &T)
+    where T: Fn(&Shape, usize) -> Result<(), String>
+  {
+    ShapeUtil::for_each_subshape_with_status_helper(shape, func, 0);
+  }
+
+  pub fn for_each_mutable_subshape_with_status<T>(shape: &Shape, func: &mut T)
+    where T: FnMut(&Shape, usize) -> Result<(), String>
+  {
+    ShapeUtil::for_each_mutable_subshape_with_status_helper(shape, func, 0);
   }
 
   pub fn for_each_subshape_post_order() {}
@@ -1098,6 +1128,23 @@ impl ShapeUtil {
     if shape.is_tuple() {
       for i in 0..ShapeUtil::tuple_element_count(shape) {
         ShapeUtil::for_each_subshape_with_status_helper(
+          shape.tuple_shapes(i), func, i);
+      }
+    }
+  }
+
+  fn for_each_mutable_subshape_with_status_helper<T>(
+    shape: &Shape,
+    func: &mut T,
+    index: usize) where T: FnMut(&Shape, usize) -> Result<(), String>
+  {
+    let result = func(shape, index);
+    if result.is_err() {
+      assert!(false, "for_each_subshape_with_status_helper is failed.");
+    }
+    if shape.is_tuple() {
+      for i in 0..ShapeUtil::tuple_element_count(shape) {
+        ShapeUtil::for_each_mutable_subshape_with_status_helper(
           shape.tuple_shapes(i), func, i);
       }
     }

@@ -57,7 +57,7 @@ pub enum Precision {
   PackedNibble,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OpMetadata {}
 
 impl OpMetadata {
@@ -65,13 +65,20 @@ impl OpMetadata {
   pub fn set_creation_pass_id(&mut self, _id: i64) {}
   pub fn set_size_of_generated_code_in_bytes(&mut self, _code_size_in_bytes: i64) {}
   pub fn set_size_of_memory_working_set_in_bytes(&mut self, _working_set_size_in_bytes: i64) {}
+  pub fn op_name(&self) -> String { "".to_string() }
   pub fn set_op_name(&mut self, _name: String) {}
+  pub fn op_type(&self) -> String { "".to_string() }
   pub fn set_logical_creation_pass_id(&mut self, _pass_id: i64) {}
   pub fn set_deduplicated_name(&mut self, _deduplicated_name: String) {}
   pub fn set_preserve_layout(&mut self, _preserve_layout: bool) {}
+  pub fn source_file(&self) -> String { "".to_string() }
+  pub fn source_line(&self) -> usize { 0 }
+  pub fn profile_type(&self) -> String { "".to_string() }
+  pub fn deduplicated_name(&self) -> String { "".to_string() }
+  pub fn preserve_layout(&self) -> bool { false }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct FrontendAttributes {
   //map: HashMap<String, String>
 }
@@ -86,13 +93,13 @@ impl FrontendAttributes {
   //}
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Statisitic {
   stat_name: String,
   stat_val: i64, // TODO: f64
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct StatisticsVis {
   stat_index_to_viaualize: i64,
   statiscics: Vec<Statisitic>

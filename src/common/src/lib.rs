@@ -20,6 +20,7 @@ pub mod primitive_util;
 pub mod printer;
 pub mod service_interface;
 pub mod shape_layout;
+pub mod shape_tree;
 pub mod shape_util;
 pub mod shape;
 pub mod sharding_op_util;

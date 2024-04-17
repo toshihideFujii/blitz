@@ -263,7 +263,7 @@ impl LayoutUtil {
         };
         ShapeUtil::for_each_subshape_with_status(
           &mut layout.physical_shape().as_ref().unwrap(),
-          shape_fn);
+          &shape_fn);
         if layout.index_primitive_type() != PrimitiveType::Invalid &&
           !primitive_util::is_unsigned_integral_type(&layout.index_primitive_type())
         {

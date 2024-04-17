@@ -1,0 +1,43 @@
+#![allow(dead_code)]
+
+pub enum ReductionKind {
+  Sum,
+  Product,
+  Min,
+  Max,
+}
+
+pub fn match_reduction_instruction() {}
+
+pub fn match_reduction_computation() {}
+
+pub fn get_reduction_identity() {}
+
+pub enum CollectiveOpGroupMode {
+  CrossReplica,
+  CrossPartition,
+  CrossReplicaAndPartition,
+  FlattenedID,
+}
+
+pub fn get_participating_ids() {}
+
+pub fn collective_op_group_mode_to_string() {}
+
+pub fn get_collective_op_group_mode() {}
+
+pub fn get_participating_device_groups() {}
+
+pub fn get_participating_flattened_id_groups() {}
+
+pub fn get_participating_devices() {}
+
+pub fn get_participant_counts_for_replica_groups() {}
+
+pub fn replica_groups_orthogonal() {}
+
+pub fn replica_groups_equal() {}
+
+pub fn is_collective() {}
+
+pub fn is_sync_collective() {}

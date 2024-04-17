@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
+
 use common::{
   blitz_data::{FrontendAttributes, OpMetadata, PrimitiveType, Statisitic, StatisticsVis},
   comparison_util::{ComparisonType, Direction},
@@ -10,37 +12,7 @@ use common::{
 
 use crate::{
   hlo_computation::HloComputation, hlo_instructions::{
-    HloAsyncInstruction,
-    HloAsyncStartInstruction,
-    HloBatchNormGradInstruction,
-    HloBatchNormInferenceInstruction,
-    HloBatchNormTrainingInstruction,
-    HloBroadcastInstruction,
-    HloCallInstruction,
-    HloCompareInstruction,
-    HloConcatenateInstruction,
-    HloConstantInstruction,
-    HloCopyStartInstruction,
-    HloDynamicReshapeInstruction,
-    HloDynamicSliceInstruction,
-    HloDynamicUpdateSliceInstruction,
-    HloGetTupleElementInstruction,
-    HloInfeedInstruction,
-    HloIotaInstruction,
-    HloMapInstruction,
-    HloOutfeedInstruction,
-    HloParameterInstruction,
-    HloRecvDoneInstruction,
-    HloRecvInstruction,
-    HloReduceInstruction,
-    HloReducePrecisionInstruction,
-    HloReshapeInstruction,
-    HloSendDoneInstruction,
-    HloSendInstruction,
-    HloSliceInstruction,
-    HloSortInstruction,
-    HloTopKInstruction,
-    HloTransposeInstruction
+    HloAsyncInstruction, HloAsyncStartInstruction, HloBatchNormGradInstruction, HloBatchNormInferenceInstruction, HloBatchNormTrainingInstruction, HloBroadcastInstruction, HloCallInstruction, HloCollectiveInstruction, HloCompareInstruction, HloConcatenateInstruction, HloConstantInstruction, HloCopyStartInstruction, HloDynamicReshapeInstruction, HloDynamicSliceInstruction, HloDynamicUpdateSliceInstruction, HloGetTupleElementInstruction, HloInfeedInstruction, HloIotaInstruction, HloMapInstruction, HloOutfeedInstruction, HloParameterInstruction, HloRecvDoneInstruction, HloRecvInstruction, HloReduceInstruction, HloReducePrecisionInstruction, HloReshapeInstruction, HloSendDoneInstruction, HloSendInstruction, HloSliceInstruction, HloSortInstruction, HloTopKInstruction, HloTransposeInstruction
   }, hlo_module::HloModule, hlo_opcode::HloOpcode, hlo_sharding::HloSharding
 };
 
@@ -373,7 +345,7 @@ pub enum FusionKind {
 
 pub const MAIN_EXECUTION_THREAD: &'static str = "main";
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct Rare {
   called_computations: Vec<HloComputation>,
   control_predecessors: Vec<HloInstruction>,
@@ -382,7 +354,7 @@ struct Rare {
   statistics_vis: StatisticsVis,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct Users {
   users: Vec<HloInstruction>
 }
@@ -432,7 +404,7 @@ const SCATTER_COMPUTATION_INDEX: usize = 1;
 const TRUE_COMPUTATION_INDEX: usize = 0;
 const FALSE_COMPUTATION_INDEX: usize = 1;
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct HloInstruction {
   unique_id: i64,
   index_in_parent: u32,
@@ -447,7 +419,8 @@ pub struct HloInstruction {
   sharding: Option<HloSharding>,
   shape: Shape,
   name: String,
-  metadata: Option<OpMetadata>
+  metadata: Option<OpMetadata>,
+  collective_instruction: Option<HloCollectiveInstruction>
 }
 
 impl HloInstruction {
@@ -1012,7 +985,27 @@ impl HloInstruction {
   pub fn replace_use_with_different_shape() {}
   pub fn replace_operand_with() {}
   pub fn replace_operand_with_different_shape() {}
-  pub fn defuse() {}
+
+  // Decomposes fusion back to individual parts.
+  pub fn defuse(&mut self) -> Result<(), String> {
+    if self.opcode() != HloOpcode::Fusion {
+      return Ok(());
+    }
+    println!("Defusiing instruction: {:?}", self.to_string_default());
+
+    let _fused_computation = self.fused_instructions_computation();
+    let mut _defused_instructions: HashMap<&HloInstruction, &mut HloInstruction> = HashMap::new();
+    for _i in 0..self.operand_count() {
+      //defused_instructions.insert(
+        //fused_computation.parameter_instruction(i).unwrap(),
+        //self.mutable_operand(i).unwrap());
+    }
+
+    // TODO
+
+    Ok(())
+  }
+
   pub fn replace_all_uses_with() {}
   pub fn replace_all_uses_with_different_shape() {}
   pub fn accept() {}
@@ -1125,8 +1118,12 @@ impl HloInstruction {
   // Prints a debugging string that represents this instruction.
   pub fn print(_printer: &dyn Printer, _options: HloPrintOptions) {}
 
+  pub fn to_string_default(&self) {
+    self.to_string(HloPrintOptions::default());
+  }
+
   // Returns a debugging string that represents this instruction.
-  pub fn to_string(options: HloPrintOptions) {
+  pub fn to_string(&self, options: HloPrintOptions) {
     let printer = StringPrinter::new();
     HloInstruction::print(&printer, options)
   }
@@ -1572,7 +1569,11 @@ impl HloInstruction {
   pub fn add_fusion_operand() {}
   pub fn merge_fusion_instruction() {}
   pub fn merge_fusion_instruction_into_multi_output() {}
-  pub fn fused_instructions_computation() {}
+
+  pub fn fused_instructions_computation(&self) -> &HloComputation {
+    unimplemented!()
+  }
+
   pub fn fused_expression_root() {}
   pub fn fused_instructions() {}
   pub fn fused_instruction_count() {}
@@ -1645,6 +1646,15 @@ impl HloInstruction {
   pub fn cholsky_options() {}
   pub fn output_operand_aliasing() {}
   pub fn append_operand() {}
+
+  // HloCollectiveInstruction
+  pub fn is_collective_instruction(&self) -> bool {
+    self.collective_instruction.is_some()
+  }
+
+  pub fn constrain_layout(&self) -> bool {
+    self.collective_instruction.as_ref().unwrap().constrain_layout()
+  }
 
   fn print_extra_attributes_impl() {}
 

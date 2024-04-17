@@ -470,9 +470,19 @@ impl HloFftInstruction {
   }
 }
 
-pub struct HloCollectiveInstruction {}
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct HloCollectiveInstruction {
+  constrain_layout: bool
+}
 
 impl HloCollectiveInstruction {
+  pub fn new() -> Self {
+    HloCollectiveInstruction { constrain_layout: false }
+  }
+
   pub fn replica_groups() {}
-  pub fn constrain_layout() {}
+
+  pub fn constrain_layout(&self) -> bool {
+    self.constrain_layout
+  }
 }
