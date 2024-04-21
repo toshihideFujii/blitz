@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use common::{
   blitz_data::{FrontendAttributes, OpMetadata, PrimitiveType, Statisitic, StatisticsVis},
@@ -12,8 +12,42 @@ use common::{
 
 use crate::{
   hlo_computation::HloComputation, hlo_instructions::{
-    HloAsyncInstruction, HloAsyncStartInstruction, HloBatchNormGradInstruction, HloBatchNormInferenceInstruction, HloBatchNormTrainingInstruction, HloBroadcastInstruction, HloCallInstruction, HloCollectiveInstruction, HloCompareInstruction, HloConcatenateInstruction, HloConstantInstruction, HloCopyStartInstruction, HloDynamicReshapeInstruction, HloDynamicSliceInstruction, HloDynamicUpdateSliceInstruction, HloGetTupleElementInstruction, HloInfeedInstruction, HloIotaInstruction, HloMapInstruction, HloOutfeedInstruction, HloParameterInstruction, HloRecvDoneInstruction, HloRecvInstruction, HloReduceInstruction, HloReducePrecisionInstruction, HloReshapeInstruction, HloSendDoneInstruction, HloSendInstruction, HloSliceInstruction, HloSortInstruction, HloTopKInstruction, HloTransposeInstruction
-  }, hlo_module::HloModule, hlo_opcode::HloOpcode, hlo_sharding::HloSharding
+    HloAsyncInstruction,
+    HloAsyncStartInstruction,
+    HloBatchNormGradInstruction,
+    HloBatchNormInferenceInstruction,
+    HloBatchNormTrainingInstruction,
+    HloBroadcastInstruction,
+    HloCallInstruction,
+    HloCollectiveInstruction,
+    HloCompareInstruction,
+    HloConcatenateInstruction,
+    HloConstantInstruction,
+    HloCopyStartInstruction,
+    HloDynamicReshapeInstruction,
+    HloDynamicSliceInstruction,
+    HloDynamicUpdateSliceInstruction,
+    HloGetTupleElementInstruction,
+    HloInfeedInstruction,
+    HloIotaInstruction,
+    HloMapInstruction,
+    HloOutfeedInstruction,
+    HloParameterInstruction,
+    HloRecvDoneInstruction,
+    HloRecvInstruction,
+    HloReduceInstruction,
+    HloReducePrecisionInstruction,
+    HloReshapeInstruction,
+    HloSendDoneInstruction,
+    HloSendInstruction,
+    HloSliceInstruction,
+    HloSortInstruction,
+    HloTopKInstruction,
+    HloTransposeInstruction
+  },
+  hlo_module::HloModule,
+  hlo_opcode::HloOpcode,
+  hlo_sharding::HloSharding
 };
 
 #[derive(Clone, PartialEq)]
@@ -345,7 +379,7 @@ pub enum FusionKind {
 
 pub const MAIN_EXECUTION_THREAD: &'static str = "main";
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Rare {
   called_computations: Vec<HloComputation>,
   control_predecessors: Vec<HloInstruction>,
@@ -354,7 +388,7 @@ struct Rare {
   statistics_vis: StatisticsVis,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Users {
   users: Vec<HloInstruction>
 }
@@ -404,7 +438,7 @@ const SCATTER_COMPUTATION_INDEX: usize = 1;
 const TRUE_COMPUTATION_INDEX: usize = 0;
 const FALSE_COMPUTATION_INDEX: usize = 1;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloInstruction {
   unique_id: i64,
   index_in_parent: u32,
@@ -824,6 +858,15 @@ impl HloInstruction {
   pub fn create_set_dimension_size() {}
   pub fn create_add_dependency() {}
 
+  // Returns true if 'execution_thread' is included in the 'execution_threads_set'.
+  pub fn is_thread_included(
+    execution_thread: String,
+    execution_threads_set: &HashSet<String>) -> bool
+  {
+    execution_threads_set.is_empty() ||
+    execution_threads_set.contains(&execution_thread)
+  }
+
   // Returns the opcode for this instruction.
   pub fn opcode(&self) -> HloOpcode {
     self.opcode.clone()
@@ -941,7 +984,30 @@ impl HloInstruction {
 
   pub fn add_control_dependency_to() {}
   pub fn remove_control_dependency_to() {}
-  pub fn drop_all_control_deps() {}
+
+  // Drops all control predecessors and successors from this HLO instruction.
+  pub fn drop_all_control_deps(&mut self) -> Result<(), String> {
+    if self.has_rare() {
+      for _ctrl_succ in &mut self.mutable_rare().control_successors {
+        // TODO
+        //let mut index = MAX;
+        //for i in 0..ctrl_succ.rare().control_predecessors.len() {
+          //if ctrl_succ.rare().control_predecessors[i] == *self {
+            //index = i;
+            //break;
+          //}
+        //}
+        //ctrl_succ.mutable_rare().control_predecessors.remove(index);
+      }
+      for _ctrl_pred in &self.rare().control_predecessors {
+        // TODO
+      }
+      self.mutable_rare().control_successors.clear();
+      self.mutable_rare().control_predecessors.clear();
+    }
+    Ok(())
+  }
+
   pub fn safely_drop_all_control_dependencies() {}
 
   // Returns if instruction has any control dependencies.

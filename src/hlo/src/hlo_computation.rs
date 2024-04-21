@@ -2,7 +2,7 @@
 
 use crate::{hlo_instruction::{self, HloInstruction}, hlo_module::HloModule, hlo_opcode::HloOpcode};
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloComputation {
   name: String,
   unique_id: i64,

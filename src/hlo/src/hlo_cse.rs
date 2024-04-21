@@ -29,7 +29,7 @@ impl HloCSE {
 
   pub fn run(&self, module: &HloModule, execution_threads: &HashSet<String>) -> bool {
     let mut changed = false;
-    for computation in module.computations(execution_threads) {
+    for computation in module.computations_by_exec_threads(execution_threads) {
       if self.only_fusion_computations && !computation.is_fusion_computation() {
         continue;
       }

@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use hlo::{
   hlo_computation::HloComputation,
   hlo_instruction::HloInstruction,
-  hlo_module::HloModule
+  hlo_module::HloModule, hlo_opcode::HloOpcode
 };
 
 #[derive(Clone, PartialEq)]
@@ -16,9 +16,40 @@ pub enum CallContext {
   None,
 }
 
-pub fn call_context_to_string() {}
+pub fn call_context_to_string(context: &CallContext) -> String {
+  match *context {
+    CallContext::None => return "None".to_string(),
+    CallContext::ControlFlow => return "ControlFlow".to_string(),
+    CallContext::Embedded => return "Embedded".to_string(),
+    CallContext::Both => return "Both".to_string(),
+  }
+}
 
-pub fn get_instruction_call_context() {}
+pub fn get_instruction_call_context(opcode: &HloOpcode) -> CallContext {
+  match *opcode {
+    HloOpcode::Call => return CallContext::ControlFlow,
+    HloOpcode::Conditional => return CallContext::ControlFlow,
+    HloOpcode::While => return CallContext::ControlFlow,
+    HloOpcode::AsyncStart => return CallContext::ControlFlow,
+    HloOpcode::AsyncUpdate => return CallContext::ControlFlow,
+    HloOpcode::AsyncDone => return CallContext::ControlFlow,
+
+    HloOpcode::AllReduce => return CallContext::Embedded,
+    HloOpcode::ReduceScatter => return CallContext::Embedded,
+    HloOpcode::AllReduceStart => return CallContext::Embedded,
+    HloOpcode::Map => return CallContext::Embedded,
+    HloOpcode::Reduce => return CallContext::Embedded,
+    HloOpcode::ReduceWindow => return CallContext::Embedded,
+    HloOpcode::Scatter => return CallContext::Embedded,
+    HloOpcode::SelectAndScatter => return CallContext::Embedded,
+    HloOpcode::Sort => return CallContext::Embedded,
+    HloOpcode::TopK => return CallContext::Embedded,
+    HloOpcode::Fusion => return CallContext::Embedded,
+    HloOpcode::CustomCall => return CallContext::Embedded,
+
+    _ => return CallContext::None
+  }
+}
 
 // Represents an HLO instruction which calls one or more computations.
 pub struct CallSite {
@@ -28,7 +59,17 @@ pub struct CallSite {
 }
 
 impl CallSite {
-  pub fn new() {}
+  pub fn new(
+    instruction: HloInstruction,
+    called_computations: Vec<HloComputation>,
+    context: CallContext) -> Self
+  {
+    CallSite {
+      instruction: instruction,
+      called_computations: called_computations,
+      context: context
+    }
+  }
 
   // Returns the instruction associated with this call site.
   pub fn instruction(&self) -> &HloInstruction {
@@ -49,7 +90,7 @@ impl CallSite {
 }
 
 // A node in the call graph representing an HLO computation.
-pub struct CallGrapgNode {
+pub struct CallGraphNode {
   computation: HloComputation,
   callees: Vec<HloComputation>,
   callee_set: HashSet<HloComputation>,
@@ -62,9 +103,9 @@ pub struct CallGrapgNode {
   depth: i64,
 }
 
-impl CallGrapgNode {
+impl CallGraphNode {
   pub fn new(computation: HloComputation) -> Self {
-    CallGrapgNode {
+    CallGraphNode {
       computation: computation,
       callees: Vec::new(),
       callee_set: HashSet::new(),
@@ -140,19 +181,48 @@ impl CallGrapgNode {
   fn add_caller_call_site(&mut self, caller_callsite: CallSite) {
     let caller = caller_callsite.instruction().parent();
     if !self.callee_set.contains(caller) {
-      // TODO
+      self.callers.push(caller.clone());
+      self.caller_set.insert(caller.clone());
     }
     self.caller_callsites.push(caller_callsite);
   }
 
   // If instruction calls any computations adds a call site for this instruction
   // to the call graph node.
-  fn add_call_site_for_instruction(&mut self, _instruction: &HloInstruction) {}
+  fn add_call_site_for_instruction(
+    &mut self,
+    instruction: &HloInstruction,
+    execution_threads: &HashSet<String>)
+  {
+    debug_assert_eq!(instruction.parent(), self.computation());
+    let context = get_instruction_call_context(&instruction.opcode());
+    if !instruction.called_computations().is_empty() {
+      debug_assert!(context == CallContext::ControlFlow ||
+        context == CallContext::Embedded);
+      let callsite = CallSite::new(
+        instruction.clone(),
+        instruction.called_computations().clone(),
+        context);
+      self.callsites.push(callsite);
+      self.callsite_instructions.insert(instruction.clone(), self.callsites.len());
+
+      for callee in self.callsites.last().unwrap().called_computations() {
+        if HloInstruction::is_thread_included(
+          callee.execution_thread(),
+          execution_threads) &&
+          !self.callee_set.contains(callee)
+        {
+          self.callees.push(callee.clone());
+          self.callee_set.insert(callee.clone());
+        }
+      }
+    }
+  }
 }
 
 pub struct CallGraph {
   module: HloModule,
-  nodes: Vec<CallGrapgNode>
+  nodes: Vec<CallGraphNode>
 }
 
 impl CallGraph {
@@ -167,11 +237,14 @@ impl CallGraph {
   }
 
   // Returns the node associated with the given computation.
-  pub fn get_node(&self, _computation: &HloComputation) -> &CallGrapgNode {
+  pub fn get_node(&self, _computation: &HloComputation) -> &CallGraphNode {
     unimplemented!()
   }
 
-  pub fn nodes() {}
+  // Returns the vector of all nodes in the call graph.
+  pub fn nodes(&self) -> &Vec<CallGraphNode> {
+    &self.nodes
+  }
 
   // Calls the given function on each node in the call graph.
   pub fn visit_nodes<F>(
@@ -179,9 +252,9 @@ impl CallGraph {
     visitor_func: F,
     visit_unreachable_nodes: bool
   ) -> Result<(), String>
-    where F: Fn(&CallGrapgNode) -> Result<(), String>
+    where F: Fn(&CallGraphNode) -> Result<(), String>
   {
-    let visited: HashSet<CallGrapgNode> = HashSet::new();
+    let visited: HashSet<CallGraphNode> = HashSet::new();
     if visit_unreachable_nodes {
       // Traverse from all roots in the call graph.
       for node in &self.nodes {
@@ -199,15 +272,59 @@ impl CallGraph {
     Ok(())
   }
 
-  pub fn dominates() {}
-  pub fn can_reach() {}
-  pub fn instruction_is_nested_in() {}
+  // Returns true if 'a' dominates 'b' in the call graph.
+  pub fn dominates(&self, _a: &HloComputation, _b: &HloComputation) -> bool {
+    false
+  }
+
+  // Returns true if 'a' can reach 'b' in the call graph.
+  pub fn can_reach(&self, a: &HloComputation, b: &HloComputation) -> bool {
+    if a == b { return true; }
+    let b_node = self.get_node(b);
+    for b_caller in b_node.callers() {
+      if self.can_reach(a, b_caller) { return true; }
+    }
+    false
+  }
+
+  // Returns whether 'instruction' is contained in 'computation' either directly
+  // or indirectly.
+  pub fn instruction_is_nested_in(
+    &self, instruction: &HloInstruction, computation: &HloComputation) -> bool
+  {
+    self.dominates(computation, instruction.parent())
+  }
+
   pub fn nearest_ancestors_in_same_computation() {}
   pub fn nearest_common_ancestor_instructions() {}
   pub fn nearest_common_ancestor_computations() {}
   pub fn nearest_common_ancestors_helper() {}
-  pub fn is_flattened() {}
-  pub fn get_computation_callers() {}
+
+  // Returns whether the call graph is flattened.
+  pub fn is_flattened(&self) -> bool {
+    for node in self.nodes() {
+      if node.context() == CallContext::Both {
+        return false;
+      }
+      if node.context() == CallContext::ControlFlow &&
+        !node.computation().is_async_computation() &&
+         node.caller_callsites().len() > 1
+      {
+        return false;
+      }
+    }
+    true
+  }
+
+  // Returns a vector of instructions calling the passed computation.
+  pub fn get_computation_callers(&self, c: &HloComputation) -> Vec<HloInstruction> {
+    let mut callers = Vec::new();
+    for callsite in self.get_node(c).caller_callsites() {
+      callers.push(callsite.instruction().clone())
+    }
+    callers
+  }
+
   pub fn to_string() {}
 
   // Helper method for visit_nodes().
@@ -216,11 +333,12 @@ impl CallGraph {
   fn visit_nodes_internal<F>(
     &self,
     _visitor_func: &F,
-    _node: &CallGrapgNode,
-    _visited: &HashSet<CallGrapgNode>
+    _node: &CallGraphNode,
+    _visited: &HashSet<CallGraphNode>
   ) -> Result<(), String>
-    where F: Fn(&CallGrapgNode) -> Result<(), String>
+    where F: Fn(&CallGraphNode) -> Result<(), String>
   {
+    
     Ok(())
   }
 }

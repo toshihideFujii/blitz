@@ -140,7 +140,17 @@ impl HloModule {
   pub fn layout_canonicalization_callback() {}
   pub fn absl_hash_value() {}
 
-  pub fn computations(&self, _execution_threads: &HashSet<String>) -> &Vec<HloComputation> {
+  pub fn computations(&self) -> &Vec<HloComputation> {
+    unimplemented!()
+  }
+
+  pub fn mutable_computations(&mut self) -> &mut Vec<HloComputation> {
+    unimplemented!()
+  }
+
+  pub fn computations_by_exec_threads(
+    &self, _execution_threads: &HashSet<String>) -> &Vec<HloComputation>
+  {
     unimplemented!()
   }
 
@@ -172,7 +182,18 @@ impl HloModule {
   }
 
   pub fn make_computation_sorted() {}
-  pub fn make_nonfusion_computations() {}
+
+  // Gets the computation in this module which aren't for fusion nodes.
+  pub fn make_nonfusion_computations(&self) -> &Vec<HloComputation> {
+    unimplemented!()
+  }
+
+  pub fn make_nonfusion_computations_by_exec_threads(
+    &self, _execution_threads: &HashSet<String>) -> &Vec<HloComputation>
+  {
+    unimplemented!()
+  }
+
   pub fn make_nonfusion_computations_sorted() {}
 
   pub fn config(&self) -> &HloModuleConfig {

@@ -78,7 +78,7 @@ impl OpMetadata {
   pub fn preserve_layout(&self) -> bool { false }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FrontendAttributes {
   //map: HashMap<String, String>
 }
@@ -93,13 +93,13 @@ impl FrontendAttributes {
   //}
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Statisitic {
   stat_name: String,
   stat_val: i64, // TODO: f64
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StatisticsVis {
   stat_index_to_viaualize: i64,
   statiscics: Vec<Statisitic>

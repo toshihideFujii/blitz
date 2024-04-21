@@ -470,7 +470,7 @@ impl HloFftInstruction {
   }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloCollectiveInstruction {
   constrain_layout: bool
 }
