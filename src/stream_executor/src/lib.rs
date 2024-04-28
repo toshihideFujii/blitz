@@ -1,3 +1,19 @@
 
+pub mod blas;
+pub mod cuda;
+pub mod device_memory_allocator;
+pub mod device_memory;
+pub mod device_options;
+pub mod event;
+pub mod executor_cache;
+pub mod fft;
+pub mod kernel_spec;
+pub mod kernel;
+pub mod module_spec;
+pub mod multi_platform_manager;
+pub mod numeric_options;
 pub mod platform;
+pub mod plugin_registry;
+pub mod stream_executor_internal;
 pub mod stream_executor;
+pub mod stream;
