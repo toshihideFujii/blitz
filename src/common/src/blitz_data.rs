@@ -142,3 +142,16 @@ pub enum OpShardingType {
 }
 
 pub struct OpSharding {}
+
+pub struct DotDimensionNumbers {
+  lhs_contracting_dimensions: i64,
+  rhs_contracting_dimensions: i64,
+  lhs_batch_dimensions: i64,
+  rhs_batch_dimensions: i64,
+}
+
+impl DotDimensionNumbers {
+  pub fn lhs_contracting_dimensions(&self) -> i64 {
+    self.lhs_contracting_dimensions
+  }
+}

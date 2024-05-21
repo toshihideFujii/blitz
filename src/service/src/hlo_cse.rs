@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use crate::{hlo_computation::HloComputation, hlo_module::HloModule, hlo_opcode::HloOpcode};
+use hlo::{hlo_computation::HloComputation, hlo_module::HloModule, hlo_opcode::HloOpcode};
 
 // A pass which perform common-subexpression elimination.
 // Identical constants and identical instructions with the same operands are

@@ -230,10 +230,10 @@ impl CallGraph {
 
   // Builds and return a call graph for the given HLO module.
   pub fn build(
-    _module: HloModule,
-    _execution_threads: Option<HashSet<String>>) -> Option<Self>
+    _module: &HloModule,
+    _execution_threads: HashSet<String>) -> Self
   {
-    None
+    unimplemented!()
   }
 
   // Returns the node associated with the given computation.

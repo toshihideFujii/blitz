@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use common::{
   blitz_data::FrontendAttributes,
@@ -79,8 +79,22 @@ impl HloModule {
   }
 
   pub fn remove_unused_computations() {}
-  pub fn mark_fusion_deplications() {}
-  pub fn replace_computations() {}
+
+  // Mark duplicate fusions with the same name to be able to group them for
+  // analysis pirposes.
+  pub fn mark_fusion_duplications(
+    &self, _replacements: &HashMap<HloComputation, HloComputation>)
+  {
+    unimplemented!()
+  }
+
+  // Replaces all uses of computations that are keys of 'replacements' with
+  // the corresponding values in 'replacements'.
+  pub fn replace_computations(
+    &self, _replacements: &HashMap<HloComputation, HloComputation>)
+  {
+    unimplemented!()
+  }
 
   pub fn name(&self) -> String {
     self.name.clone()
@@ -177,7 +191,8 @@ impl HloModule {
     }
   }
 
-  pub fn make_computation_post_order(&self) -> Vec<&mut HloComputation> {
+  pub fn make_computation_post_order(
+    &self, _execution_threads: &HashSet<String>) -> Vec<&mut HloComputation> {
     unimplemented!()
   }
 

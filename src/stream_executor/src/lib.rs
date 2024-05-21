@@ -1,6 +1,10 @@
 
-pub mod blas;
 pub mod cuda;
+pub mod gpu;
+pub mod allocator_stats;
+pub mod blas;
+pub mod command_buffer;
+pub mod device_description;
 pub mod device_memory_allocator;
 pub mod device_memory;
 pub mod device_options;
@@ -9,6 +13,7 @@ pub mod executor_cache;
 pub mod fft;
 pub mod kernel_spec;
 pub mod kernel;
+pub mod launch_dim;
 pub mod module_spec;
 pub mod multi_platform_manager;
 pub mod numeric_options;

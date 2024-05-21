@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::{
+use hlo::{
   hlo_computation::HloComputation,
   hlo_instruction::HloInstruction,
   hlo_module::HloModule,
@@ -77,13 +77,13 @@ impl HloDCE {
 
   // Run the pass on the given module.
   // Returns whether the module was changed (instructions were removed).
-  pub fn run(&mut self, module: &HloModule, _execution_threads: HashSet<String>) -> bool {
+  pub fn run(&mut self, module: &HloModule, execution_threads: HashSet<String>) -> bool {
     let mut changed = false;
     println!("Before dce:");
     println!("{:?}", module.to_string());
 
     // Run DCE on each computation.
-    for computation in module.make_computation_post_order() {
+    for computation in module.make_computation_post_order(&execution_threads) {
       changed |= self.run_on_computation(computation, self.remove_cross_partition_collective_ops)
     }
 
@@ -91,7 +91,7 @@ impl HloDCE {
     // Keep doing passes through the module until no more computations can be
     // eliminated. The functions removes all aubcomputations that cana be proved
     // to have no ramining live callers.
-    changed |= HloDCE::recursively_remove_dead_computations(module);
+    changed |= HloDCE::recursively_remove_dead_computations(module, execution_threads);
 
     println!("After dve:");
     println!("{:?}", module.to_string());
@@ -101,7 +101,7 @@ impl HloDCE {
 
   // Finds all computations that are not called by any instruction and removes
   // them from the module. Returns whether any dead code was removed.
-  fn recursively_remove_dead_computations(module: &HloModule) -> bool {
+  fn recursively_remove_dead_computations(module: &HloModule, execution_threads: HashSet<String>) -> bool {
     // Tracks whether any dead code is eliminated by this pass.
     let mut module_contains_dead_code = false;
 
@@ -119,7 +119,7 @@ impl HloDCE {
 
     // Account for all threads' caller when counting a sub computation's live
     // call count.
-    for computation in module.make_computation_post_order() {
+    for computation in module.make_computation_post_order(&execution_threads) {
       for instruction in computation.instructions() {
         for subcomp in instruction.called_computations() {
           live_computation_call_count.insert(subcomp, count);
@@ -129,7 +129,7 @@ impl HloDCE {
     }
 
     // Find dead computations.
-    for computation in module.make_computation_post_order() {
+    for computation in module.make_computation_post_order(&execution_threads) {
       // Finds all 'top-level' dead computations not called by any instructions.
       // contains(comp) == true and live_computaiton_call_count[comp] = 0 also
       // inplies that computation is dead, but is nested in other dead computations.

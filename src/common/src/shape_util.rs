@@ -108,7 +108,6 @@ impl ShapeUtil {
   // of shape, which must be an array shape.
   pub fn byte_size_of_elements(shape: &Shape) -> i64 {
     assert_eq!(ShapeUtil::validate_shape_with_optional_layout(shape), Ok(()));
-
     assert!(LayoutUtil::is_dense_array(shape));
     let allocated_element_count = ShapeUtil::elements_in(shape);
 
@@ -117,6 +116,7 @@ impl ShapeUtil {
       let num_bits = (allocated_element_count * element_size_in_bits) as u32;
       return num_bits.div_ceil(8) as i64 // TODO: Is it ok ?
     }
+
     allocated_element_count *
       ShapeUtil::byte_size_of_primitive_type(&shape.element_type())
   }
@@ -845,13 +845,23 @@ impl ShapeUtil {
     !ShapeUtil::get_subshape(shape, index_vec).is_tuple()
   }
 
+  // Returns the number of leaves in the shape.
   pub fn get_leaf_count(shape: &Shape) -> usize {
     if !shape.is_tuple() {
       return 1;
     }
+    ShapeUtil::get_leaf_count_tuple(shape)
+  }
+
+  pub fn get_leaf_count_tuple(shape: &Shape) -> usize {
+    debug_assert!(shape.is_tuple());
     let mut count = 0;
     for subshape in shape.tuple_shapes_vec() {
-      count += ShapeUtil::get_leaf_count(subshape);
+      if subshape.is_tuple() {
+        count += ShapeUtil::get_leaf_count(subshape);
+      } else {
+        count += 1;
+      }
     }
     count
   }

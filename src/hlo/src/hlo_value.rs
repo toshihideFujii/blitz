@@ -1,17 +1,17 @@
 #![allow(dead_code)]
 
-use common::shape::Shape;
+use std::cmp::Ordering;
+
+use common::{shape::Shape, shape_tree::ShapeTree, shape_util::ShapeUtil};
 
 use crate::{
-  hlo_computation::HloComputation,
-  hlo_instruction::HloInstruction,
-  buffer_value::BufferValue
+  buffer_value::BufferValue, hlo_computation::HloComputation, hlo_instruction::HloInstruction,
 };
 
 // abstraction which identifies a specific point in the Blitz graph.
 // an HloPosition specifies a shapeIndex within the output of a specific
 // instruction.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloPosition {
   instruction: HloInstruction,
   index: usize
@@ -28,11 +28,36 @@ impl HloPosition {
   pub fn to_string() {}
 }
 
+impl PartialOrd for HloPosition {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    if self.instruction.unique_id() < other.instruction.unique_id() {
+      Some(Ordering::Less)
+    } else if self.instruction.unique_id() == other.instruction.unique_id() {
+      Some(Ordering::Equal)
+    } else {
+      Some(Ordering::Greater)
+    }
+  }
+}
+
+impl Ord for HloPosition {
+  fn cmp(&self, other: &Self) -> Ordering {
+    if self.instruction.unique_id() < other.instruction.unique_id() {
+      Ordering::Less
+    } else if self.instruction.unique_id() == other.instruction.unique_id() {
+      Ordering::Equal
+    } else {
+      Ordering::Greater
+    }
+  }
+}
+
 // Defines a single use of an HLO value.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct HloUse {
-  instruction: HloInstruction,
-  operand_number: i64,
-  operand_index: usize
+  pub instruction: HloInstruction,
+  pub operand_number: i64,
+  pub operand_index: usize
 }
 
 impl HloUse {
@@ -40,6 +65,7 @@ impl HloUse {
   pub fn to_string() {}
 }
 
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct HloValue {
   buffer_value: BufferValue,
   positions: Vec<HloPosition>,
@@ -140,24 +166,80 @@ impl HloValue {
     self.live_out_of_module
   }
 
-  pub fn to_short_string() {}
-  pub fn to_string() {}
+  pub fn to_short_string(&self) -> String {
+    unimplemented!()
+  }
+
+  pub fn to_string(&self) -> String {
+    unimplemented!()
+  }
 
   // ----- BufferValue methods -----
   pub fn id(&self) -> i64 {
     self.buffer_value.id()
   }
+
+  pub fn color(&self) -> i64 {
+    self.buffer_value.color()
+  }
+}
+
+impl PartialOrd for HloValue {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    if self.id() < other.id() {
+      return Some(Ordering::Less);
+    } else if self.id() == other.id() {
+      return Some(Ordering::Equal);
+    } else {
+      return Some(Ordering::Greater);
+    }
+  }
+}
+
+impl Ord for HloValue {
+  fn cmp(&self, other: &Self) -> Ordering {
+    if self.id() < other.id() {
+      return Ordering::Less;
+    } else if self.id() == other.id() {
+      return Ordering::Equal;
+    } else {
+      return Ordering::Greater;
+    }
+  }
 }
 
 // A class representing the possible set of HloValues at a particular point
 // (shape index in the output of an instruction) in the Blitz graph.
+#[derive(Default, Clone, PartialEq)]
 pub struct HloValueSet {
   values: Vec<HloValue>
 }
 
 impl HloValueSet {
-  pub fn new() {}
-  pub fn assign_union_of() {}
+  pub fn default() -> Self {
+    HloValueSet { values: Vec::new() }
+  }
+
+  pub fn new(values: Vec<HloValue>) -> Self {
+    let mut instance = HloValueSet { values: values };
+    instance.sort_and_uniquify_values();
+    instance
+  }
+
+  // Sets this value set to the union of the given value sets.
+  // Returns whether this value set changed.
+  pub fn assign_union_of(&mut self, inputs: Vec<HloValueSet>) -> bool {
+    let mut original: Vec<HloValue> = Vec::new();
+    original.clone_from_slice(&self.values);
+
+    for input in inputs {
+      for value in input.values {
+        self.values.push(value);
+      }
+    }
+    self.sort_and_uniquify_values();
+    if self.values != original { true } else { false }
+  }
 
   // Return the vector of HloValues in the set.
   // Values in the vector are unique and stably sorted by value id.
@@ -165,7 +247,14 @@ impl HloValueSet {
     &self.values
   }
 
-  pub fn add_value() {}
+  // Adds the value to the set.
+  // Returns true if the value was added and didn't already exist in the set.
+  pub fn add_value(&mut self, value: HloValue) -> bool {
+    if self.values.contains(&value) { return false; }
+    self.values.push(value);
+    self.sort_and_uniquify_values();
+    true
+  }
 
   // Clear all values from the set.
   pub fn clear(&mut self) {
@@ -182,14 +271,103 @@ impl HloValueSet {
     self.values.get(0).unwrap()
   }
 
-  pub fn to_string() {}
+  pub fn to_string(&self) -> String {
+    let mut result = "HloValueSet: ".to_string();
+    for value in &self.values {
+      result.push_str(&value.to_short_string());
+      if Some(value) != self.values.last() {
+        result.push_str(", ");
+      }
+    }
+    result
+  }
+
+  // Sorts value and removes duplicates.
+  fn sort_and_uniquify_values(&mut self) {
+    self.values.sort();
+    self.values.dedup();
+  }
 }
 
-pub struct InstructionValueSet {}
+// A class collecting the HloValues which might be contained in the output of
+// an HLO instruction.
+#[derive(Clone, PartialEq)]
+pub struct InstructionValueSet {
+  shape_tree: ShapeTree<HloValueSet>
+}
 
 impl InstructionValueSet {
-  pub fn new() {}
-  pub fn assign_union_of() {}
-  pub fn is_ambiguous() {}
-  pub fn to_string() {}
+  pub fn new(shape: Shape) -> Self {
+    InstructionValueSet { shape_tree: ShapeTree::new(shape) }
+  }
+
+  // Sets this value set to the union of the given value sets.
+  // Returns whether this value set changed.
+  pub fn assign_union_of(&mut self, inputs: Vec<InstructionValueSet>) -> bool {
+    debug_assert!(inputs.len() > 0);
+    for _i in 1..inputs.len() {
+      debug_assert!(ShapeUtil::compatible(
+        inputs[0].shape(), inputs[1].shape()));
+    }
+    let mut changed = false;
+    for pair in self.mutable_nodes() {
+      let index = pair.0;
+      let value_set = &mut pair.1;
+      let mut input_value_sets = Vec::new();
+      for input in &inputs {
+        input_value_sets.push(input.element(index).clone());
+      }
+      changed |= value_set.assign_union_of(input_value_sets);
+    }
+    changed
+  }
+
+  // Return true if any value sets for any subshape element is not a singleton.
+  pub fn is_ambiguous(&self) -> bool {
+    let mut ambiguous = false;
+    for node in self.nodes() {
+      ambiguous |= node.1.values().len() > 1;
+    }
+    ambiguous
+  }
+
+  pub fn shape(&self) -> &Shape {
+    self.shape_tree.shape()
+  }
+
+  pub fn element(&self, index: usize) -> &HloValueSet {
+    self.shape_tree.element(index)
+  }
+
+  pub fn mutable_element(&mut self, index: usize) -> &mut HloValueSet {
+    self.shape_tree.mutable_element(index)
+  }
+
+  pub fn find(&self, index: usize) -> &(usize, HloValueSet) {
+    self.shape_tree.find(index)
+  }
+
+  pub fn nodes(&self) -> &Vec<(usize, HloValueSet)> {
+    self.shape_tree.nodes()
+  }
+
+  pub fn mutable_nodes(&mut self) -> &mut Vec<(usize, HloValueSet)> {
+    self.shape_tree.mutable_nodes()
+  }
+
+  pub fn to_string(&mut self) -> String {
+    let mut out = "InstructionValueSet(".to_string();
+    out.push_str(ShapeUtil::human_string(self.shape()).as_str());
+    out.push_str(")\n");
+
+    let mut func = |index: usize, value_set: &mut HloValueSet| {
+      out.push_str("  ");
+      out.push_str(&index.to_string());
+      out.push_str(" : ");
+      out.push_str(&value_set.to_string());
+      out.push('\n');
+    };
+    self.shape_tree.for_each_mutable_element(&mut func);
+    out
+  }
 }

@@ -1,5 +1,9 @@
 #![allow(dead_code)]
 
+use std::collections::HashSet;
+
+use hlo::hlo_module::HloModule;
+
 pub struct AlgebraicSimplifierOptions {
   is_layout_sensitive: bool,
   enable_dot_strength_reduction: bool,
@@ -194,14 +198,85 @@ impl AlgebraicSimplifierOptions {
   }
 }
 
-pub struct AlgebraicSimplifier {}
+// A pass which performs algebraic simplifications.
+pub struct AlgebraicSimplifier {
+  options: AlgebraicSimplifierOptions
+}
 
 impl AlgebraicSimplifier {
-  pub fn new() {}
+  pub fn new(options: AlgebraicSimplifierOptions) -> Self {
+    AlgebraicSimplifier { options: options }
+  }
 
   pub fn name() -> String {
     "algsimp".to_string()
   }
 
+  // Run algebraic simplification on the given computation.
+  pub fn run(_module: &HloModule, _execution_threads: HashSet<String>) {}
+
+  pub fn create_constant_with_layout_updated() {}
+}
+
+
+pub struct AlgebraicSimplifierVisitor {}
+
+impl AlgebraicSimplifierVisitor {
+  pub fn new() {}
+  pub fn handle_abs() {}
+  pub fn handle_add() {}
+  pub fn handle_and() {}
+  pub fn handle_bitcast() {}
+  pub fn handle_bitcast_convert() {}
+  pub fn handle_broadcast() {}
+  pub fn handle_compare() {}
+  pub fn handle_concatenate() {}
+  pub fn hamdle_constant() {}
+  pub fn handle_copy() {}
+  pub fn handle_convert() {}
+  pub fn hamdle_complex() {}
+  pub fn handle_custom_call() {}
+  pub fn handle_real() {}
+  pub fn handle_imag() {}
+  pub fn handle_iota() {}
+  pub fn handle_convolution() {}
+  pub fn handle_divide() {}
+  pub fn handle_dot() {}
+  pub fn handle_gather() {}
+  pub fn handle_get_tuple_element() {}
+  pub fn handle_log() {}
+  pub fn handle_maximum() {}
+  pub fn handle_minimum() {}
+  pub fn handle_clamp() {}
+  pub fn handle_multiply() {}
+  pub fn handle_negate() {}
+  pub fn handle_not() {}
+  pub fn handle_optimization_bariier() {}
+  pub fn handle_or() {}
+  pub fn handle_pad() {}
+  pub fn handle_power() {}
+  pub fn handle_remainder() {}
+  pub fn handle_reshape() {}
+  pub fn handle_reduce() {}
+  pub fn handle_reduce_window() {}
+  pub fn handle_reverse() {}
+  pub fn hadle_rsqrt() {}
+  pub fn handle_slice() {}
+  pub fn handle_sqrt() {}
+  pub fn handle_dynamic_slice() {}
+  pub fn handle_dynamic_update_slice() {}
+  pub fn handle_scatter() {}
+  pub fn handle_select() {}
+  pub fn handle_sort() {}
+  pub fn handle_transpose() {}
+  pub fn handle_subtract() {}
+  pub fn handle_map() {}
+
   pub fn run() {}
+  pub fn compute_bitcast_dim_map() {}
+  pub fn invert_bitcast_dim_map() {}
+  pub fn reshape_layout_dimensions() {}
+
+  pub fn is_valid_layout() {}
+  pub fn should_strength_reduce_dot_to_reduce() {}
 }

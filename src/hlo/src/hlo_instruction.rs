@@ -3,11 +3,11 @@
 use std::collections::{HashMap, HashSet};
 
 use common::{
-  blitz_data::{FrontendAttributes, OpMetadata, PrimitiveType, Statisitic, StatisticsVis},
+  blitz_data::{DotDimensionNumbers, FrontendAttributes, OpMetadata, PrimitiveType, Statisitic, StatisticsVis},
   comparison_util::{ComparisonType, Direction},
   literal::Literal,
   printer::{Printer, StringPrinter},
-  shape::Shape
+  shape::Shape, shape_util::ShapeUtil
 };
 
 use crate::{
@@ -421,7 +421,16 @@ impl Users {
   }
 
   pub fn maybe_remove_user() {}
-  pub fn remove_user() {}
+
+  pub fn remove_user(&mut self, user: HloInstruction) {
+    let mut target_index = 0;
+    for i in 0..self.users.len() {
+      if self.users.get(i) == Some(&user) {
+        target_index = i;
+      }
+    }
+    self.users.remove(target_index);
+  }
 
   pub fn user_id(&self, _user: &HloInstruction) -> i64 { 0 }
 
@@ -1047,8 +1056,39 @@ impl HloInstruction {
     false
   }
 
-  pub fn replace_use_with() {}
-  pub fn replace_use_with_different_shape() {}
+  // Replaces the use of this instruction in 'user' with 'new_producer'.
+  pub fn replace_use_with(
+    &mut self, user: &HloInstruction, new_producer: &mut HloInstruction) -> Result<(), String>
+  {
+    debug_assert!(ShapeUtil::compatible_ignoring_fp_precision(self.shape(), new_producer.shape()));
+    self.replace_use_with_different_shape(user, new_producer)
+  }
+
+  // Same as replace_use_with(), but new_producer can have a different shape.
+  pub fn replace_use_with_different_shape(
+    &mut self, user: &HloInstruction, new_producer: &mut HloInstruction) -> Result<(), String>
+  {
+    println!("Replacing uses of {:?} in  {:?} with {:?}.",
+      self.name(), user.name(), new_producer.name());
+    
+    self.remove_user(user.clone()); // check
+
+    let mut count = 0;
+    for operand in user.operands() {
+      if operand == self { count += 1; }
+    }
+    debug_assert!(count >= 0);
+
+    // TODO
+    new_producer.add_user(user.clone());
+    if user.opcode() == HloOpcode::Fusion {
+      let result = user.deduplicate_fusion_operands();
+      if result.is_err() { return result; }
+    }
+
+    Ok(())
+  }
+
   pub fn replace_operand_with() {}
   pub fn replace_operand_with_different_shape() {}
 
@@ -1437,7 +1477,11 @@ impl HloInstruction {
   pub fn reuse_operand_elements() {}
   pub fn operand_indices() {}
   pub fn reshape_merely_inserts_or_deletes_1_sized_dimensions() {}
-  pub fn name() {}
+
+  // Gets the string identifier for this instruction.
+  pub fn name(&self) -> String {
+    self.name.clone()
+  }
 
   // Sets the string identifier for this instruction. Name will be sanitized to
   // match the regexp "[a-zA-Z_][a-zA-Z0-9.-]*".
@@ -1632,6 +1676,8 @@ impl HloInstruction {
 
   pub fn relayout_constant() {}
   pub fn append_instruction_into_called_computation() {}
+
+  // ##### HloFusionInstruction : start #####
   pub fn add_fusion_operand() {}
   pub fn merge_fusion_instruction() {}
   pub fn merge_fusion_instruction_into_multi_output() {}
@@ -1643,7 +1689,12 @@ impl HloInstruction {
   pub fn fused_expression_root() {}
   pub fn fused_instructions() {}
   pub fn fused_instruction_count() {}
-  pub fn fused_parameter() {}
+
+  // Delegates to HloFusionInstruction::fused_parameters.
+  pub fn fused_parameter(&self, _parameter_number: i64) -> &HloInstruction {
+    unimplemented!()
+  }
+
   pub fn fused_parameters() {}
   pub fn is_multi_output_fusion() {}
 
@@ -1653,6 +1704,14 @@ impl HloInstruction {
   }
 
   pub fn set_fusion_kind() {}
+
+  // If multiple operands are the same instruction, keeps only one of them.
+  pub fn deduplicate_fusion_operands(&self) -> Result<(), String> {
+    unimplemented!()
+  }
+
+  // ##### HloFusionInstruction : end #####
+
   pub fn random_distribution() {}
   pub fn parameter_number() {}
   pub fn set_parameter_replicated_at_leaf_buffers() {}
@@ -1693,7 +1752,11 @@ impl HloInstruction {
   pub fn gather_dimension_numbers() {}
   pub fn gather_slice_sizes() {}
   pub fn scatter_dimension_numbers() {}
-  pub fn dot_dimension_numbers() {}
+
+  pub fn dot_dimension_numbers(&self) -> &DotDimensionNumbers {
+    unimplemented!()
+  }
+
   pub fn operand_side_metadata() {}
   pub fn user_side_metadata() {}
   pub fn is_asynchronous() {}
@@ -1713,7 +1776,7 @@ impl HloInstruction {
   pub fn output_operand_aliasing() {}
   pub fn append_operand() {}
 
-  // HloCollectiveInstruction
+  // HloCollectiveInstruction : start
   pub fn is_collective_instruction(&self) -> bool {
     self.collective_instruction.is_some()
   }
@@ -1723,6 +1786,7 @@ impl HloInstruction {
   }
 
   fn print_extra_attributes_impl() {}
+  // HloCollectiveInstruction : end
 
   fn is_elementwise_impl(&self, _operand_idx: Option<i64>) -> bool {
     false
@@ -1731,8 +1795,17 @@ impl HloInstruction {
   fn print_operand_with_canonical_name_map() {}
   fn identical_slow_path() {}
   fn create_nary() {}
-  fn add_user() {}
-  fn remove_user() {}
+
+  // Adds a user for this instruction.
+  fn add_user(&mut self, user: HloInstruction) {
+    self.users.add_user(user);
+  }
+
+  // Removes a user for this instruction.
+  fn remove_user(&mut self, user: HloInstruction) {
+    self.users.remove_user(user);
+  }
+
   fn get_backend_config_internal() {}
   fn mark_as_dead() {}
 

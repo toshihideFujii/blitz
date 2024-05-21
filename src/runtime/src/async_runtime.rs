@@ -41,3 +41,12 @@ impl AsyncRuntime {
   pub fn as_value() {}
   pub fn runner() {}
 }
+
+pub struct AsyncRuntimeObject {}
+
+pub struct AsyncToken {}
+
+impl AsyncToken {
+  pub fn new() {}
+  pub fn get_async_value() {}
+}

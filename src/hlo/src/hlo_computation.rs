@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::{hlo_instruction::{self, HloInstruction}, hlo_module::HloModule, hlo_opcode::HloOpcode};
+use crate::{hlo_instruction::{self, HloInstruction, HloPrintOptions}, hlo_module::HloModule, hlo_opcode::HloOpcode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloComputation {
@@ -103,6 +103,9 @@ impl HloComputation {
   pub fn print() {}
 
   pub fn to_string(&self) -> String { "".to_string() }
+  pub fn to_string_with_options(&self, _options: &HloPrintOptions) -> String {
+    unimplemented!()
+  }
 
   pub fn to_cord() {}
   pub fn to_proto() {}
@@ -182,7 +185,10 @@ impl HloComputation {
     false //self.is_fusion_computation
   }
 
-  pub fn is_entry_computation() {}
+  // Returns if the computation is the entry computation of the module.
+  pub fn is_entry_computation(&self) -> bool {
+    self.parent().as_ref().unwrap().entry_computation().unwrap() == self
+  }
 
   // Returns the owning fusion instruction, or nullptr if this is not a fusion
   // computation.
