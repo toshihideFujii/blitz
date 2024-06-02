@@ -16,6 +16,7 @@ pub mod metric_table_report;
 pub mod overflow_util;
 pub mod packed_literal_reader;
 pub mod parse_flags_from_env;
+pub mod permutation_util;
 pub mod primitive_util;
 pub mod printer;
 pub mod service_interface;

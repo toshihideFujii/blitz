@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::{hlo_instruction::{self, HloInstruction, HloPrintOptions}, hlo_module::HloModule, hlo_opcode::HloOpcode};
+use crate::{dfs_hlo_visitor_with_default::FunctionVisitor, hlo_instruction::{self, HloInstruction, HloPrintOptions}, hlo_module::HloModule, hlo_opcode::HloOpcode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloComputation {
@@ -28,11 +28,16 @@ impl HloComputation {
 
   // Add an instruction to the computation.
   // The computation takes ownership of the instruction.
-  pub fn add_instruction(&mut self, mut instruction: HloInstruction, name: String) {
+  pub fn add_instruction(&
+    mut self, mut instruction: HloInstruction, name: String) -> &mut HloInstruction
+  {
     assert!(instruction.opcode() != HloOpcode::Parameter,
       "Parameter insstructions cannot be added to a computation after it has been built.");
     if !name.is_empty() { instruction.set_and_sanitize_name(name); }
     self.add_instruction_internal(instruction);
+
+    // TODO
+    unimplemented!()
   }
 
   fn add_instruction_internal(&mut self, _instruction: HloInstruction) {}
@@ -120,7 +125,11 @@ impl HloComputation {
     &mut self.instructions
   }
 
-  pub fn make_instruction_post_order(&self) -> &mut Vec<HloInstruction> {
+  pub fn make_instruction_post_order(&self) -> &Vec<HloInstruction> {
+    unimplemented!()
+  }
+
+  pub fn mutable_make_instruction_post_order(&mut self) -> &mut Vec<HloInstruction> {
     unimplemented!()
   }
 
@@ -148,7 +157,10 @@ impl HloComputation {
     unimplemented!()
   }
 
-  pub fn accept() {}
+  pub fn accept(&self, _visitor: &FunctionVisitor) -> Result<(), String> {
+    unimplemented!()
+  }
+
   pub fn accept_ordered() {}
 
   // Returns true if the given instruction can be removed from the computation.

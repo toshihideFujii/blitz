@@ -1,11 +1,15 @@
 #![allow(dead_code)]
 
 use crate::{
-  blitz_data::{PrimitiveType, DimLevelType},
-  shape::{Shape, ProgramShape, ShapeEqual,},
-  primitive_util, overflow_util::{self, overflow_safe_multiply},
+  blitz_data::{DimLevelType, PrimitiveType},
+  layout::Tile,
   layout_util::LayoutUtil,
-  printer::{StringPrinter, Printer}, layout::Tile, util::DimensionVector,
+  overflow_util::{self, overflow_safe_multiply},
+  permutation_util::compose_permutation,
+  primitive_util,
+  printer::{Printer, StringPrinter},
+  shape::{ProgramShape, Shape, ShapeEqual},
+  util::DimensionVector
 };
 
 pub struct ShapeUtil {}
@@ -42,7 +46,18 @@ impl ShapeUtil {
     result.0
   }
 
-  pub fn elements_in_recursive() {}
+  // As elements_in(), but recurses through tuples.
+  pub fn elements_in_recursive(shape: &Shape) -> i64 {
+    debug_assert!(shape.is_array() || shape.is_tuple());
+    if shape.is_array() {
+      return ShapeUtil::elements_in(shape);
+    }
+    let mut count = 0;
+    for element_shape in shape.tuple_shapes_vec() {
+      count += ShapeUtil::elements_in_recursive(element_shape);
+    }
+    count
+  }
 
   // Returns true if shape has the primitive type, recurses through tuples.
   pub fn has_primitive_type(shape: &Shape, primitive_type: &PrimitiveType) -> bool {
@@ -923,7 +938,36 @@ impl ShapeUtil {
   pub fn inserted_or_deleted_sized_dimensions() {}
   pub fn dimensions_unmodified_by_reshape() {}
   pub fn rehsape_leaves_dimensions_unmodified() {}
-  pub fn transpose_is_bitcast() {}
+
+  // Returns whether a transpose from input_shape to output_shape with dimension
+  // mapping "dimension_mapping" produces a result which is bit-wise identical
+  // to its input and thus may be replaced with a bitcast.
+  pub fn transpose_is_bitcast(
+    input_shape: &Shape,
+    output_shape: &Shape,
+    dimension_mapping: Vec<i64>,
+    ignore_element_type: bool) -> bool
+  {
+    debug_assert!(LayoutUtil::is_dense_array(input_shape),
+      "{:?}", input_shape.to_string(true));
+    debug_assert!(LayoutUtil::is_dense_array(output_shape),
+      "{:?}", output_shape.to_string(true));
+    debug_assert!(input_shape.has_layout(), "{:?}", input_shape.to_string(true));
+    debug_assert!(output_shape.has_layout(), "{:?}", output_shape.to_string(true));
+
+    if !ignore_element_type &&
+       !ShapeUtil::same_element_type(input_shape, output_shape)
+    {
+      return false;
+    }
+
+    let permutations = compose_permutation(
+      dimension_mapping,
+      output_shape.layout().as_ref().unwrap().minor_to_major_vec().clone());
+    
+    &permutations == input_shape.layout().as_ref().unwrap().minor_to_major_vec()
+  }
+
   pub fn reshape_is_bitcast() {}
   pub fn is_reshape_or_transpose_bitcast() {}
   pub fn deduce_transpose_dimensions_for_bitcast() {}

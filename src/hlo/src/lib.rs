@@ -1,21 +1,15 @@
 
 pub mod evaluator;
+pub mod dfs_hlo_visitor_with_default;
+pub mod dfs_hlo_visitor;
 pub mod buffer_value;
 pub mod hlo_buffer;
 pub mod hlo_computation;
 pub mod hlo_creation_utils;
-pub mod hlo_domain_map;
-pub mod hlo_domain_remover;
-pub mod hlo_domain_verifier;
-pub mod hlo_element_type_converter;
-pub mod hlo_execution_profile;
-pub mod hlo_graph_dumper;
+pub mod hlo_domain_metadata;
 pub mod hlo_input_output_alias_config;
 pub mod hlo_instruction;
 pub mod hlo_instructions;
-pub mod hlo_lexer;
-pub mod hlo_liveness_analysis;
-pub mod hlo_memory_scheduler;
 pub mod hlo_module_config;
 pub mod hlo_module_dce;
 pub mod hlo_module_group_metadata;

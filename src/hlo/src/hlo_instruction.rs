@@ -11,7 +11,7 @@ use common::{
 };
 
 use crate::{
-  hlo_computation::HloComputation, hlo_instructions::{
+  hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata, hlo_instructions::{
     HloAsyncInstruction,
     HloAsyncStartInstruction,
     HloBatchNormGradInstruction,
@@ -44,10 +44,7 @@ use crate::{
     HloSortInstruction,
     HloTopKInstruction,
     HloTransposeInstruction
-  },
-  hlo_module::HloModule,
-  hlo_opcode::HloOpcode,
-  hlo_sharding::HloSharding
+  }, hlo_module::HloModule, hlo_opcode::HloOpcode, hlo_sharding::HloSharding
 };
 
 #[derive(Clone, PartialEq)]
@@ -406,6 +403,10 @@ impl Users {
 
   pub fn vec(&self) -> &Vec<HloInstruction> {
     &self.users
+  }
+
+  pub fn mutable_vec(&mut self) -> &mut Vec<HloInstruction> {
+    &mut self.users
   }
 
   pub fn clear(&mut self) {
@@ -959,7 +960,18 @@ impl HloInstruction {
     &mut self.operands
   }
 
-  pub fn unique_operands() {}
+  // Returns the vector of unique oprands, in the same order they are found
+  // within the operand vector.
+  pub fn unique_operands(&self) -> Vec<HloInstruction> {
+    let mut unique = vec![];
+    let mut seen = HashSet::new();
+    for operand in self.operands() {
+      if seen.insert(operand) {
+        unique.push(operand.clone());
+      }
+    }
+    unique
+  }
 
   // Returns the index of 'target' in the operands sequence.
   pub fn operand_index(&self, target: &HloInstruction) -> usize {
@@ -979,6 +991,10 @@ impl HloInstruction {
   // Returns the users of this instruction.
   pub fn users(&self) -> &Vec<HloInstruction> {
     self.users.vec()
+  }
+
+  pub fn mutable_users(&mut self) -> &mut Vec<HloInstruction> {
+    self.users.mutable_vec()
   }
 
   // Returns the index of the user in the users vector.
@@ -1024,7 +1040,11 @@ impl HloInstruction {
     false
   }
 
-  pub fn copy_all_control_deps_from() {}
+  // Copies the control predecessors and successors on this HLO instruction to
+  // 'inst'.
+  pub fn copy_all_control_deps_from(_inst: &HloInstruction) -> Result<(), String> {
+    unimplemented!()
+  }
 
   // Returns the set of control predecessors / successors of this instruction.
   pub fn control_predecessors(&self) -> &Vec<HloInstruction>{
@@ -1112,8 +1132,60 @@ impl HloInstruction {
     Ok(())
   }
 
-  pub fn replace_all_uses_with() {}
-  pub fn replace_all_uses_with_different_shape() {}
+  // Replaces all uses of this instruction with thenew producer.
+  pub fn replace_all_uses_with(
+    &mut self, new_producer: &mut HloInstruction, trigger: String) -> Result<(), String>
+  {
+    let mut print_options = HloPrintOptions::short_parsable();
+    print_options.set_print_operand_shape(true);
+    print_options.set_print_extra_attributes(false);
+
+    if !ShapeUtil::compatible_ignoring_fp_precision(self.shape(), new_producer.shape()) {
+      let mut result = "The shape doesn't match when replacing".to_string();
+      result.push_str(&self.to_string(&print_options));
+      result.push_str(" with ");
+      result.push_str(&new_producer.to_string(&print_options));
+      result.push_str(". ");
+      result.push_str(&self.shape().to_string(false));
+      result.push_str(" is not compatible with ");
+      result.push_str(&new_producer.shape().to_string(false));
+      result.push('\n');
+      result.push_str(&trigger);
+      result.push('\n');
+      result.push_str(" triggered this wrong replacement.");
+      return Err(result);
+    }
+    self.replace_all_uses_with_different_shape(new_producer)
+  }
+
+  // Same as replace_all_uses_with, but new_producer can have a different shape.
+  pub fn replace_all_uses_with_different_shape(
+    &mut self, new_producer: &mut HloInstruction) -> Result<(), String>
+  {
+    let mut new_producer_is_user = false;
+    for user in self.users() {
+      if user == new_producer {
+        new_producer_is_user = true;
+      } else {
+        // TODO
+        new_producer.add_user(user.clone());
+        if user.opcode() == HloOpcode::Fusion {
+          // TODO
+        }
+      }
+    }
+    self.users.clear();
+    if new_producer_is_user {
+      self.add_user(new_producer.clone());
+    }
+    if self.parent.is_some() && self.parent().root_instruction() == self {
+      self.mutable_parent().set_root_instruction(
+        new_producer.clone(), true);
+    }
+
+    Ok(())
+  }
+
   pub fn accept() {}
   pub fn accept_with_operand_order() {}
   pub fn visit() {}
@@ -1222,16 +1294,17 @@ impl HloInstruction {
   pub fn signature_string() {}
 
   // Prints a debugging string that represents this instruction.
-  pub fn print(_printer: &dyn Printer, _options: HloPrintOptions) {}
+  pub fn print(_printer: &dyn Printer, _options: &HloPrintOptions) {}
 
-  pub fn to_string_default(&self) {
-    self.to_string(HloPrintOptions::default());
+  pub fn to_string_default(&self) -> String {
+    self.to_string(&HloPrintOptions::default())
   }
 
   // Returns a debugging string that represents this instruction.
-  pub fn to_string(&self, options: HloPrintOptions) {
+  pub fn to_string(&self, options: &HloPrintOptions) -> String {
     let printer = StringPrinter::new();
-    HloInstruction::print(&printer, options)
+    HloInstruction::print(&printer, options);
+    "".to_string() // TODO
   }
 
   pub fn print_extra_attributes() {}
@@ -1346,7 +1419,13 @@ impl HloInstruction {
 
   pub fn setup_derived_instruction() {}
   pub fn clone_with_new_shape() {}
-  pub fn clone_with_new_opereands() {}
+
+  // Clones the HLO instruction as above but with new shape and operands.
+  pub fn clone_with_new_opereands(
+    &self, _shape: &Shape, _new_operands: Vec<HloInstruction>) -> HloInstruction
+  {
+    unimplemented!()
+  }
 
   // Returns the computations this instruction directly calls (if any).
   pub fn called_computations(&self) -> &Vec<HloComputation> {
@@ -1640,6 +1719,10 @@ impl HloInstruction {
     self.parent.as_ref().unwrap()
   }
 
+  pub fn mutable_parent(&mut self) -> &mut HloComputation {
+    self.parent.as_mut().unwrap()
+  }
+
   // Returns the module for this instruction.
   pub fn get_module(&self) -> &Option<HloModule> {
     if self.parent.is_some() {
@@ -1757,8 +1840,14 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn operand_side_metadata() {}
-  pub fn user_side_metadata() {}
+  pub fn operand_side_metadata(&self) -> &DomainMetadata {
+    unimplemented!()
+  }
+
+  pub fn user_side_metadata(&self) -> &DomainMetadata {
+    unimplemented!()
+  }
+
   pub fn is_asynchronous() {}
   pub fn async_chain_start() {}
   pub fn async_chain_done() {}

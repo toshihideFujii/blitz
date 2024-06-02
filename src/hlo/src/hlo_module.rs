@@ -168,6 +168,12 @@ impl HloModule {
     unimplemented!()
   }
 
+  pub fn mutable_computations_by_exec_threads(
+    &mut self, _execution_threads: &HashSet<String>) -> &mut Vec<HloComputation>
+  {
+    unimplemented!()
+  }
+
   pub fn get_computation_with_name() {}
 
   // Gets the number of computations in this module.

@@ -99,6 +99,12 @@ pub struct Statisitic {
   stat_val: i64, // TODO: f64
 }
 
+impl Statisitic {
+  pub fn stat_val(&self) -> i64 {
+    self.stat_val
+  }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StatisticsVis {
   stat_index_to_viaualize: i64,

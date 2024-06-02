@@ -10,7 +10,12 @@ pub struct HloInstructionSequence {
 }
 
 impl HloInstructionSequence {
-  pub fn new() {}
+  pub fn new() -> Self {
+    HloInstructionSequence {
+      instruction_sequence: Vec::new(),
+      id_sequence: Vec::new() 
+    }
+  }
 
   // Adds the instruction to the end of the sequence.
   pub fn push_pack(&mut self, instruction: HloInstruction) {
@@ -90,16 +95,17 @@ impl HloInstructionSequence {
   }
 }
 
+// A class representing a sequential schedule of instructionns for an HLO module.
 pub struct HloSchedule {
-  module: Box<HloModule>,
+  //module: Box<HloModule>,
   sequences: HashMap<i64, HloInstructionSequence>,
   execution_threads: HashMap<i64, String>,
 }
 
 impl HloSchedule {
-  pub fn new(module: HloModule) -> Self {
+  pub fn new(/*module: HloModule*/) -> Self {
     HloSchedule {
-      module: Box::new(module),
+      //module: Box::new(module),
       sequences: HashMap::new(),
       execution_threads: HashMap::new()
     }
@@ -112,7 +118,22 @@ impl HloSchedule {
     self.sequences.get(&computation.unique_id())
   }
 
-  pub fn get_or_create_sequence() {}
+  // Returns the sequence for the given computation.
+  pub fn get_or_create_sequence(
+    &mut self,
+    _module: &HloModule,
+    computation: &HloComputation) -> &HloInstructionSequence
+  {
+    if !self.sequences.contains_key(&computation.unique_id()) {
+      // No sequence found for computation. Create and return an empty one.
+      //debug_assert!(computation.parent().unwrap() == *module);
+      self.execution_threads.insert(computation.unique_id(), computation.execution_thread());
+      let sequence = HloInstructionSequence::new();
+      self.sequences.insert(computation.unique_id(), sequence);
+    }
+
+    self.sequences.get(&computation.unique_id()).unwrap()
+  }
 
   // Sets the sequence for the given computation to the given sequence.
   pub fn set_sequence(
@@ -180,6 +201,7 @@ impl HloSchedule {
   }
 
   pub fn module(&self) -> &HloModule {
-    &self.module.as_ref()
+    //&self.module.as_ref()
+    unimplemented!()
   }
 }

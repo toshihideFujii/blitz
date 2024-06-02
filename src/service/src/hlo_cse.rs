@@ -27,15 +27,18 @@ impl HloCSE {
     "cse".to_string()
   }
 
-  pub fn run(&self, module: &HloModule, execution_threads: &HashSet<String>) -> bool {
+  pub fn run(&
+    self, module: &mut HloModule,
+    execution_threads: &HashSet<String>) -> bool
+  {
     let mut changed = false;
-    for computation in module.computations_by_exec_threads(execution_threads) {
+    for computation in module.mutable_computations_by_exec_threads(execution_threads) {
       if self.only_fusion_computations && !computation.is_fusion_computation() {
         continue;
       }
       changed |= HloCSE::combine_constants(computation, self.is_layout_sensitive);
       
-      for instruction in computation.make_instruction_post_order() {
+      for instruction in computation.mutable_make_instruction_post_order() {
         // If the instruction has zero operands (constants, parameters, etc.) skip over it.
         if instruction.operand_count() == 0 &&
            instruction.opcode() != HloOpcode::PartitionId &&
