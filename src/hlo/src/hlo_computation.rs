@@ -149,7 +149,18 @@ impl HloComputation {
   pub fn compute_program_shape() {}
   pub fn replace_with_new_instruction() {}
   pub fn replace_with_entry_computation_parameter() {}
-  pub fn replace_instruction() {}
+
+  pub fn replace_instruction(
+    &self,
+    _old_instruction: &HloInstruction,
+    _new_instruction: &HloInstruction,
+    _preserve_sharding: bool,
+    _relay_control_dependency: bool,
+    _remove_unused_operands: bool) -> Result<bool, String>
+  {
+    unimplemented!()
+  }
+
   pub fn replace_instruction_with_defferent_shape() {}
   pub fn set_parent() {}
 

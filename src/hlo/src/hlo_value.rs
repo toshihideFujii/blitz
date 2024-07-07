@@ -13,8 +13,8 @@ use crate::{
 // instruction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloPosition {
-  instruction: HloInstruction,
-  index: usize
+  pub instruction: HloInstruction,
+  pub index: usize
 }
 
 impl HloPosition {
@@ -62,7 +62,9 @@ pub struct HloUse {
 
 impl HloUse {
   pub fn new() {}
-  pub fn to_string() {}
+  pub fn to_string(&self) -> String {
+    unimplemented!()
+  }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]

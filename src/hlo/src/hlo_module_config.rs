@@ -11,6 +11,7 @@ pub enum FusionConfigCollection {
   PerNode,
 }
 
+#[derive(PartialEq)]
 pub struct HloModuleConfig {
   seed: u64,
   launch_id: i32,

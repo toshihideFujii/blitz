@@ -6,11 +6,10 @@ use hlo::{
   hlo_instruction::HloInstruction,
   hlo_module::HloModule,
   hlo_opcode::HloOpcode,
-  hlo_phi_graph::PhiGraph,
   hlo_value::{HloValue, HloValueSet, InstructionValueSet}
 };
 
-use crate::call_graph::CallGraph;
+use crate::{call_graph::CallGraph, hlo_phi_graph::PhiGraph};
 
 // Identifies one array input of an HloInstruction.
 struct HloOperandIndex {
@@ -18,7 +17,7 @@ struct HloOperandIndex {
   operand_index: usize,
 }
 
-struct ForwardedOperand {
+pub struct ForwardedOperand {
   operand_number: i64,
   operand_index: usize,
 }
@@ -60,14 +59,23 @@ impl HloDataflowAnalysis {
     }
   }
 
-  pub fn run() {}
+  pub fn run(
+    _module: &HloModule,
+    _ssa_form: bool,
+    _bitcast_defines_value: bool,
+    _can_share_buffer: Option<&dyn Fn(&HloInstruction, &HloInstruction, usize) -> bool>,
+    _forwards_operand: Option<&dyn Fn(&HloInstruction, usize) -> ForwardedOperand>,
+    _execution_threads: &HashSet<String>) -> Result<HloDataflowAnalysis, String>
+  {
+    unimplemented!()
+  }
 
   // Returns true if 'instruction' defines an HLO value at the given shape index
   // of its output.
   pub fn value_is_defined_at(
-    &self, instruction: &HloInstruction, index: usize) -> bool
+    &self, instruction: &HloInstruction, index_vec: &Vec<i64>) -> bool
   {
-    let value_set = self.get_value_set(instruction, index);
+    let value_set = self.get_value_set(instruction, index_vec);
     if value_set.values().len() != 1 { return false; }
     value_set.get_unique_value().defining_instruction() == instruction
   }
@@ -75,10 +83,10 @@ impl HloDataflowAnalysis {
   // Returns the HloValue defined by 'instruction' at the given shape index of
   // its output.
   pub fn get_value_defined_at(
-    &self, instruction: &HloInstruction, index: usize) -> &HloValue
+    &self, instruction: &HloInstruction, index_vec: &Vec<i64>) -> &HloValue
   {
-    debug_assert!(self.value_is_defined_at(instruction, index));
-    self.get_unique_value_at(instruction, index)
+    debug_assert!(self.value_is_defined_at(instruction, index_vec));
+    self.get_unique_value_at(instruction, index_vec)
   }
 
   // Returns the InstructionValueSet for the given instruction.
@@ -122,8 +130,13 @@ impl HloDataflowAnalysis {
 
   // Returns the HloValueSet for the given instruction at the given index or the
   // given position.
-  pub fn get_value_set(&self, instruction: &HloInstruction, index: usize) -> &HloValueSet {
-    self.get_instruction_value_set(instruction).unwrap().element(index)
+  pub fn get_value_set(
+    &self,
+    _instruction: &HloInstruction,
+    _index_vec: &Vec<i64>) -> &HloValueSet
+  {
+    //self.get_instruction_value_set(instruction).unwrap().element(index)
+    unimplemented!()
   }
 
   pub fn get_mutable_value_set(
@@ -134,8 +147,8 @@ impl HloDataflowAnalysis {
 
   // Returns the unique value in the HloValueSet at the given instruction and
   // shape index.
-  pub fn get_unique_value_at(&self, instruction: &HloInstruction, index: usize) -> &HloValue {
-    self.get_value(self.get_value_set(instruction, index).get_unique_value().id())
+  pub fn get_unique_value_at(&self, instruction: &HloInstruction, index_vec: &Vec<i64>) -> &HloValue {
+    self.get_value(self.get_value_set(instruction, index_vec).get_unique_value().id())
   }
 
   // Returns the HloValue with the given id.
@@ -165,16 +178,17 @@ impl HloDataflowAnalysis {
 
   // Returns true if 'user' cannot possibly use the buffer at 'index' in 'operand'.
   pub fn does_not_use_operand_buffer(
-    &self, operand: &HloInstruction, index: usize, user: &HloInstruction) -> bool
+    &self, operand: &HloInstruction, index_vec: &Vec<i64>, user: &HloInstruction) -> bool
   {
-    for value in self.get_value_set(operand, index).values() {
+    for value in self.get_value_set(operand, index_vec).values() {
       for use_ in value.get_uses() {
         if &use_.instruction == user {
           if user.is_loop_fusion() {
             let fusion_param =
               user.fused_parameter(use_.operand_number);
             let value =
-              self.get_value_defined_at(fusion_param, use_.operand_index);
+              self.get_value_defined_at(
+                fusion_param, &vec![use_.operand_index as i64]);
             return value.get_uses().is_empty();
           }
           return false;
@@ -184,7 +198,15 @@ impl HloDataflowAnalysis {
     true
   }
 
-  pub fn can_share_operand_buffer_with_user() {}
+  pub fn can_share_operand_buffer_with_user(
+    &self,
+    _operand: &HloInstruction,
+    _operand_index: usize,
+    _user: &HloInstruction,
+    _user_index: usize) -> bool
+  {
+    unimplemented!()
+  }
 
   pub fn module(&self) -> &HloModule {
     &self.module
@@ -292,9 +314,10 @@ impl HloDataflowAnalysis {
     let nodes =
       self.get_instruction_value_set(domain).unwrap().nodes();
     for pair in nodes {
-      let index = pair.0;
+      let index = pair.0 as i64;
       let value_set = &pair.1;
-      let operand_value_set = self.get_value_set(domain.operand(0), index);
+      let operand_value_set =
+        self.get_value_set(domain.operand(0), &vec![index]);
       if value_set != operand_value_set {
         // TODO
         //pair.1 = operand_value_set.clone();
@@ -315,9 +338,9 @@ impl HloDataflowAnalysis {
     debug_assert!(copy_start.opcode() == HloOpcode::CopyStart);
     let mut changed = false;
     let operand_value_set =
-      self.get_value_set(copy_start.operand(0), 0);
+      self.get_value_set(copy_start.operand(0), &vec![0]);
     let value_set =
-      self.get_value_set(copy_start, 1);
+      self.get_value_set(copy_start, &vec![1]);
     if value_set != operand_value_set {
       // TODO
       //self.set_instruction_value_set(copy_start.clone(), operand_value_set.clone());

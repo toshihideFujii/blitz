@@ -22,7 +22,7 @@ pub struct Shape {
 impl Shape {
   pub const UNBOUNDED_SIZE: i64 = i64::MIN;
 
-  pub fn new_default() -> Self {
+  pub fn new() -> Self {
     Shape {
       element_type: PrimitiveType::Invalid,
       dimensions: Vec::new(),
@@ -491,7 +491,7 @@ impl ProgramShape {
     ProgramShape {
       parameters: Vec::new(),
       parameter_names: Vec::new(),
-      result: Shape::new_default(),
+      result: Shape::new(),
     }
   }
 

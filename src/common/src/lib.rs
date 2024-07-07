@@ -11,6 +11,7 @@ pub mod executable_run_options;
 pub mod frontend_attributes;
 pub mod layout_util;
 pub mod layout;
+pub mod literal_util;
 pub mod literal;
 pub mod metric_table_report;
 pub mod overflow_util;

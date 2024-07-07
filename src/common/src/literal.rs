@@ -21,7 +21,7 @@ fn scalar_shape(t: &PrimitiveType) -> Shape {
 }
 
 fn nil_shape() -> Shape {
-  Shape::new_default()
+  Shape::new()
 }
 
 fn try_intern_shape(shape: &Shape) -> Option<Shape> {
@@ -128,12 +128,12 @@ impl LiteralBase {
 
   // Returns the count of the elements in the array at the given shape index
   // in this literal.
-  pub fn element_count(&self, index_vec: Vec<i64>) -> i64 {
+  pub fn element_count(&self, index_vec: &Vec<i64>) -> i64 {
     if index_vec.is_empty() {
       return ShapeUtil::elements_in(self.shape());
     }
     ShapeUtil::elements_in(
-      ShapeUtil::get_subshape(self.shape(), index_vec))
+      &ShapeUtil::get_subshape(self.shape(), index_vec))
   }
 
   pub fn convert_to_shape() {}
@@ -256,9 +256,9 @@ impl LiteralBase {
     printer: &mut dyn Printer)
   {
     let subshape =
-      ShapeUtil::get_subshape(self.shape(), vec![shape_index as i64]);
+      ShapeUtil::get_subshape(self.shape(), &vec![shape_index as i64]);
     assert!(LayoutUtil::has_layout(self.shape()));
-    assert!(LayoutUtil::has_layout(subshape));
+    assert!(LayoutUtil::has_layout(&subshape));
 
     if subshape.is_tuple() {
       self.tuple_print_helper(shape_index, print_shape,
@@ -266,12 +266,12 @@ impl LiteralBase {
     } else if subshape.is_token() {
       printer.append(&"token".to_string());
     } else {
-      assert!(LayoutUtil::is_dense_array(subshape));
+      assert!(LayoutUtil::is_dense_array(&subshape));
       if self.is_known(shape_index) {
         self.dense_array_print_helper(shape_index, print_shape,
           print_layout, one_line, printer);
       } else {
-        LiteralBase::print_shape(print_layout, subshape, printer);
+        LiteralBase::print_shape(print_layout, &subshape, printer);
         printer.append(&" ".to_string());
         if self.is_determined(shape_index) {
           printer.append(&"unknown".to_string());
@@ -292,7 +292,7 @@ impl Literal {
   pub fn new_from_shape(_shape: &Shape) -> Self {
     Literal {
       base: LiteralBase::new(),
-      shape: Shape::new_default(),
+      shape: Shape::new(),
     }
   }
 
@@ -373,7 +373,7 @@ pub struct Piece {
 impl Piece {
   pub fn new() -> Self {
     Piece {
-      subshape: Shape::new_default(),
+      subshape: Shape::new(),
       children: None,
       data: vec![],
       array_value_state: ArrayValueState::Undetermined

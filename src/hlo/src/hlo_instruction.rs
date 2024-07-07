@@ -3,21 +3,21 @@
 use std::collections::{HashMap, HashSet};
 
 use common::{
-  blitz_data::{DotDimensionNumbers, FrontendAttributes, OpMetadata, PrimitiveType, Statisitic, StatisticsVis},
-  comparison_util::{ComparisonType, Direction},
+  blitz_data::{Algorithm, DotDimensionNumbers, FftType, FrontendAttributes, GatherDimensionNumbers, OpMetadata, PaddingConfig, Precision, PrimitiveType, RandomAlgorithm, RandomDistribution, Statisitic, StatisticsViz, TriangularSolveOptions},
+  comparison_util::{ComparisonDirection, ComparisonType},
   literal::Literal,
   printer::{Printer, StringPrinter},
   shape::Shape, shape_util::ShapeUtil
 };
 
 use crate::{
-  hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata, hlo_instructions::{
+  dfs_hlo_visitor_with_default::DfsHloVisitor, hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata, hlo_instructions::{
     HloAsyncInstruction,
     HloAsyncStartInstruction,
     HloBatchNormGradInstruction,
     HloBatchNormInferenceInstruction,
     HloBatchNormTrainingInstruction,
-    HloBroadcastInstruction,
+    //HloBroadcastInstruction,
     HloCallInstruction,
     HloCollectiveInstruction,
     HloCompareInstruction,
@@ -382,7 +382,7 @@ struct Rare {
   control_predecessors: Vec<HloInstruction>,
   control_successors: Vec<HloInstruction>,
   frontend_attributes: FrontendAttributes,
-  statistics_vis: StatisticsVis,
+  statistics_vis: StatisticsViz,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -586,7 +586,7 @@ impl HloInstruction {
     shape: &Shape,
     lhs: &HloInstruction,
     rhs: &HloInstruction,
-    direction: Direction,
+    direction: ComparisonDirection,
     t: ComparisonType) -> HloCompareInstruction
   {
     HloCompareInstruction::new(shape, lhs, rhs, direction, t)
@@ -788,12 +788,14 @@ impl HloInstruction {
 
   pub fn create_select_and_scatter() {}
 
+  // Creates a broadcast instruction.
   pub fn create_broadcast(
-    shape: &Shape,
-    operand: HloInstruction,
-    broadcast_dimensions: Vec<i64>) -> HloBroadcastInstruction
+    _shape: &Shape,
+    _operand: HloInstruction,
+    _broadcast_dimensions: Vec<i64>) -> HloInstruction //HloBroadcastInstruction
   {
-    HloBroadcastInstruction::new(shape, operand, broadcast_dimensions)
+    //HloBroadcastInstruction::new(shape, operand, broadcast_dimensions)
+    unimplemented!()
   }
 
   pub fn create_broadcast_sequence() {}
@@ -1186,7 +1188,15 @@ impl HloInstruction {
     Ok(())
   }
 
-  pub fn accept() {}
+  pub fn accept(&self,
+    _visitor: &dyn DfsHloVisitor,
+    _call_finish_visit: bool,
+    _ignore_control_predecessors: bool,
+    _cross_computation: bool) -> Result<(), String>
+  {
+    unimplemented!()
+  }
+
   pub fn accept_with_operand_order() {}
   pub fn visit() {}
   pub fn latest_non_gte_ancestor_and_index() {}
@@ -1309,7 +1319,11 @@ impl HloInstruction {
 
   pub fn print_extra_attributes() {}
   pub fn extra_attributes_to_string() {}
-  pub fn to_short_string() {}
+
+  pub fn to_short_string(&self) -> String {
+    unimplemented!()
+  }
+
   pub fn print_with_canonical_name_map() {}
   pub fn to_proto() {}
   pub fn to_category() {}
@@ -1637,11 +1651,11 @@ impl HloInstruction {
     &self.statistics_vis().statiscics()[index as usize]
   }
 
-  pub fn set_statistics_vis(&mut self, statistics_vis: StatisticsVis) {
+  pub fn set_statistics_vis(&mut self, statistics_vis: StatisticsViz) {
     self.mutable_rare().statistics_vis = statistics_vis;
   }
 
-  pub fn statistics_vis(&self) -> &StatisticsVis {
+  pub fn statistics_vis(&self) -> &StatisticsViz {
     &self.rare().statistics_vis
   }
 
@@ -1732,10 +1746,20 @@ impl HloInstruction {
   }
 
   pub fn sort_instruction_user_and_control_lists() {}
-  pub fn feature_index() {}
+
+  pub fn feature_index(&self) -> i64 {
+    unimplemented!()
+  }
+
   pub fn epsilon() {}
-  pub fn fft_type() {}
-  pub fn fft_length() {}
+
+  pub fn fft_type(&self) -> FftType {
+    unimplemented!()
+  }
+
+  pub fn fft_length(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
 
   // Delegates to HloChannelInstruction::channel_id.
   pub fn channel_id(&self) -> Option<i64> {
@@ -1744,15 +1768,37 @@ impl HloInstruction {
 
   pub fn set_channel_id(&mut self, _channel_id: Option<i64>) {}
 
-  pub fn dimensions() {}
-  pub fn concatenate_dimension() {}
-  pub fn dimension() {}
+  pub fn dimensions(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+
+  pub fn concatenate_dimension(&self) -> i64 {
+    unimplemented!()
+  }
+
+  pub fn dimension(&self) -> i64 {
+    unimplemented!()
+  }
+
   pub fn inferred_dimension() {}
   pub fn is_rank_2_transpose() {}
-  pub fn slice_starts() {}
+
+  pub fn slice_starts(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+
   pub fn mutable_slice_starts() {}
-  pub fn slice_strides() {}
+
+  pub fn slice_strides(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+
   pub fn mutable_slice_strides() {}
+
+  pub fn slice_limits(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+
   pub fn literal() {}
 
   pub fn is_constant(&self) -> bool { false }
@@ -1769,7 +1815,10 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn fused_expression_root() {}
+  pub fn fused_expression_root(&self) -> &HloInstruction {
+    unimplemented!()
+  }
+  
   pub fn fused_instructions() {}
   pub fn fused_instruction_count() {}
 
@@ -1796,13 +1845,20 @@ impl HloInstruction {
   // ##### HloFusionInstruction : end #####
 
   pub fn random_distribution() {}
-  pub fn parameter_number() {}
+
+  pub fn parameter_number(&self) -> i64 {
+    unimplemented!()
+  }
+
   pub fn set_parameter_replicated_at_leaf_buffers() {}
   pub fn parameter_replicated_at_leaf_byffers() {}
-  pub fn tuple_index() {}
+
+  pub fn tuple_index(&self) -> i64 {
+    unimplemented!()
+  }
+
   pub fn set_tuple_index() {}
   pub fn exponent_bits() {}
-  pub fn mantissa_bits() {}
   pub fn infeed_config() {}
   pub fn set_infeed_config() {}
   pub fn outfeed_config() {}
@@ -1826,14 +1882,33 @@ impl HloInstruction {
   pub fn custom_call_target(&self)-> String { "".to_string() }
 
   pub fn set_custom_call_target() {}
-  pub fn padding_config() {}
+
+  pub fn padding_config(&self) -> &PaddingConfig {
+    unimplemented!()
+  }
+
   pub fn mutable_padding_config() {}
   pub fn padding_type() {}
   pub fn slice_sizes() {}
-  pub fn dynamic_slice_sizes() {}
+
+  pub fn dynamic_slice_sizes(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+
   pub fn dynamic_slice_sizes_list() {}
-  pub fn gather_dimension_numbers() {}
-  pub fn gather_slice_sizes() {}
+
+  pub fn index_shapes(&self) -> &Vec<Shape> {
+    unimplemented!()
+  }
+
+  pub fn gather_dimension_numbers(&self) -> &GatherDimensionNumbers {
+    unimplemented!()
+  }
+
+  pub fn gather_slice_sizes(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+
   pub fn scatter_dimension_numbers() {}
 
   pub fn dot_dimension_numbers(&self) -> &DotDimensionNumbers {
@@ -1848,24 +1923,48 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn is_asynchronous() {}
+  pub fn is_asynchronous(&self) -> bool {
+    unimplemented!()
+  }
+
   pub fn async_chain_start() {}
   pub fn async_chain_done() {}
   pub fn async_wrapped_computation() {}
-  pub fn async_wrapped_instruction() {}
-  pub fn async_wrapped_opcode() {}
+
+  pub fn async_wrapped_instruction(&self) -> &HloInstruction {
+    unimplemented!()
+  }
+
+  pub fn async_wrapped_opcode(&self) -> HloOpcode {
+    unimplemented!()
+  }
+
   pub fn async_execution_thread() {}
   pub fn set_async_execution_thread() {}
   pub fn set_called_computations_execution_thread() {}
   pub fn cross_program_prefetch_index() {}
   pub fn comparison_direction() {}
   pub fn comparison_order() {}
-  pub fn triangular_solve_options() {}
+
+  pub fn triangular_solve_options(&self) -> &TriangularSolveOptions {
+    unimplemented!()
+  }
+
   pub fn cholsky_options() {}
   pub fn output_operand_aliasing() {}
   pub fn append_operand() {}
 
-  // HloCollectiveInstruction : start
+  // HloReducePrecisionInstruction
+  pub fn operand_bits(&self) -> i64 {
+    unimplemented!()
+  }
+
+  pub fn mantissa_bits(&self) -> i64 {
+    unimplemented!()
+  }
+  // HloReducePrecisionInstruction
+
+  // HloCollectiveInstruction
   pub fn is_collective_instruction(&self) -> bool {
     self.collective_instruction.is_some()
   }
@@ -1874,8 +1973,18 @@ impl HloInstruction {
     self.collective_instruction.as_ref().unwrap().constrain_layout()
   }
 
+  pub fn iota_dimension(&self) -> i64 {
+    unimplemented!()
+  }
+
   fn print_extra_attributes_impl() {}
-  // HloCollectiveInstruction : end
+  // HloCollectiveInstruction
+
+  // HloTopKInstruction
+  pub fn k(&self) -> i64{
+    unimplemented!()
+  }
+  // HloTopKInstruction
 
   fn is_elementwise_impl(&self, _operand_idx: Option<i64>) -> bool {
     false
@@ -1915,4 +2024,34 @@ impl HloInstruction {
     assert!(self.has_rare());
     self.rare.as_mut().unwrap()
   }
+}
+
+pub fn string_to_fusion_kind(name: &String) -> Result<FusionKind, String> {
+  if name == "Loop" {
+    Ok(FusionKind::Loop)
+  } else if name == "Input" {
+    Ok(FusionKind::Input)
+  } else if name == "Output" {
+    Ok(FusionKind::Output)
+  } else if name == "Custom" {
+    Ok(FusionKind::Custom)
+  } else {
+    Err("Unknown fusion kind".to_string())
+  }
+}
+
+pub fn string_to_random_distribution(_name: &String) -> Result<RandomDistribution, String> {
+  unimplemented!()
+}
+
+pub fn string_to_random_algorithm(_name: &String) -> Result<RandomAlgorithm, String> {
+  unimplemented!()
+}
+
+pub fn string_to_precision(_name: &String) -> Result<Precision, String> {
+  unimplemented!()
+}
+
+pub fn string_to_algorithm(_name: &String) -> Result<Algorithm, String> {
+  unimplemented!()
 }

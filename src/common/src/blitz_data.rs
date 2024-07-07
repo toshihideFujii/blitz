@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::hash::Hash;
+use std::{/*collections::HashMap,*/ hash::Hash};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PrimitiveType {
@@ -57,6 +57,11 @@ pub enum Precision {
   PackedNibble,
 }
 
+pub enum Algorithm {
+  Unset,
+  DotAnyF8anyF8F32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OpMetadata {}
 
@@ -84,6 +89,12 @@ pub struct FrontendAttributes {
 }
 
 impl FrontendAttributes {
+  pub fn new() -> Self {
+    FrontendAttributes {
+      //map: HashMap::new()
+    }
+  }
+
   //pub fn map(&self) -> &HashMap<String, String> {
     //&self.map
   //}
@@ -100,18 +111,26 @@ pub struct Statisitic {
 }
 
 impl Statisitic {
+  pub fn new() -> Self {
+    Statisitic { stat_name: "".to_string(), stat_val: 0 }
+  }
+
   pub fn stat_val(&self) -> i64 {
     self.stat_val
   }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StatisticsVis {
+pub struct StatisticsViz {
   stat_index_to_viaualize: i64,
   statiscics: Vec<Statisitic>
 }
 
-impl StatisticsVis {
+impl StatisticsViz {
+  pub fn new() -> Self {
+    StatisticsViz { stat_index_to_viaualize: 0, statiscics: Vec::new() }    
+  }
+
   pub fn add_statistics(&mut self, statistic: Statisitic) {
     self.statiscics.push(statistic);
   }
@@ -161,3 +180,82 @@ impl DotDimensionNumbers {
     self.lhs_contracting_dimensions
   }
 }
+
+// Describes whether all data-parallelism replicas will receive the same
+// parameter data at each buffer.
+pub struct ParameterReplication {
+  replicated_at_leaf_buffers: Vec<bool>
+}
+
+impl ParameterReplication {
+  pub fn new() -> Self {
+    ParameterReplication {
+      replicated_at_leaf_buffers: Vec::new()
+    }
+  }
+
+  pub fn replicated_at_leaf_buffers(&self) -> &Vec<bool> {
+    &self.replicated_at_leaf_buffers
+  }
+
+  pub fn add_replicated_at_leaf_buffers(&mut self, _value: bool) {
+    unimplemented!()
+  }
+}
+
+pub struct ConvolutionDimensionNumbers {
+
+}
+
+impl ConvolutionDimensionNumbers {
+  pub fn new() -> Self {
+    ConvolutionDimensionNumbers {  }
+  }
+}
+
+pub struct PaddingConfig {}
+
+impl PaddingConfig {
+  pub fn new() -> Self {
+    PaddingConfig {  }
+  }
+}
+
+pub struct ReplicaGroup {}
+
+impl ReplicaGroup {
+  pub fn new() {}
+}
+
+pub enum RandomDistribution {
+  Invalid,
+  Uniform,
+  Normal,
+}
+
+pub enum RandomAlgorithm {
+  Default,
+  ThreeFry,
+  Philox,
+}
+
+// Debugging options for Blitz.
+pub struct DebugOptions {
+
+}
+
+enum Transpose {
+  Invalid,
+  NoTranspose,
+  Transpose,
+  Adjoint,
+}
+
+pub struct TriangularSolveOptions {
+  left_side: bool,
+  lower: bool,
+  unit_diagonal: bool,
+  transpose_a: Transpose,
+}
+
+pub struct GatherDimensionNumbers {}

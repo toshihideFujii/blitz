@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use common::{
-  blitz_data::FftType, comparison_util::{ComparisonType, Direction}, literal::Literal, shape::Shape
+  blitz_data::FftType, comparison_util::{ComparisonType, ComparisonDirection}, literal::Literal, shape::Shape
 };
 
 use crate::{
@@ -175,7 +175,7 @@ impl HloCompareInstruction {
     _shape: &Shape,
     _lhs: &HloInstruction,
     _rhs: &HloInstruction,
-    _direction: Direction,
+    _direction: ComparisonDirection,
     _t: ComparisonType) -> Self
   {
     HloCompareInstruction {  }

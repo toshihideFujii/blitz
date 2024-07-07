@@ -2,7 +2,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::hlo_value::HloValue;
+use hlo::hlo_value::HloValue;
+
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Node {

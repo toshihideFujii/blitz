@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Direction {
+pub enum ComparisonDirection {
   Eq,
   Ne,
   Ge,
@@ -16,4 +16,17 @@ pub enum ComparisonType {
   FloatTotalOrder,
   Signed,
   Unsigned,
+}
+
+
+pub fn string_to_comparison_direction(
+  _direction: &String) -> Result<ComparisonDirection, String>
+{
+  unimplemented!()    
+}
+
+pub fn string_to_comparison_type(
+  _comparison: &String) -> Result<ComparisonType, String>
+{
+  unimplemented!()    
 }

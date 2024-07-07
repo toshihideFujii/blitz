@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::{hlo_computation::HloComputation, hlo_instruction::HloInstruction, hlo_module::HloModule};
 
+#[derive(PartialEq)]
 pub struct HloInstructionSequence {
   instruction_sequence: Vec<HloInstruction>,
   id_sequence: Vec<i64>
@@ -96,6 +97,7 @@ impl HloInstructionSequence {
 }
 
 // A class representing a sequential schedule of instructionns for an HLO module.
+#[derive(PartialEq)]
 pub struct HloSchedule {
   //module: Box<HloModule>,
   sequences: HashMap<i64, HloInstructionSequence>,
@@ -121,12 +123,12 @@ impl HloSchedule {
   // Returns the sequence for the given computation.
   pub fn get_or_create_sequence(
     &mut self,
-    _module: &HloModule,
+    module: &HloModule,
     computation: &HloComputation) -> &HloInstructionSequence
   {
     if !self.sequences.contains_key(&computation.unique_id()) {
       // No sequence found for computation. Create and return an empty one.
-      //debug_assert!(computation.parent().unwrap() == *module);
+      debug_assert!(computation.parent().as_ref().unwrap() == module);
       self.execution_threads.insert(computation.unique_id(), computation.execution_thread());
       let sequence = HloInstructionSequence::new();
       self.sequences.insert(computation.unique_id(), sequence);
@@ -138,10 +140,11 @@ impl HloSchedule {
   // Sets the sequence for the given computation to the given sequence.
   pub fn set_sequence(
     &mut self,
+    module: &HloModule,
     computation: &HloComputation,
     sequence: HloInstructionSequence)
   {
-    //assert!(*computation.parent().as_ref().unwrap() == *self.module.as_ref()); 
+    debug_assert!(computation.parent().as_ref().unwrap() == module); 
     self.sequences.insert(
       computation.unique_id(), sequence);
     self.execution_threads.insert(
@@ -194,7 +197,10 @@ impl HloSchedule {
 
   pub fn update() {}
   pub fn verify() {}
-  pub fn to_string() {}
+
+  pub fn to_string(&self) -> String {
+    unimplemented!()
+  }
 
   pub fn empty(&self) -> bool {
     self.sequences.is_empty()

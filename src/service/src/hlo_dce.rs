@@ -7,7 +7,6 @@ use hlo::{
   hlo_instruction::HloInstruction,
   hlo_module::HloModule,
   hlo_opcode::HloOpcode,
-  hlo_pass_interface::HloPassInterface
 };
 
 // HLO pass which removes dead instructions from each computation in
@@ -184,14 +183,5 @@ impl HloDCE {
     _remove_cross_partition_collective_ops: bool) -> bool
   {
     false
-  }
-}
-
-impl HloPassInterface for HloDCE {
-  fn run(
-    _module: &HloModule,
-    _execution_threads: HashSet<String>) -> Result<(), String>
-  {
-    Ok(())
   }
 }

@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+// Service implementation that extends the Blitz service to leverage running
+// in the same process as the client.
 pub struct LocalService {}
 
 impl LocalService {

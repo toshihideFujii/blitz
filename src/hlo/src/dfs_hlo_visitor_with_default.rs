@@ -2,6 +2,12 @@
 
 use crate::{dfs_hlo_visitor::{DfsHloVisitorBase, VisitState}, hlo_instruction::HloInstruction};
 
+pub trait DfsHloVisitor {
+  fn default_action(&self, _instruction: &HloInstruction) -> Result<(), String> {
+    Ok(())
+  }
+}
+
 struct DfsHloVisitorWithDefaultBase {
   visitor: DfsHloVisitorBase
 }

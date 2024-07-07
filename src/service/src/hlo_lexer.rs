@@ -61,7 +61,9 @@ pub enum TokKind {
 const EOF: i64 = -1;
 const ERROR: i64 = -2;
 
-pub fn tok_kind_to_string() {}
+pub fn tok_kind_to_string(_kind: &TokKind) -> String {
+  unimplemented!()
+}
 
 // Informaton about the current token.
 #[derive(Debug, Clone)]

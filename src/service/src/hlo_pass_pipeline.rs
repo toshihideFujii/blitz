@@ -1,6 +1,10 @@
 #![allow(dead_code)]
 
-pub struct HloPassPipeline {}
+//use crate::hlo_pass_interface::HloPassInterface;
+
+pub struct HloPassPipeline {
+  //passes: Vec<Box<dyn HloPassInterface>>
+}
 
 impl HloPassPipeline {
   pub fn new() {}

@@ -34,12 +34,14 @@ impl StackFrame {
   pub fn empty() -> bool { false }
 }
 
+#[derive(PartialEq)]
 pub struct CrossProgramPrefetchInfo {
   parameter: i64,
   index: usize,
   alt_memory_offset: Option<i64>
 }
 
+#[derive(PartialEq)]
 pub struct HloModule {
   name: String,
   entry_computation: Option<HloComputation>,

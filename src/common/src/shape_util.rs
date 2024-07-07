@@ -451,7 +451,7 @@ impl ShapeUtil {
 
   // Creates a tuple shape from a slice of element shapes within the tuple.
   pub fn make_tuple_shape(shapes: Vec<Shape>) -> Shape {
-    let mut result = Shape::new_default();
+    let mut result = Shape::new();
     result.set_element_type(PrimitiveType::Tuple);
     result.tuple_shapes_vec_mut().reserve(shapes.len());
     for shape in shapes {
@@ -473,7 +473,7 @@ impl ShapeUtil {
   }
 
   pub fn make_opaque_shape() -> Shape {
-    let mut result = Shape::new_default();
+    let mut result = Shape::new();
     result.set_element_type(PrimitiveType::OpaqueType);
     let err =
       ShapeUtil::validate_shape_with_optional_layout(&result);
@@ -486,7 +486,7 @@ impl ShapeUtil {
   // Creates a token shape.
   // Values of this shape are used for ordering side-effecting operations.
   pub fn make_token_shape() -> Shape {
-    let mut result = Shape::new_default();
+    let mut result = Shape::new();
     result.set_element_type(PrimitiveType::Token);
     let err =
       ShapeUtil::validate_shape_with_optional_layout(&result);
@@ -576,7 +576,7 @@ impl ShapeUtil {
 
   // Constructs a new shape with the given element type and sequence of dimensions.
   pub fn make_shape(elt_t: &PrimitiveType, dimensions: Vec<i64>) -> Shape {
-    let mut shape = Shape::new_default();
+    let mut shape = Shape::new();
     assert!(ShapeUtil::fill_new_shape(elt_t, &dimensions, &mut shape));
     shape
   }
@@ -597,7 +597,7 @@ impl ShapeUtil {
   // dimensions. Method checks the element type is valid, the shape's
   // size fits in i64::max(), and dynamic size is not marked static.
   pub fn make_validated_shape(elt_t: &PrimitiveType, dimensions: Vec<i64>) -> Shape {
-    let mut shape = Shape::new_default();
+    let mut shape = Shape::new();
     if !ShapeUtil::fill_new_shape(elt_t, &dimensions, &mut shape) {
       assert!(false, "Invalid shape type={:?}, dims={:?}.", elt_t, dimensions);
     }
@@ -613,7 +613,7 @@ impl ShapeUtil {
       assert!(false, "Dynamic dimensions size {} did not match number of dimensions {}.",
         dynamic_dimensions.len(), dimensions.len());
     }
-    let mut shape = Shape::new_default();
+    let mut shape = Shape::new();
     if !ShapeUtil::fill_new_shape(elt_t, &dimensions, &mut shape) {
       assert!(false, "Invalid shape type={:?}, dims={:?}.",
         elt_t, dimensions);
@@ -825,11 +825,12 @@ impl ShapeUtil {
   }
 
   // Returns a particular nested shape within the given shape argument.s
-  pub fn get_subshape(shape: &Shape, index_vec: Vec<i64>) -> &Shape {
-    let mut return_shape: &Shape = shape;
+  pub fn get_subshape(shape: &Shape, index_vec: &Vec<i64>) -> Shape {
+    //let mut return_shape: &Shape = shape;
+    let mut return_shape = shape.clone();
     for i in index_vec {
       assert!(return_shape.is_tuple(), "Invalid index for shape.");
-      return_shape = return_shape.tuple_shapes(i as usize);
+      return_shape = return_shape.tuple_shapes(*i as usize).clone();
     }
     return_shape
   }
@@ -856,7 +857,7 @@ impl ShapeUtil {
     return_shape
   }
 
-  pub fn is_leaf_index(shape: &Shape, index_vec: Vec<i64>) -> bool {
+  pub fn is_leaf_index(shape: &Shape, index_vec: &Vec<i64>) -> bool {
     !ShapeUtil::get_subshape(shape, index_vec).is_tuple()
   }
 
@@ -906,7 +907,18 @@ impl ShapeUtil {
     ShapeUtil::for_each_mutable_subshape_with_status(shape, &mut pass_func)
   }
 
-  pub fn for_each_leaf_shape() {}
+  // Calls the given visitor function for each leaf subshape of the given shape.
+  // Subshapes are visited in DFS pre-order starting with the entire shape (index {}).
+  pub fn for_each_mutable_leaf_shape<T>(shape: &Shape, func: &mut T)
+    where T: FnMut(&Shape, &Vec<i64>)
+  {
+    let _pass_func = |sub_shape: &Shape, index_vec: &Vec<i64>| {
+      if ShapeUtil::is_leaf_index(shape, index_vec) {
+        func(sub_shape, index_vec)
+      }
+    };
+    //ShapeUtil::for_each_subshape(shape, pass_func);
+  }
 
   // Variants of for_each_subshape wchich propagate status from the
   // visitor functions.
@@ -1879,7 +1891,7 @@ use super::*;
     let mut array_shape = ShapeUtil::make_shape(
       &PrimitiveType::S32, vec![42, 42, 123]);
     assert_eq!(ShapeEqual::new().equal(&array_shape,
-      &ShapeUtil::get_subshape(&array_shape, vec![])), true);
+      &ShapeUtil::get_subshape(&array_shape, &vec![])), true);
     
     let original = array_shape.clone();
     let sub = ShapeUtil::get_mutable_subshape(&mut array_shape, vec![]);
@@ -1888,13 +1900,13 @@ use super::*;
     let tuple_shape = ShapeUtil::make_tuple_shape(
       vec![array_shape.clone(), array_shape.clone(), array_shape.clone()]);
     assert_eq!(ShapeEqual::new().equal(
-      ShapeUtil::get_subshape(&tuple_shape, vec![]), &tuple_shape), true);
+      &ShapeUtil::get_subshape(&tuple_shape, &vec![]), &tuple_shape), true);
     assert_eq!(ShapeEqual::new().equal(
-      ShapeUtil::get_subshape(&tuple_shape, vec![0]), &array_shape), true);
+      &ShapeUtil::get_subshape(&tuple_shape, &vec![0]), &array_shape), true);
     assert_eq!(ShapeEqual::new().equal(
-      ShapeUtil::get_subshape(&tuple_shape, vec![1]), &array_shape), true);
+      &ShapeUtil::get_subshape(&tuple_shape, &vec![1]), &array_shape), true);
     assert_eq!(ShapeEqual::new().equal(
-      ShapeUtil::get_subshape(&tuple_shape, vec![2]), &array_shape), true);
+      &ShapeUtil::get_subshape(&tuple_shape, &vec![2]), &array_shape), true);
 
     let nested_tuple_shape = ShapeUtil::make_tuple_shape(vec![
       array_shape.clone(),
@@ -1907,14 +1919,14 @@ use super::*;
       ])
     ]);
     assert_eq!(ShapeEqual::new().equal(&nested_tuple_shape,
-      &ShapeUtil::get_subshape(&nested_tuple_shape, vec![])), true);
+      &ShapeUtil::get_subshape(&nested_tuple_shape, &vec![])), true);
     assert_eq!(ShapeEqual::new().equal(&array_shape,
-      &ShapeUtil::get_subshape(&nested_tuple_shape, vec![0])), true);
+      &ShapeUtil::get_subshape(&nested_tuple_shape, &vec![0])), true);
     assert_eq!(ShapeEqual::new().equal(
       &ShapeUtil::make_tuple_shape(vec![array_shape.clone(), array_shape.clone()]),
-      &ShapeUtil::get_subshape(&nested_tuple_shape, vec![1])), true);
+      &ShapeUtil::get_subshape(&nested_tuple_shape, &vec![1])), true);
     assert_eq!(ShapeEqual::new().equal(
       &ShapeUtil::make_tuple_shape(vec![array_shape.clone(), array_shape.clone()]),
-      &ShapeUtil::get_subshape(&nested_tuple_shape, vec![2, 0])), true);
+      &ShapeUtil::get_subshape(&nested_tuple_shape, &vec![2, 0])), true);
   }
 }
