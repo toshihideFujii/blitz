@@ -35,6 +35,8 @@ impl ExecutionOutput {
   pub fn consume_aliased_indices() {}
 }
 
+// A given platform's compiler will produce an Executable -- this is a uniform
+// interface that is used for launching compiled programs across platforms.
 pub struct Executable {}
 
 impl Executable {

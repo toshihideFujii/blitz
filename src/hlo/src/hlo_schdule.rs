@@ -120,7 +120,8 @@ impl HloSchedule {
     self.sequences.get(&computation.unique_id())
   }
 
-  // Returns the sequence for the given computation.
+  // Returns the sequence for the given computation. An empty sequence is
+  // created if none exists for the computation.
   pub fn get_or_create_sequence(
     &mut self,
     module: &HloModule,
@@ -137,18 +138,42 @@ impl HloSchedule {
     self.sequences.get(&computation.unique_id()).unwrap()
   }
 
+  pub fn get_or_create_mutable_sequence(
+    &mut self,
+    module: &HloModule,
+    computation: &HloComputation) -> &mut HloInstructionSequence
+  {
+    if !self.sequences.contains_key(&computation.unique_id()) {
+      // No sequence found for computation. Create and return an empty one.
+      debug_assert!(computation.parent().as_ref().unwrap() == module);
+      self.execution_threads.insert(computation.unique_id(), computation.execution_thread());
+      let sequence = HloInstructionSequence::new();
+      self.sequences.insert(computation.unique_id(), sequence);
+    }
+
+    self.sequences.get_mut(&computation.unique_id()).unwrap()
+  }
+
   // Sets the sequence for the given computation to the given sequence.
   pub fn set_sequence(
     &mut self,
-    module: &HloModule,
+    //module: &HloModule,
     computation: &HloComputation,
     sequence: HloInstructionSequence)
   {
-    debug_assert!(computation.parent().as_ref().unwrap() == module); 
+    //debug_assert!(computation.parent().as_ref().unwrap() == module); 
     self.sequences.insert(
       computation.unique_id(), sequence);
     self.execution_threads.insert(
       computation.unique_id(), computation.execution_thread());
+  }
+
+  pub fn set_sequence_by_instr_vec(
+    &mut self,
+    _computation: &HloComputation,
+    _sequence: &Vec<HloInstruction>)
+  {
+    unimplemented!()    
   }
 
   // Returns a map from HloComputation unique id to instruction sequence.

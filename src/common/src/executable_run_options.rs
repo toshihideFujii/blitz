@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use stream_executor::{device_memory_allocator::DeviceMemoryAllocator, stream::Stream};
+
 #[derive(Clone)]
 pub struct RunId {
   data: i64,
@@ -25,20 +27,52 @@ impl RunId {
   pub fn absl_hash_value() {}
 }
 
+// Class containing options for running a LocalExecutable.
 pub struct ExecutableRunOptions {
+  allocator: Option<DeviceMemoryAllocator>,
   device_ordinal: i64,
+  stream: Option<Stream>,
   rng_seed: i64,
-  launch_id: i32,
+  launch_id: i64,
+  device_to_host_stream: Option<Stream>,
+  host_to_device_stream: Option<Stream>,
   run_id: RunId,
 }
 
 impl ExecutableRunOptions {
-  pub fn new() {}
+  pub fn new() -> Self {
+    ExecutableRunOptions {
+      allocator: None,
+      device_ordinal: 0,
+      stream: None,
+      rng_seed: 0,
+      launch_id: 0,
+      device_to_host_stream: None,
+      host_to_device_stream: None,
+      run_id: RunId::new(0)
+    }
+  }
 
-  pub fn set_allocator() {}
-  pub fn allocator() {}
+  // Specifies the allocator to use during execution.
+  pub fn set_allocator(
+    &mut self, allocator: DeviceMemoryAllocator) -> &mut ExecutableRunOptions
+  {
+    self.allocator = Some(allocator);
+    self
+  }
 
-  pub fn set_device_ordinal(&mut self, device_ordinal: i64) -> &mut ExecutableRunOptions {
+  pub fn allocator(&self) -> &DeviceMemoryAllocator {
+    self.allocator.as_ref().unwrap()
+  }
+
+  // If set, this is the device to run the computation on. Valid device_ordinal
+  // values are: 0 to # of devices - 1. These values are identical to the device
+  // ordinal values used by StreamExecutor. The device must be of the same type
+  // as the executable was compiled for. A value of -1 indicates this option has
+  // not been set.
+  pub fn set_device_ordinal(
+    &mut self, device_ordinal: i64) -> &mut ExecutableRunOptions
+  {
     self.device_ordinal = device_ordinal;
     self
   }
@@ -47,8 +81,17 @@ impl ExecutableRunOptions {
     self.device_ordinal
   }
 
-  pub fn set_stream() {}
-  pub fn stream() {}
+  // If set, this is the stream to run the computation on. The platform of the
+  // stream must match the platform the executable was built for.  A value of
+  // nullptr indicates the option has not been set.
+  pub fn set_stream(&mut self, stream: Stream) -> &mut ExecutableRunOptions {
+    self.stream = Some(stream);
+    self
+  }
+
+  pub fn stream(&self) -> &Stream {
+    self.stream.as_ref().unwrap()
+  }
 
   pub fn set_host_to_device_stream() {}
   pub fn host_to_device_stream() {}
@@ -74,12 +117,12 @@ impl ExecutableRunOptions {
     self.rng_seed
   }
 
-  pub fn set_launch_id(&mut self, launch_id: i32) -> &mut ExecutableRunOptions {
+  pub fn set_launch_id(&mut self, launch_id: i64) -> &mut ExecutableRunOptions {
     self.launch_id = launch_id;
     self
   }
 
-  pub fn launch_id(&self) -> i32 {
+  pub fn launch_id(&self) -> i64 {
     self.launch_id
   }
 

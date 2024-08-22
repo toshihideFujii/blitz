@@ -836,7 +836,7 @@ impl ShapeUtil {
   }
 
   pub fn get_mutable_subshape(shape: &mut Shape, index_vec: Vec<i64>) -> &mut Shape {
-    let mut return_shape: &mut Shape = shape;
+    let mut return_shape = shape;
     for i in index_vec {
       assert!(return_shape.is_tuple(), "Invalid index for shape.");
       return_shape = return_shape.mutable_tuple_shapes(i as usize);

@@ -34,8 +34,7 @@ impl MemorySpacePropagation {
       module, false, true, None,
       None, execution_threads).unwrap();
 
-    for computation in
-      module.make_nonfusion_computations_by_exec_threads(execution_threads) {
+    for computation in module.make_nonfusion_computations(execution_threads) {
       for instruction in computation.instructions() {
         if instruction.opcode() == HloOpcode::Fusion {
           // Propagate the operand subshapes.
@@ -74,19 +73,33 @@ impl MemorySpacePropagation {
     &self,
     index_vec: &Vec<i64>,
     callee_instruction: &HloInstruction,
-    _memory_space: i64) -> bool
+    memory_space: i64) -> bool
   {
-    let modified = false;
+    let mut modified = false;
     let value = self.dataflow_analysis.as_ref().unwrap()
       .get_unique_value_at(callee_instruction, index_vec);
 
     for _pos in value.positions() {
-      
+      /*
+      let instruction = &pos.instruction;
+      let shape = ShapeUtil::get_mutable_subshape(
+        instruction.mutable_shape(), pos.index);
+
+      if shape.layout().unwrap().memory_space() == memory_space {
+        continue;
+      }
+      shape.mutable_layout().unwrap().set_memory_space(memory_space);
+      */
+      modified = true;
     }
 
-    for _use_ in value.get_uses() {
+    for use_ in value.get_uses() {
       // For fusion uses, propagate the memory space to the fusion parameter.
-      //modified |= self.propagate(use_., callee_instruction, memory_space)
+      modified |= self.propagate(
+        &use_.operand_index_vec,
+        use_.instruction
+          .fused_parameter(use_.operand_number),
+        memory_space);
     }
 
     modified

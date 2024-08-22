@@ -283,6 +283,7 @@ impl LiteralBase {
   }
 }
 
+//#[derive(Debug, Clone)]
 pub struct Literal {
   base: LiteralBase,
   shape: Shape,
@@ -332,6 +333,14 @@ impl Literal {
     self.base.mutable_root_piece()
   }
 
+  pub fn data_default<T>(&self) -> &Vec<T> {
+    unimplemented!()
+  }
+
+  pub fn data<T>(&self, shape_index: usize) -> &Vec<T> {
+    self.base.data(shape_index)
+  }
+
   fn set_piece(
     shape: &Shape,
     piece: &mut Piece,
@@ -353,6 +362,27 @@ impl Literal {
         // TODO
       }
     }   
+  }
+
+  // Copy values from 'src_literal' rooted at 'src_shape_index' into this
+  // literal rooted at 'dest_shape_index'. The subshape of this literal rooted
+  // at 'dest_shape_index' must be compatible with the subshape of 'src_literal'
+  // rooted at 'src_shape_index', but need not be arrays. If only_dynamic_bound
+  // is true, only elements within dynamic bounds will be copied.
+  pub fn copy_from(
+    &self,
+    _src_literal: &Literal,
+    _dest_shape_index: Vec<usize>,
+    _src_shape_index: Vec<usize>,
+    _only_dynamic_bound: bool) -> Result<(), String>
+  {
+    unimplemented!()
+  }
+
+  // Returns the element value at index (0, ..., 0), however many zeroes are
+  // required for that index.
+  pub fn get_first_element<T>(&self) -> &T {
+    unimplemented!()
   }
 }
 
@@ -525,7 +555,6 @@ impl Piece {
   pub fn count_all() {}
   pub fn equal_elements() {}
   pub fn equal_dynamic_size() {}
-  pub fn copy_from() {}
 
   pub fn is_determined(&self) -> bool {
     if self.array_value_state == ArrayValueState::Undetermined {

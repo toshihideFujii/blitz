@@ -40,7 +40,16 @@ pub struct HloModuleConfig {
 }
 
 impl HloModuleConfig {
-  pub fn new() {}
+  // A configuration can be created either with, or without an entry
+  // ComputationLayout. The default ctor creates it without -- in this case
+  // accessing entry_computation_layout will CHECK-fail. The ctor accepting a
+  // ProgramShape creates a computation layout using this shape.
+  // The layouts in the ProgramShape will be reset to default unless
+  // ignore_layouts is set to false.
+  pub fn new_default() -> Self {
+    unimplemented!()
+  }
+
   pub fn to_proto() {}
   pub fn assign_proto_shardable_value_update_pairs() {}
   pub fn has_entry_computation_layout() {}

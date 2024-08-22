@@ -1,6 +1,12 @@
 #![allow(dead_code)]
 
-use crate::{dfs_hlo_visitor::{DfsHloVisitorBase, VisitState}, hlo_instruction::HloInstruction};
+use std::collections::HashSet;
+
+use crate::{
+  dfs_hlo_visitor::{DfsHloVisitorBase, VisitState},
+  hlo_instruction::HloInstruction,
+  hlo_module::HloModule
+};
 
 pub trait DfsHloVisitor {
   fn default_action(&self, _instruction: &HloInstruction) -> Result<(), String> {
@@ -14,6 +20,13 @@ struct DfsHloVisitorWithDefaultBase {
 
 impl DfsHloVisitorWithDefaultBase {
   pub fn new() {}
+}
+
+pub trait DfsHloRewriteVisitor {
+  fn run_on_module(
+    &mut self,
+    module: &HloModule,
+    execution_threads: &HashSet<String>) -> Result<bool, String>;
 }
 
 pub struct FunctionVisitor {

@@ -137,7 +137,7 @@ impl HloOrdering {
           if use_is_always_before_def_in_same_instr ||
              dataflow.can_share_operand_buffer_with_user(
               use_.instruction.mutable_operand(use_.operand_number as usize).unwrap(),
-              use_.operand_index,
+              &use_.operand_index_vec,
               value.defining_instruction(),
               value.defining_index())
           {
@@ -350,7 +350,7 @@ impl HloOrdering {
     let mut uses = vec![];
     for use_ in a.get_uses() {
       if dataflow.does_not_use_operand_buffer(
-        a.instruction(), &vec![a.index() as i64], &use_.instruction)
+        a.instruction(), a.index(), &use_.instruction)
       {
         continue;
       }

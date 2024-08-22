@@ -14,6 +14,8 @@ impl DeviceAssignment {
   pub fn to_string() {}
 }
 
+// A generic implementation of the Blitz computation placer, which assigns device
+// ids to a set of replicated computations.
 pub struct ComputationPlacer {}
 
 impl ComputationPlacer {

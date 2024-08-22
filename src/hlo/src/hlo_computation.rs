@@ -1,6 +1,13 @@
 #![allow(dead_code)]
 
-use crate::{dfs_hlo_visitor_with_default::FunctionVisitor, hlo_instruction::{self, HloInstruction, HloPrintOptions}, hlo_module::HloModule, hlo_opcode::HloOpcode};
+use std::collections::HashMap;
+
+use crate::{
+  dfs_hlo_visitor_with_default::{DfsHloRewriteVisitor, FunctionVisitor},
+  hlo_clone_context::HloCloneContext,
+  hlo_instruction::{self, HloInstruction, HloPrintOptions},
+  hlo_module::HloModule, hlo_opcode::HloOpcode
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloComputation {
@@ -63,7 +70,9 @@ impl HloComputation {
   pub fn add_entry_computation_parameter() {}
   pub fn replace_entry_computation_parameter() {}
 
-  pub fn remove_instruction(&mut self, _instruction: &HloInstruction) {}
+  pub fn remove_instruction(&mut self, _instruction: &HloInstruction) -> Result<(), String> {
+    unimplemented!()
+  }
 
   pub fn force_remove_instruction() {}
 
@@ -83,6 +92,10 @@ impl HloComputation {
   // instruction which produces the output of the computation.
   pub fn root_instruction(&self) -> &HloInstruction {
     &self.root_instruction
+  }
+
+  pub fn mutable_root_instruction(&mut self) -> &mut HloInstruction {
+    &mut self.root_instruction
   }
 
   // Returns the number of parameters for this computation.
@@ -168,7 +181,15 @@ impl HloComputation {
     unimplemented!()
   }
 
+  pub fn mutable_parent(&mut self) -> &mut Option<HloModule> {
+    unimplemented!()
+  }
+
   pub fn accept(&self, _visitor: &FunctionVisitor) -> Result<(), String> {
+    unimplemented!()
+  }
+
+  pub fn accept_rewrite_visitor(&self, _visitor: &dyn DfsHloRewriteVisitor) -> Result<(), String> {
     unimplemented!()
   }
 
@@ -305,4 +326,29 @@ impl HloComputation {
   }
 
   pub fn can_expand_into_single_instruction() {}
+
+  // Like Clone(), but if an instruction is present in replacement_map, we use
+  // the map's value to replace that instruction in the cloned computation.
+  //
+  // If replacements is nullptr, don't perform replacement.
+  // If replacements maps a key to nullptr, we remove that instruction from the
+  // new computation.  If an element of `replacements` references an instruction
+  // that's not already in the computation, it's cloned and added to the new
+  // computation.
+  //
+  // 'extra_parameters' allows to specify additional parameters that should be
+  // added to the computation.
+  //
+  // All relevant instructions are cloned, *including* unique_ptr in the
+  // `replacements` map.
+  pub fn clone_with_replacements(
+    &self,
+    _replacements: &HashMap<HloInstruction, HloInstruction>,
+    _extra_parameeters: &Vec<HloInstruction>,
+    _context: Option<HloCloneContext>,
+    _suffix: String,
+    _new_root: Option<HloInstruction>) -> HloComputation
+  {
+    unimplemented!()    
+  }
 }

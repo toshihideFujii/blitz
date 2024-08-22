@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use hlo::{hlo_computation::HloComputation, hlo_instruction::HloInstruction};
+
 pub enum ReductionKind {
   Sum,
   Product,
@@ -7,9 +9,17 @@ pub enum ReductionKind {
   Max,
 }
 
-pub fn match_reduction_instruction() {}
+// Attempts to match instruction to one of the possible cases for ReductionKind.
+pub fn match_reduction_instruction(_hlo: &HloInstruction) -> Option<ReductionKind>
+{
+  unimplemented!()
+}
 
-pub fn match_reduction_computation() {}
+// Attempts to match computation to one of the possible cases in ReductionKind.
+pub fn match_reduction_computation(_computation: &HloComputation) -> Option<ReductionKind>
+{
+  unimplemented!()
+}
 
 pub fn get_reduction_identity() {}
 

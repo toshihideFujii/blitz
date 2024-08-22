@@ -66,11 +66,18 @@ pub struct HloModule {
 }
 
 impl HloModule {
-  pub fn new() {}
+  pub fn new(_name: String, _config: HloModuleConfig) -> Self {
+    unimplemented!()
+  }
+
   pub fn add_entry_computation() {}
   pub fn add_entry_computation_with_layouts() {}
   pub fn replace_entry_computation() {}
-  pub fn add_embedded_computation() {}
+
+  // Adds an embedded computation to the module.
+  pub fn add_embedded_computation(&mut self, _computation: HloComputation) -> &HloComputation {
+    unimplemented!()
+  }
 
   // Removes an embedded computation.
   pub fn remove_embedded_computation(
@@ -207,12 +214,18 @@ impl HloModule {
   pub fn make_computation_sorted() {}
 
   // Gets the computation in this module which aren't for fusion nodes.
-  pub fn make_nonfusion_computations(&self) -> &Vec<HloComputation> {
+  pub fn make_nonfusion_computations_default(&self) -> &Vec<HloComputation> {
     unimplemented!()
   }
 
-  pub fn make_nonfusion_computations_by_exec_threads(
+  pub fn make_nonfusion_computations(
     &self, _execution_threads: &HashSet<String>) -> &Vec<HloComputation>
+  {
+    unimplemented!()
+  }
+
+  pub fn make_mutable_nonfusion_computations(
+    &mut self, _execution_threads: &HashSet<String>) -> &mut Vec<HloComputation>
   {
     unimplemented!()
   }
@@ -304,6 +317,11 @@ impl HloModule {
   pub fn schedule(&self) -> &HloSchedule {
     assert!(self.has_schedule());
     &self.schedule.as_ref().unwrap()
+  }
+
+  pub fn mutable_schedule(&mut self) -> &mut HloSchedule {
+    assert!(self.has_schedule());
+    self.schedule.as_mut().unwrap()
   }
 
   pub fn add_computation_and_unify_names_and_ids() {}

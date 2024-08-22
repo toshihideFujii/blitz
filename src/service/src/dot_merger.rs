@@ -31,9 +31,7 @@ impl DotMerger {
     execution_threads: &HashSet<String>) -> Result<bool, String>
   {
     let mut changed = false;
-    for comp in
-      module.make_nonfusion_computations_by_exec_threads(execution_threads)
-    {
+    for comp in module.make_nonfusion_computations(execution_threads) {
       let result = self.merge_dots(comp);
       if result.is_err() { return Err(result.err().unwrap()); }
       changed |= result.ok().unwrap();

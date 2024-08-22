@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use common::{blitz_data::{FftType, GatherDimensionNumbers, PaddingConfig, PrimitiveType, TriangularSolveOptions}, shape::Shape};
+use common::{blitz_data::{ConvolutionDimensionNumbers, DotDimensionNumbers, FftType, GatherDimensionNumbers, PaddingConfig, PrimitiveType, SparsityDescriptor, TriangularSolveOptions, Window}, shape::Shape};
 use hlo::{hlo_instruction::HloInstruction, hlo_opcode::HloOpcode};
 
 // For a given operation and input shapes, infers what the resulting shape
@@ -217,6 +217,28 @@ impl ShapeInference {
     _shape: &Shape,
     _val_shape: &Shape,
     _dimension: i64) -> Result<Shape, String>
+  {
+    unimplemented!()    
+  }
+
+  pub fn infer_dot_op_shape(
+    _lhs: &Shape,
+    _rhs: &Shape,
+    _dimension_numbers: &DotDimensionNumbers,
+    _preferred_element_type: Option<PrimitiveType>,
+    _sparsity: &Vec<SparsityDescriptor>) -> Result<Shape, String>
+  {
+    unimplemented!()    
+  }
+
+  pub fn infer_convolve_shape(
+    _lhs: &Shape,
+    _rhs: &Shape,
+    _feature_group_count: i64,
+    _batch_group_count: i64,
+    _window: &Window,
+    _dnums: &ConvolutionDimensionNumbers,
+    _preferred_element_type: Option<PrimitiveType>) -> Result<Shape, String>
   {
     unimplemented!()    
   }

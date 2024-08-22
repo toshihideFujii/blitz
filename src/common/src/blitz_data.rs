@@ -62,6 +62,14 @@ pub enum Algorithm {
   DotAnyF8anyF8F32,
 }
 
+pub struct PrecisionConfig {}
+
+impl PrecisionConfig {
+  pub fn operand_precision(&self) -> &Vec<Precision> {
+    unimplemented!()
+  }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OpMetadata {}
 
@@ -259,3 +267,161 @@ pub struct TriangularSolveOptions {
 }
 
 pub struct GatherDimensionNumbers {}
+
+pub enum SparsityType {
+  Invalid,
+  StructuredNM,  
+}
+
+pub struct SparsityDescriptor {
+  t: SparsityType,
+  index: i64,
+  dimension: i64,
+  n: i64,
+  m: i64,
+}
+
+pub struct Window {}
+
+pub struct ScatterDimensionNummbers {
+  update_window_dims: i64,
+  inserted_window_dims: i64,
+  index_vector_dim: i64
+}
+
+impl ScatterDimensionNummbers {
+  pub fn index_vector_dim(&self) -> i64 {
+    self.index_vector_dim
+  }
+
+  pub fn update_window_dims(&self) -> &Vec<i64> {
+    //self.update_window_dims
+    unimplemented!()
+  }
+
+  pub fn scatter_dims_to_operand_dims(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+
+  pub fn inserted_window_dims(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+}
+
+// Handle given to a user that represents a globally accessible allocation.
+// Contrast this against a ComputationDataHandle, which is not globally
+// accessible, since it only exists within a specific computation.
+pub struct GlobalDataHandle {
+  handle: i64
+}
+
+pub struct UnregisterRequest {}
+
+pub struct UnregisterResponse {}
+
+pub struct DeconstructTupleRequest {
+  tuple_handle: GlobalDataHandle
+}
+
+pub struct DeconstructTupleResponse {
+  element_handles: Vec<GlobalDataHandle>
+}
+
+pub struct CompileRequest {}
+
+pub struct CompileResponse {}
+
+pub struct ExecuteRequest {}
+
+pub struct ExecuteResponse {}
+
+pub struct ExecuteGtaphParallelRequest {}
+
+pub struct ExecuteParallelResponse {
+  responses: Vec<ExecuteResponse>
+}
+
+pub struct GetDeviceHandlesRequest {
+  device_count: i64
+}
+
+pub struct GetDeviceHandlesResponse {
+
+}
+
+pub struct TransferToClientRequest {}
+
+pub struct TransferToClientResponse {}
+
+pub struct TransferToServerRequest {}
+
+pub struct TransferToServerResponse {}
+
+pub struct TransferToInfeedRequest {}
+
+pub struct TransferToInfeedResponse {}
+
+pub struct TransferFromOutfeedRequest {}
+
+pub struct TransferFromOutfeedResponse {}
+
+pub struct ResetDeviceRequest {}
+
+pub struct ResetDeviceResponse {}
+
+pub struct ComputeConstantGraphRequest {}
+
+pub struct ComputeConstantResponse {}
+
+pub struct GetShapeRequest {}
+pub struct GetShapeResponse {}
+
+pub struct ComputationGraphStatsRequest {}
+
+pub struct ComputationStatsResponse {}
+
+pub struct CreateChannelHandleRequest {}
+
+pub struct CreateChannelHandleResponse {}
+
+// Handle given to a user that represents an execution that the user launched
+// asynchronously on the device.
+pub struct ExecutionHandle {
+  handle: i64
+}
+
+pub enum ChannelType {
+  Invalid,
+  DeviceToDevice,
+  DeviceToHost,
+  HostToDevice,
+}
+
+// Handle given to a user to represent a channel between two computations
+// via a Send and Recv instruction pair. Channels are unbuffered, so Send
+// instructions will be blocked until the data is transferred.
+pub struct ChannelHandle {
+  t: ChannelType
+}
+
+// A backend-config for kWhile loops that stores the loop's trip count, if it is
+// known.
+//
+// This is useful for backends that can implement a `for i in 0..N` loop more
+// efficiently than a `while` loop.  For example, on GPUs, we can implement a
+// `for i in 0..N` loop by enqueueing the kernels for the loop body N times,
+// whereas implementing a `while` loop requires a host-device sync on each
+// iteration.
+pub struct WhileLoopBackendConfig {
+  known_trip_count: usize
+}
+
+impl WhileLoopBackendConfig {
+  pub fn new() -> Self {
+    WhileLoopBackendConfig { known_trip_count: 0 }
+  }
+
+  pub fn set_known_trip_count(&mut self, count: usize) {
+    self.known_trip_count = count;
+  }
+}

@@ -14,7 +14,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloPosition {
   pub instruction: HloInstruction,
-  pub index: usize
+  pub index: Vec<i64>
 }
 
 impl HloPosition {
@@ -57,7 +57,7 @@ impl Ord for HloPosition {
 pub struct HloUse {
   pub instruction: HloInstruction,
   pub operand_number: i64,
-  pub operand_index: usize
+  pub operand_index_vec: Vec<i64>
 }
 
 impl HloUse {
@@ -129,11 +129,11 @@ impl HloValue {
 
   // Return the shape index at which this HloValue is defined in the output of
   // its defining instruction.
-  pub fn defining_index(&self) -> usize {
-    self.defining_position().index
+  pub fn defining_index(&self) -> &Vec<i64> {
+    &self.defining_position().index
   }
 
-  pub fn index(&self) -> usize {
+  pub fn index(&self) -> &Vec<i64> {
     self.defining_index()
   }
 

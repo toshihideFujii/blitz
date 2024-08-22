@@ -12,9 +12,9 @@ use hlo::{
 use crate::{call_graph::CallGraph, hlo_phi_graph::PhiGraph};
 
 // Identifies one array input of an HloInstruction.
-struct HloOperandIndex {
-  operand_number: i64,
-  operand_index: usize,
+pub struct HloOperandIndex {
+  pub operand_number: i64,
+  pub operand_index: usize,
 }
 
 pub struct ForwardedOperand {
@@ -188,7 +188,7 @@ impl HloDataflowAnalysis {
               user.fused_parameter(use_.operand_number);
             let value =
               self.get_value_defined_at(
-                fusion_param, &vec![use_.operand_index as i64]);
+                fusion_param, &use_.operand_index_vec);
             return value.get_uses().is_empty();
           }
           return false;
@@ -201,9 +201,9 @@ impl HloDataflowAnalysis {
   pub fn can_share_operand_buffer_with_user(
     &self,
     _operand: &HloInstruction,
-    _operand_index: usize,
+    _operand_index_vec: &Vec<i64>,
     _user: &HloInstruction,
-    _user_index: usize) -> bool
+    _user_index_vec: &Vec<i64>) -> bool
   {
     unimplemented!()
   }
@@ -241,7 +241,12 @@ impl HloDataflowAnalysis {
     *opcode == HloOpcode::AsyncDone
   }
 
-  pub fn get_in_place_input_output_pairs() {}
+  pub fn get_in_place_input_output_pairs(
+    _instruction: &HloInstruction) -> &Vec<(HloOperandIndex, Vec<i64>)>
+  {
+    unimplemented!()
+  }
+
   pub fn verify() {}
 
   fn are_transitive_uses_elementwise_or_tuple() {}

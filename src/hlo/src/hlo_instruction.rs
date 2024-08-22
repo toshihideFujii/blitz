@@ -3,7 +3,9 @@
 use std::collections::{HashMap, HashSet};
 
 use common::{
-  blitz_data::{Algorithm, DotDimensionNumbers, FftType, FrontendAttributes, GatherDimensionNumbers, OpMetadata, PaddingConfig, Precision, PrimitiveType, RandomAlgorithm, RandomDistribution, Statisitic, StatisticsViz, TriangularSolveOptions},
+  blitz_data::{
+    Algorithm, ConvolutionDimensionNumbers, DotDimensionNumbers, FftType, FrontendAttributes, GatherDimensionNumbers, OpMetadata, PaddingConfig, Precision, PrecisionConfig, PrimitiveType, RandomAlgorithm, RandomDistribution, ScatterDimensionNummbers, SparsityDescriptor, Statisitic, StatisticsViz, TriangularSolveOptions, WhileLoopBackendConfig, Window
+  },
   comparison_util::{ComparisonDirection, ComparisonType},
   literal::Literal,
   printer::{Printer, StringPrinter},
@@ -11,7 +13,10 @@ use common::{
 };
 
 use crate::{
-  dfs_hlo_visitor_with_default::DfsHloVisitor, hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata, hlo_instructions::{
+  dfs_hlo_visitor_with_default::DfsHloVisitor,
+  hlo_computation::HloComputation,
+  hlo_domain_metadata::DomainMetadata,
+  hlo_instructions::{
     HloAsyncInstruction,
     HloAsyncStartInstruction,
     HloBatchNormGradInstruction,
@@ -21,18 +26,18 @@ use crate::{
     HloCallInstruction,
     HloCollectiveInstruction,
     HloCompareInstruction,
-    HloConcatenateInstruction,
+    //HloConcatenateInstruction,
     HloConstantInstruction,
     HloCopyStartInstruction,
     HloDynamicReshapeInstruction,
     HloDynamicSliceInstruction,
     HloDynamicUpdateSliceInstruction,
-    HloGetTupleElementInstruction,
+    //HloGetTupleElementInstruction,
     HloInfeedInstruction,
     HloIotaInstruction,
     HloMapInstruction,
     HloOutfeedInstruction,
-    HloParameterInstruction,
+    //HloParameterInstruction,
     HloRecvDoneInstruction,
     HloRecvInstruction,
     HloReduceInstruction,
@@ -472,11 +477,12 @@ impl HloInstruction {
 
   // Creates a parameter-retrieving insstruction.
   pub fn create_parameter(
-    parameter_number: i64,
-    shape: &Shape,
-    name: String) -> HloParameterInstruction
+    _parameter_number: i64,
+    _shape: &Shape,
+    _name: String) -> HloInstruction //HloParameterInstruction
   {
-    HloParameterInstruction::new(parameter_number, shape, name)
+    //HloParameterInstruction::new(parameter_number, shape, name)
+    unimplemented!()
   }
 
   // Creates a literal constant instruction.
@@ -501,12 +507,21 @@ impl HloInstruction {
   }
 
   // Creates a get tuple element instruction.
-  pub fn create_get_tuple_element(
-    shape: &Shape,
-    operand: &HloInstruction,
-    index: i64) -> HloGetTupleElementInstruction
+  pub fn create_get_tuple_element_by_shape(
+    _shape: &Shape,
+    _operand: &HloInstruction,
+    _index: i64) -> HloInstruction
   {
-    HloGetTupleElementInstruction::new(shape, operand, index)
+    //HloGetTupleElementInstruction::new(shape, operand, index)
+    unimplemented!()
+  }
+
+  pub fn create_get_tuple_element(
+    _operand: &HloInstruction,
+    _index: i64) -> HloInstruction
+  {
+    //HloGetTupleElementInstruction::new(shape, operand, index)
+    unimplemented!()
   }
 
   // Creates a random number generation instruction that fills a shape with
@@ -627,7 +642,9 @@ impl HloInstruction {
 
   // Creates a bitcast instruction, where operand is the data to convert
   // and shape is the target shape for the conversion.
-  pub fn create_bitcast(_shape: &Shape, _operand: HloInstruction) {}
+  pub fn create_bitcast(_shape: &Shape, _operand: &HloInstruction) -> HloInstruction {
+    unimplemented!()
+  }
 
   pub fn create_bitcast_convert() {}
   pub fn create_stochastic_convert() {}
@@ -723,11 +740,12 @@ impl HloInstruction {
   }
 
   pub fn create_concatenate(
-    shape: &Shape,
-    operands: Vec<HloInstruction>,
-    dimension: i64) -> HloConcatenateInstruction
+    _shape: &Shape,
+    _operands: Vec<HloInstruction>,
+    _dimension: i64) -> HloInstruction
   {
-    HloConcatenateInstruction::new(shape, operands, dimension)
+    //HloConcatenateInstruction::new(shape, operands, dimension)
+    unimplemented!()
   }
 
   pub fn create_reduce(
@@ -1044,7 +1062,7 @@ impl HloInstruction {
 
   // Copies the control predecessors and successors on this HLO instruction to
   // 'inst'.
-  pub fn copy_all_control_deps_from(_inst: &HloInstruction) -> Result<(), String> {
+  pub fn copy_all_control_deps_from(&self, _inst: &HloInstruction) -> Result<(), String> {
     unimplemented!()
   }
 
@@ -1111,7 +1129,17 @@ impl HloInstruction {
     Ok(())
   }
 
-  pub fn replace_operand_with() {}
+  // Replaces the specified operand with new_operand. The old and new operands
+  // must have compatible shapes ignoring floating-point precision.
+  //
+  // This function does NOT remove duplicated operands even if this instruction
+  // is a fusion, so that the existing operand numbers do not change.
+  pub fn replace_operand_with(
+    &mut self, _operand_num: i64, _new_operand: HloInstruction) -> Result<(), String>
+  {
+    unimplemented!()
+  }
+
   pub fn replace_operand_with_different_shape() {}
 
   // Decomposes fusion back to individual parts.
@@ -1134,7 +1162,7 @@ impl HloInstruction {
     Ok(())
   }
 
-  // Replaces all uses of this instruction with thenew producer.
+  // Replaces all uses of this instruction with the new producer.
   pub fn replace_all_uses_with(
     &mut self, new_producer: &mut HloInstruction, trigger: String) -> Result<(), String>
   {
@@ -1246,6 +1274,10 @@ impl HloInstruction {
   pub fn while_body(&self) -> &HloComputation {
     assert!(self.opcode == HloOpcode::While);
     self.called_computations().get(BODY_COMPUTATION_INDEX).unwrap()
+  }
+
+  pub fn mutable_while_body(&mut self) -> &mut HloComputation {
+    unimplemented!()
   }
 
   pub fn set_while_condition(&mut self, computation: HloComputation) {
@@ -1436,7 +1468,7 @@ impl HloInstruction {
 
   // Clones the HLO instruction as above but with new shape and operands.
   pub fn clone_with_new_opereands(
-    &self, _shape: &Shape, _new_operands: Vec<HloInstruction>) -> HloInstruction
+    &self, _shape: &Shape, _new_operands: &Vec<HloInstruction>) -> HloInstruction
   {
     unimplemented!()
   }
@@ -1603,7 +1635,11 @@ impl HloInstruction {
   }
 
   pub fn backend_config() {}
-  pub fn set_backend_config() {}
+
+  pub fn set_backend_config(&mut self, _config: WhileLoopBackendConfig) {
+    unimplemented!()
+  }
+
   pub fn preserve_layout() {}
   pub fn has_backend_config() {}
   pub fn clear_backend_config() {}
@@ -1671,7 +1707,11 @@ impl HloInstruction {
   }
 
   pub fn backend_config_to_raw_string() {}
-  pub fn precision_config() {}
+
+  pub fn precision_config(&self) -> &PrecisionConfig {
+    unimplemented!()
+  }
+
   pub fn mutable_precision_config() {}
 
   // Sets the debug metadata for this instruction, excluding cration_pass_id,
@@ -1772,6 +1812,10 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn dimensions_number(&self, _index: i64) -> i64 {
+    unimplemented!()
+  }
+
   pub fn concatenate_dimension(&self) -> i64 {
     unimplemented!()
   }
@@ -1799,7 +1843,9 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn literal() {}
+  pub fn literal(&self) -> &Literal {
+    unimplemented!()
+  }
 
   pub fn is_constant(&self) -> bool { false }
 
@@ -1818,7 +1864,7 @@ impl HloInstruction {
   pub fn fused_expression_root(&self) -> &HloInstruction {
     unimplemented!()
   }
-  
+
   pub fn fused_instructions() {}
   pub fn fused_instruction_count() {}
 
@@ -1828,7 +1874,11 @@ impl HloInstruction {
   }
 
   pub fn fused_parameters() {}
-  pub fn is_multi_output_fusion() {}
+
+  // Delegates to HloFusionInstruction::is_multi_output_fusion
+  pub fn is_multi_output_fusion(&self) -> bool {
+    unimplemented!()
+  }
 
   // Delegates to HloFusionInstruction::fusion_kind
   pub fn fusion_kind(&self) -> FusionKind {
@@ -1867,11 +1917,23 @@ impl HloInstruction {
   pub fn mutable_outfeed_shape() {}
   pub fn replica_groups() {}
   pub fn source_target_pairs() {}
-  pub fn convolution_dimension_numberes() {}
+
+  pub fn convolution_dimension_numberes(&self) -> &ConvolutionDimensionNumbers {
+    unimplemented!()
+  }
+
   pub fn set_convolution_dimension_numberes() {}
-  pub fn feature_group_count() {}
+
+  pub fn feature_group_count(&self) -> i64 {
+    unimplemented!()
+  }
+
   pub fn set_feature_group_count() {}
-  pub fn batch_group_count() {}
+
+  pub fn batch_group_count(&self) -> i64 {
+    unimplemented!()
+  }
+
   pub fn set_batch_group_count() {}
   pub fn select() {}
   pub fn scatter() {}
@@ -1909,7 +1971,9 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn scatter_dimension_numbers() {}
+  pub fn scatter_dimension(&self) -> i64 {
+    unimplemented!()
+  }
 
   pub fn dot_dimension_numbers(&self) -> &DotDimensionNumbers {
     unimplemented!()
@@ -1974,6 +2038,30 @@ impl HloInstruction {
   }
 
   pub fn iota_dimension(&self) -> i64 {
+    unimplemented!()
+  }
+
+  pub fn sparsity(&self) -> &Vec<SparsityDescriptor> {
+    unimplemented!()
+  }
+
+  pub fn window(&self) -> &Window {
+    unimplemented!()
+  }
+
+  pub fn unique_indices(&self) -> bool {
+    unimplemented!()
+  }
+
+  pub fn scatter_indices(&self) -> &HloInstruction {
+    unimplemented!()
+  }
+
+  pub fn scatter_dimension_numbers(&self) -> &ScatterDimensionNummbers {
+    unimplemented!()
+  }
+
+  pub fn scatter_updates(&self) -> &Vec<HloInstruction> {
     unimplemented!()
   }
 

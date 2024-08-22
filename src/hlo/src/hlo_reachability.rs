@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, ops::BitOrAssign};
 
-use crate::hlo_instruction::HloInstruction;
+use crate::{hlo_computation::HloComputation, hlo_instruction::HloInstruction};
 
 #[derive(Debug, Clone, PartialEq)]
 struct BitSet {
@@ -70,7 +70,10 @@ impl HloReachabilityMap {
     instance
   }
 
-  pub fn build() {}
+  pub fn build(_computation: &HloComputation) -> Self {
+    unimplemented!()
+  }
+
   pub fn build_with_restrictions() {}
 
   // Set the reachability set of 'instruction' to the union of the reachability
@@ -93,6 +96,16 @@ impl HloReachabilityMap {
     instruction: &HloInstruction)
   {
     self.set_reachability_to_union_helper(inputs, self.get_index(instruction));
+  }
+
+  // As above, but use Index instead if it's already looked up which is even
+  // faster since no hash map lookup will occur.
+  pub fn fast_set_rachability_to_union_by_index(
+    &mut self,
+    _input_indices: &Vec<usize>,
+    _index: usize)
+  {
+    unimplemented!()    
   }
 
   pub fn get_index(&self, instruction: &HloInstruction) -> usize {
@@ -185,5 +198,9 @@ impl HloReachabilityMap {
         //self.bit_sets[index] |= self.bit_sets[*i];
       }
     }
+  }
+
+  pub fn reset(&self) {
+    unimplemented!()
   }
 }
