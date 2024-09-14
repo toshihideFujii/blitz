@@ -55,6 +55,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
+name = "ffi"
+version = "0.1.0"
+
+[[package]]
 name = "getrandom"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -349,6 +353,9 @@ checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
 [[package]]
 name = "stream_executor"
 version = "0.1.0"
+dependencies = [
+ "ffi",
+]
 
 [[package]]
 name = "syn"

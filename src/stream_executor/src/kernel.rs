@@ -160,7 +160,7 @@ impl KernelArgsDeviceMemoryArray {
 }
 
 pub struct Kernel {
-  parent: StreamExecutor,
+  parent: Box<dyn StreamExecutor>,
   name: String,
   demangle_name: String,
   metadata: KernelMetadata

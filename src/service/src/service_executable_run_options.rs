@@ -25,7 +25,7 @@ impl ServiceExecutableRunOptions {
     &mut self.run_options
   }
 
-  pub fn stream(&self) -> &Stream {
+  pub fn stream(&self) -> &Option<Stream> {
     self.run_options.stream()
   }
 

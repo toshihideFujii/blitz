@@ -15,6 +15,7 @@ edition = "2021"
 members = [
   "src/client",
   "src/common",
+  "src/ffi",
   "src/hlo",
   "src/mlir",
   "src/runtime",
@@ -25,6 +26,7 @@ members = [
 [workspace.dependencies]
 client = { path = "src/client" }
 common = { path = "src/common" }
+ffi = { path = "src/ffi" }
 hlo = { path = "src/hlo" }
 mlir = { path = "src/mlir" }
 runtime = { path = "src/runtime" }

@@ -47,13 +47,29 @@ impl DeviceMemoryBase {
 }
 
 // Typed wrapper around "void *"-like DeviceMemoryBase.
+// For example, DeviceMemory<int> is a simple wrapper around DeviceMemoryBase
+// that represents one or more integers in Device memory.
+// Thread-compatible.
 pub struct Devicememory<T> {
   type_: T,
   base: DeviceMemoryBase
 }
 
 impl<T> Devicememory<T> {
-  pub fn new() {}
+  // Default constructor instantiates a null-pointed, zero-sized memory region.
+  pub fn default(t: T) -> Self {
+    Devicememory { type_: t, base: DeviceMemoryBase::new(0) }
+  }
+
+  // This is made protected because it accepts a byte-size instead of an element
+  // count, which could potentially be misused given the ElementCount() nature
+  // of this interface.
+  //
+  // In order to specify the desire to use byte size instead of element count
+  // explicitly, use MakeFromByteSize.
+  pub fn new(opaque: T, size: usize) -> Self {
+    Devicememory { type_: opaque, base: DeviceMemoryBase::new(size) }
+  }
 
   // Returns the number of elements of type T that constitute this allocation.
   pub fn element_count(&self) -> usize {
@@ -65,7 +81,19 @@ impl<T> Devicememory<T> {
     self.element_count() == 1
   }
 
-  pub fn make_form_byte_size() {}
-  pub fn get_slice() {}
-  pub fn reset_from_byte_size() {}
+  // Returns pointer to the allocated data
+  pub fn base() {}
+
+  // Creates a typed area of DeviceMemory with a given opaque pointer and the
+  // quantity of bytes in the allocation. This function is broken out to
+  // distinguish bytes from an element count.
+  pub fn make_form_byte_size(opaque: T, bytes: usize) -> Self {
+    Devicememory::new(opaque, bytes)
+  }
+
+  // Creates a memory region (slice) inside another allocated memory region.
+  // Offset and size are specified in terms of ElemT elements.
+  pub fn get_slice(&self, _element_offset: u64, _element_count: u64) -> Self {
+    unimplemented!()
+  }
 }

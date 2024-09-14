@@ -386,6 +386,17 @@ impl Literal {
   }
 }
 
+// A read-only view of a Literal. A LiteralSlice contains pointers to shape and
+// literal buffers always owned by others.
+pub struct LiteralSlice {
+  base: LiteralBase
+}
+
+impl LiteralSlice {
+  pub fn new() {}
+  fn root_piece() {}
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ArrayValueState {
   Known,

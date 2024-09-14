@@ -67,7 +67,7 @@ pub struct Backend {
   compiler: Compiler,
   transfer_manager: TransferManager,
   computation_placer: ComputationPlacer,
-  stream_executors: Vec<StreamExecutor>,
+  stream_executors: Vec<Box<dyn StreamExecutor>>,
   memory_allocator: StreamExecutorMemoryAllocator,
 }
 
@@ -104,7 +104,7 @@ impl Backend {
 
   // Returns stream executors of all supported devices for this backend. The
   // executors are ordered by the device ordinal.
-  pub fn stream_executors(&self) -> &Vec<StreamExecutor> {
+  pub fn stream_executors(&self) -> &Vec<Box<dyn StreamExecutor>> {
     &self.stream_executors
   }
 
@@ -113,7 +113,7 @@ impl Backend {
   // Returns the stream executor for the default device ordinal. This stream
   // executor can only be used when the number of computations is 1 (replication
   // can be > 1).
-  pub fn default_stream_executor(&self) -> &StreamExecutor{
+  pub fn default_stream_executor(&self) -> &Box<dyn StreamExecutor> {
     assert!(!self.stream_executors.is_empty());
     &self.stream_executors[0]
   }

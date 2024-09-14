@@ -1,6 +1,7 @@
 
 pub mod cuda;
 pub mod gpu;
+pub mod host;
 pub mod allocator_stats;
 pub mod blas;
 pub mod command_buffer;
@@ -8,6 +9,7 @@ pub mod device_description;
 pub mod device_memory_allocator;
 pub mod device_memory;
 pub mod device_options;
+pub mod dnn;
 pub mod event;
 pub mod executor_cache;
 pub mod fft;
@@ -19,6 +21,7 @@ pub mod multi_platform_manager;
 pub mod numeric_options;
 pub mod platform;
 pub mod plugin_registry;
-pub mod stream_executor_internal;
+pub mod stream_executor_interface;
 pub mod stream_executor;
+pub mod stream_interface;
 pub mod stream;

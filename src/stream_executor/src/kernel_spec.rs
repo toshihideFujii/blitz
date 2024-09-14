@@ -1,27 +1,111 @@
 #![allow(dead_code)]
 
-pub struct KernelLoaderSpec {}
-
-impl KernelLoaderSpec {
-  pub fn new() {}
-  pub fn kernel_name() {}
+// Describes how to load a kernel on a target platform.
+//
+// This is an abstract base class, subclassed for specific platforms.
+// The filename_or_text field represents the program location (i.e. PTX or
+// OpenCL loadable translation unit path) and is simply stored; whether it is a
+// filename or text is exposed via more specifically named accessors in
+// subclasses.
+//
+// These kernel loader specifications are typically auto-generated into header
+// files at build time, but can also be specified manually.
+pub struct KernelLoaderSpec {
+  kernel_name: String
 }
 
-pub struct InProcessSymbol {}
+impl KernelLoaderSpec {
+  pub fn new(kernel_name: String) -> Self {
+    KernelLoaderSpec { kernel_name: kernel_name }
+  }
 
-pub struct CudaPtxInMemory {}
+  // Returns the kernel name to load out of the program.
+  pub fn kernel_name(&self) -> &String {
+    &self.kernel_name
+  }
+}
+
+// Loads kernel from in process symbol pointer (e.g. pointer to CUDA C++ device
+// function).
+pub struct InProcessSymbol {
+  kernel_loader: KernelLoaderSpec
+}
+
+impl InProcessSymbol {
+  pub fn new(kernel_name: String) -> Self {
+    InProcessSymbol {
+      kernel_loader: KernelLoaderSpec::new(kernel_name)
+    }
+  }
+
+  pub fn symbol() {}
+}
+
+// Kernel loader specification for PTX text that resides in memory.
+pub struct CudaPtxInMemory {
+  kernel_loader: KernelLoaderSpec,
+}
 
 impl CudaPtxInMemory {
   pub fn new() {}
   pub fn add_spec() {}
   pub fn default_text() {}
-  pub fn original_default_text() {}
   pub fn text() {}
-  pub fn original_text() {}
-  pub fn decompress_ptx() {}
 }
 
-pub struct CudaCubinInMemory {}
+// Kernel loader specification for a CUBIN blob that resides in memory.
+pub struct CudaCubinInMemory {
+  kernel_loader: KernelLoaderSpec,
+  cubin_bytes: Vec<u8>,
+}
+
+impl CudaCubinInMemory {
+  pub fn new(cubin_bytes: Vec<u8>, kernel_name: String) -> Self {
+    CudaCubinInMemory {
+      kernel_loader: KernelLoaderSpec::new(kernel_name),
+      cubin_bytes: cubin_bytes
+    }
+  }
+
+  pub fn cubin_bytes(&self) -> &Vec<u8> {
+    &self.cubin_bytes
+  }
+}
+
+pub struct LlvmHostKernel {
+  kernel_loader: KernelLoaderSpec,
+  ir: String,
+  entry_point: String,
+  options: Vec<String>
+}
+
+impl LlvmHostKernel {
+  pub fn new(
+    ir: String,
+    entry_point: String,
+    options: Vec<String>,
+    kernel_name: String) -> Self
+  {
+    LlvmHostKernel {
+      kernel_loader: KernelLoaderSpec::new(kernel_name),
+      ir: ir,
+      entry_point: entry_point,
+      options: options
+    }
+  }
+
+  pub fn ir(&self) -> &String {
+    &self.ir
+  }
+
+  pub fn entry_point(&self) -> &String {
+    &self.entry_point
+  }
+
+  pub fn options(&self) -> &Vec<String> {
+    &self.options
+  }
+}
 
 // Describes how to load a kernel on any subset of a number of target platforms.
 pub struct MultiKernelLoaderSpec {

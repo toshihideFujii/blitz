@@ -220,16 +220,16 @@ pub struct DeviceDescriptionBuilder {
 impl DeviceDescriptionBuilder {
   pub fn set_gpu_compute_capability() {}
 
-  pub fn set_block_dim_limit_x(&mut self, limit: i64) {
-    self.device_description.block_dim_limit.x = limit;
+  pub fn set_block_dim_limit_x(&mut self, limit: u64) {
+    self.device_description.block_dim_limit.dim_3d.x = limit;
   }
 
-  pub fn set_block_dim_limit_y(&mut self, limit: i64) {
-    self.device_description.block_dim_limit.y = limit;
+  pub fn set_block_dim_limit_y(&mut self, limit: u64) {
+    self.device_description.block_dim_limit.dim_3d.y = limit;
   }
 
-  pub fn set_block_dim_limit_z(&mut self, limit: i64) {
-    self.device_description.block_dim_limit.z = limit;
+  pub fn set_block_dim_limit_z(&mut self, limit: u64) {
+    self.device_description.block_dim_limit.dim_3d.z = limit;
   }
 
   pub fn set_device_vendor(&mut self, value: String) {

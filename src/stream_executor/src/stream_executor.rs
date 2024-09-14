@@ -1,20 +1,33 @@
 #![allow(dead_code)]
 
-use crate::{platform::Platform, stream_executor_internal::StreamExecutorInterface};
+use crate::{event::Event, platform::Platform, stream::Stream, stream_executor_interface::StreamExecutorInterface};
 
-pub struct StreamExecutor {
+// A StreamExecutor manages a single device, in terms of executing work (kernel
+// launches) and memory management (allocation/deallocation, memory copies to
+// and from the device). It is conceptually the "handle" for a device -- Stream
+// objects, which are used to enqueue work to run on the
+// coprocessor have a StreamExecutor instance as their "parent" object.
+//
+// StreamExecutor objects have an underlying platform that is specified up
+// front;
+// e.g. either it is a CUDA or OpenCL executor.
+//
+// Thread-safe after initialization.
+// StreamExecutor interface should not be invoked from a signal handler.
+//#[derive(Debug, Clone)]
+pub struct StreamExecutorBase {
   platform: Platform,
   implementation: StreamExecutorInterface,
   device_ordinal: i64,
 }
 
-impl StreamExecutor {
+impl StreamExecutorBase {
   pub fn new() {}
 
   pub fn platform_specific_handle() {}
   pub fn init() {}
 
-  pub fn platform(&self) -> &Platform {
+  pub fn get_platform(&self) -> &Platform {
     &self.platform
   }
 
@@ -47,10 +60,6 @@ impl StreamExecutor {
   pub fn get_device_load() {}
   pub fn device_memory_usage() {}
 
-  pub fn device_ordinal(&self) -> i64 {
-    self.device_ordinal
-  }
-
   pub fn implementation() {}
   pub fn create_typed_kernel() {}
   pub fn launch() {}
@@ -62,4 +71,17 @@ impl StreamExecutor {
   pub fn clear_allocate_stats() {}
   pub fn get_allocator() {}
   pub fn find_allocated_stream() {}
+
+  pub fn record_event(&self, stream: &Stream, event: &Event) -> Result<(), String> {
+    self.implementation.record_event(stream, event)
+  }
+
+  pub fn wait_for_event(&self, stream: &Stream, event: &Event) -> Result<(), String> {
+    self.implementation.wait_for_event(stream, event)
+  }
+}
+
+pub trait StreamExecutor {
+  fn get_platform(&self) -> &Platform;
+  fn device_ordinal(&self) -> i64;
 }

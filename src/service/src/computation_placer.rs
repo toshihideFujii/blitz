@@ -1,5 +1,9 @@
 #![allow(dead_code)]
 
+// Class that represents the device assignment for a set of Blitz replicated
+// computations. For R replicas and C computations, R * C devices are required
+// execute the computation in parallel. The assigned device ids can be accessed
+// by assignment(replica, computation).
 pub struct DeviceAssignment {}
 
 impl DeviceAssignment {
