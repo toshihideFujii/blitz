@@ -8,7 +8,7 @@ use crate::{compiler::Compiler, computation_placer::ComputationPlacer, transfer_
 
 // Options to configure the backend when it is created.
 pub struct BackendOptions {
-  platform: Option<Platform>,
+  platform: Option<Box<dyn Platform>>,
   intra_op_parallelism_threads: i64,
   allowed_devices: Option<HashSet<i64>>
 }
@@ -23,12 +23,12 @@ impl BackendOptions {
   }
 
   // Set the platform backing the backend, or nullptr for the default platform.
-  pub fn set_platform(&mut self, platform: Platform) -> &mut Self {
+  pub fn set_platform(&mut self, platform: Box<dyn Platform>) -> &mut Self {
     self.platform = Some(platform);
     self
   }
 
-  pub fn platform(&self) -> &Option<Platform> {
+  pub fn platform(&self) -> &Option<Box<dyn Platform>> {
     &self.platform
   }
 
@@ -63,7 +63,7 @@ impl BackendOptions {
 //
 //    StreamPool::Ptr stream = backend->BorrowStream().value();
 pub struct Backend {
-  platform: Platform,
+  platform: Box<dyn Platform>,
   compiler: Compiler,
   transfer_manager: TransferManager,
   computation_placer: ComputationPlacer,
@@ -72,11 +72,18 @@ pub struct Backend {
 }
 
 impl Backend {
-  pub fn new() {}
+  // Creates a new backend.
+  pub fn new(options: &BackendOptions) -> Self {
+    let platform = options.platform();
+    let _compiler =
+      Compiler::get_for_platform(platform.as_ref().unwrap().as_ref());
+    
+    unimplemented!()
+  }
 
   // Accessors for the various objects.
-  pub fn platform(&self) -> &Platform {
-    &self.platform
+  pub fn platform(&self) -> &dyn Platform {
+    self.platform.as_ref()
   }
 
   pub fn compiler(&self) -> &Compiler {
@@ -100,7 +107,10 @@ impl Backend {
     self.stream_executors.len()
   }
 
-  pub fn default_device_ordinal() {}
+  // Returns the device ordinal number of the default device.
+  pub fn default_device_ordinal(&self) -> i64 {
+    self.default_stream_executor().device_ordinal()
+  }
 
   // Returns stream executors of all supported devices for this backend. The
   // executors are ordered by the device ordinal.
@@ -108,7 +118,10 @@ impl Backend {
     &self.stream_executors
   }
 
-  pub fn stream_executor() {}
+  // Returns the stream executor for the given device ordinal.
+  pub fn stream_executor(&self, device_ordinal: i64) -> Option<&Box<dyn StreamExecutor>> {
+    self.stream_executors.get(device_ordinal as usize)
+  }
 
   // Returns the stream executor for the default device ordinal. This stream
   // executor can only be used when the number of computations is 1 (replication
@@ -120,7 +133,14 @@ impl Backend {
 
   pub fn borrow_stream() {}
   pub fn stream_borrower_with_priority() {}
-  pub fn device_ordinal_supported() {}
+
+  // Returns whether the given device ordinal of the backend is supported.
+  pub fn device_ordinal_supported(&self, device_ordinal: i64) -> bool {
+    device_ordinal >= 0 &&
+    device_ordinal < self.device_count() as i64 &&
+    self.stream_executors.get(device_ordinal as usize).is_some()
+  }
+
   pub fn device_name() {}
   pub fn devices_equivalent() {}
   pub fn eigen_intra_op_thread_pool_device() {}

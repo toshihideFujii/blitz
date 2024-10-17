@@ -10,7 +10,7 @@ impl CUDABlas {
   pub fn init() {}
 
   pub fn do_blas_axpy(
-    _stream: Stream,
+    _stream: Box<dyn Stream>,
     _elem_count: u64,
     _alpha: f64,
     _incx: i64,

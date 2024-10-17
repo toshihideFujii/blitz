@@ -2,6 +2,17 @@
 
 use std::mem::size_of;
 
+// void*-analogous device memory allocation. For the typed variation, see
+// DeviceMemory<T>.
+//
+// This is effectively a two-tuple of a pointer and size; however, note that the
+// pointer may not be to the virtual address itself -- in OpenCL the pointer is
+// to a cl_mem handle that describes the device allocation. Therefore,
+// DeviceMemoryBase::opaque does not necessarily produce a pointer that can be
+// referenced directly, so use it with caution.
+//
+// Thread-compatible.
+#[derive(Debug, Clone, Default)]
 pub struct DeviceMemoryBase {
   size: usize,
   payload: u64
@@ -22,6 +33,8 @@ impl DeviceMemoryBase {
     self.size
   }
 
+  // Warning: note that the pointer returned is not necessarily directly to
+  // device virtual address space, but is platform-dependent.
   pub fn opaque() {}
 
   // Returns the payload of this memory region.
@@ -50,15 +63,15 @@ impl DeviceMemoryBase {
 // For example, DeviceMemory<int> is a simple wrapper around DeviceMemoryBase
 // that represents one or more integers in Device memory.
 // Thread-compatible.
-pub struct Devicememory<T> {
+pub struct DeviceMemory<T> {
   type_: T,
   base: DeviceMemoryBase
 }
 
-impl<T> Devicememory<T> {
+impl<T> DeviceMemory<T> {
   // Default constructor instantiates a null-pointed, zero-sized memory region.
   pub fn default(t: T) -> Self {
-    Devicememory { type_: t, base: DeviceMemoryBase::new(0) }
+    DeviceMemory { type_: t, base: DeviceMemoryBase::new(0) }
   }
 
   // This is made protected because it accepts a byte-size instead of an element
@@ -68,7 +81,7 @@ impl<T> Devicememory<T> {
   // In order to specify the desire to use byte size instead of element count
   // explicitly, use MakeFromByteSize.
   pub fn new(opaque: T, size: usize) -> Self {
-    Devicememory { type_: opaque, base: DeviceMemoryBase::new(size) }
+    DeviceMemory { type_: opaque, base: DeviceMemoryBase::new(size) }
   }
 
   // Returns the number of elements of type T that constitute this allocation.
@@ -88,7 +101,7 @@ impl<T> Devicememory<T> {
   // quantity of bytes in the allocation. This function is broken out to
   // distinguish bytes from an element count.
   pub fn make_form_byte_size(opaque: T, bytes: usize) -> Self {
-    Devicememory::new(opaque, bytes)
+    DeviceMemory::new(opaque, bytes)
   }
 
   // Creates a memory region (slice) inside another allocated memory region.

@@ -45,7 +45,7 @@ impl HloDataflowAnalysis {
     execution_threads: HashSet<String>) -> Self
   {
     HloDataflowAnalysis {
-      call_graph: CallGraph::build(&module, execution_threads.clone()),
+      call_graph: CallGraph::build(&module, &execution_threads.clone()),
       module: module,
       execution_threads: execution_threads,
       ssa_form: ssa_form,

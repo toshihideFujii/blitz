@@ -55,7 +55,10 @@ impl HloModuleConfig {
   pub fn has_entry_computation_layout() {}
   pub fn set_default_computation_layout() {}
   pub fn set_computation_layout_if_exists() {}
-  pub fn entry_computation_layout() {}
+
+  // Returns a constant reference to the layout of the entry computation.
+  // Assumes the layout was set.
+  pub fn entry_computation_layout(&self) {}
   pub fn clear_entry_computation_layout() {}
   pub fn hlo_profiling_enabled() {}
   pub fn cpu_traceme_enabled() {}

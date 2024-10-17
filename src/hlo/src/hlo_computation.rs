@@ -270,7 +270,9 @@ impl HloComputation {
     &self.while_call_instruction
   }
 
-  pub fn set_while_call_instruction() {}
+  pub fn set_while_call_instruction(&mut self, _while_call_instruction: &HloInstruction) {
+    unimplemented!()
+  }
 
   pub fn is_async_computation(&self) -> bool {
     !self.async_instructions.is_empty()

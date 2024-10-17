@@ -19,6 +19,7 @@ pub mod launch_dim;
 pub mod module_spec;
 pub mod multi_platform_manager;
 pub mod numeric_options;
+pub mod platform_manager;
 pub mod platform;
 pub mod plugin_registry;
 pub mod stream_executor_interface;

@@ -3,30 +3,77 @@
 use crate::launch_dim::{BlockDim, ThreadDim};
 
 pub enum CudaComputeCapabilities {
-  Pascal,
-  Volta,
-  Ampere,
-  Hopper,
+  Pascal = 6,
+  Volta = 7,
+  Ampere = 8,
+  Hopper = 9,
+  Blackwell = 10,
 }
 
 
 // CUDA compute capability, as reported by the device description.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CudaComputeCapability {
   major: i64,
   minor: i64,
 }
 
 impl CudaComputeCapability {
-  pub fn new() {}
+  pub fn new(major: i64, minor: i64) -> Self {
+    CudaComputeCapability { major: major, minor: minor }
+  }
 
-  pub fn is_at_least() {}
-  pub fn is_at_least_volta() {}
-  pub fn is_at_least_ampere() {}
-  pub fn is_at_least_hopper() {}
-  pub fn get_max_resident_blocks_per_sm() {}
-  pub fn get_max_resident_warps_per_sm() {}
-  pub fn to_string() {}
-  pub fn to_pair() {}
+  pub fn volta() -> Self {
+    CudaComputeCapability::new(
+      CudaComputeCapabilities::Volta as i64, 0)
+  }
+
+  pub fn ampare() -> Self {
+    CudaComputeCapability::new(
+      CudaComputeCapabilities::Ampere as i64, 0)
+  }
+
+  pub fn hopper() -> Self {
+    CudaComputeCapability::new(
+      CudaComputeCapabilities::Hopper as i64, 0)
+  }
+
+  pub fn blackwell() -> Self {
+    CudaComputeCapability::new(
+      CudaComputeCapabilities::Blackwell as i64, 0)
+  }
+
+  pub fn is_at_least_major_minor(&self, other_major: i64, other_minor: i64) -> bool {
+    self.is_at_least(&CudaComputeCapability::new(other_major, other_minor))
+  }
+
+  pub fn is_at_least(&self, cc: &CudaComputeCapability) -> bool {
+    !(self < cc)
+  }
+
+  pub fn is_at_least_volta(&self) -> bool {
+    self.major >= CudaComputeCapabilities::Volta as i64
+  }
+
+  pub fn is_at_least_ampere(&self) -> bool {
+    self.major >= CudaComputeCapabilities::Ampere as i64
+  }
+
+  pub fn is_at_least_hopper(&self) -> bool {
+    self.major >= CudaComputeCapabilities::Hopper as i64
+  }
+
+  pub fn is_at_least_blackwell(&self) -> bool {
+    self.major >= CudaComputeCapabilities::Blackwell as i64
+  }
+  
+  pub fn to_string(&self) -> String {
+    self.major.to_string() + "." + &self.minor.to_string()
+  }
+
+  pub fn to_pair(&self) -> (i64, i64) {
+    (self.major, self.minor)
+  }
 }
 
 // Data that describes the execution target of the StreamExecutor, in terms of
@@ -343,5 +390,26 @@ impl DeviceDescriptionBuilder {
 
   pub fn build_object(&self) -> &DeviceDescription {
     &self.device_description
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_generation_numeric() {
+    assert_eq!(CudaComputeCapability::new(7, 5).is_at_least_volta(), true);
+    assert_eq!(CudaComputeCapability::new(8, 0).is_at_least_ampere(), true);
+    assert_eq!(CudaComputeCapability::new(9, 0).is_at_least_hopper(), true);
+    assert_eq!(CudaComputeCapability::new(10, 0).is_at_least_blackwell(), true);
+  }
+
+  #[test]
+  fn test_generation_literal() {
+    assert_eq!(CudaComputeCapability::volta().is_at_least_major_minor(7, 0), true);
+    assert_eq!(CudaComputeCapability::ampare().is_at_least_major_minor(8, 0), true);
+    assert_eq!(CudaComputeCapability::hopper().is_at_least_major_minor(9, 0), true);
+    assert_eq!(CudaComputeCapability::blackwell().is_at_least_major_minor(10, 0), true);
   }
 }

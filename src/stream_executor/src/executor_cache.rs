@@ -11,6 +11,7 @@ use crate::{
 };
 
 // Utility class to allow Platform objects to manage cached StreamExecutors.
+//#[derive(Debug, Clone)]
 pub struct ExecutorCache {
   // Maps ordinal number to a cached executor for that ordinal.
   cache: Mutex<HashMap<i64, HostExecutor>>,

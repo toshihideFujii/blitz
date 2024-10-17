@@ -1,7 +1,5 @@
 #![allow(dead_code)]
 
-use crate::stream_executor::StreamExecutor;
-
 // Potential states for an Event. If PollForStatus() returns anything aside
 // from kPending or kComplete, an error has occurred; kUnknown is a bad state.
 // Not all implementations are able to return all enumeration values. Refer to
@@ -13,27 +11,15 @@ pub enum EventStatus {
   Complete,
 }
 
-// The Event class, when supported by a platform, enables low-overhead
-// status reporting for a stram.
-pub struct Event {
-  stream_exec: dyn StreamExecutor
-}
-
-impl Event {
-  pub fn new() {}
-
-  // Performs any platform-specific or potentially error-generating
-  // initialization.
-  pub fn init(&self) -> bool {
-    unimplemented!()
-  }
-
+// The Event class, when supported by a platform, enables low-overhead status
+// reporting for a Stream. An Event is inserted at a location in a stream via
+// the Stream::RecordEvent() API. From then on, the Event's status can be
+// monitored via the nonblocking Event::PollForStatus() call.
+pub trait Event {
   // Returns the current Status for the event.
-  pub fn poll_for_status(&self) -> EventStatus {
-    unimplemented!()
-  }
-
+  fn poll_for_status(&self) -> EventStatus;
+  
   // Blocks `stream` on this event. `stream` is a raw platform-specific
   // stream (e.g. GpuStreamHandle).
-  pub fn wait_for_event_on_external_stream(&self) {}
+  fn wait_for_event_on_external_stream(&self) -> Result<(), String>;
 }

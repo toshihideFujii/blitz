@@ -38,6 +38,8 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "common",
+ "service",
+ "stream_executor",
 ]
 
 [[package]]

@@ -2,6 +2,8 @@
 
 use std::{/*collections::HashMap,*/ hash::Hash};
 
+use crate::shape::Shape;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PrimitiveType {
   Invalid,
@@ -174,7 +176,39 @@ pub enum OpShardingType {
   Unknown,
 }
 
-pub struct OpSharding {}
+pub struct OpSharding {
+  t: OpShardingType,
+  tile_shape: Shape,
+  tile_assignment_dimensions: Vec<i64>,
+  tile_assignment_devices: Vec<i64>
+}
+
+impl OpSharding {
+  pub fn new() -> Self {
+    OpSharding {
+      t: OpShardingType::Unknown,
+      tile_shape: Shape::new(),
+      tile_assignment_dimensions: Vec::new(),
+      tile_assignment_devices: Vec::new()
+    }
+  }
+
+  pub fn set_type(&mut self, t: OpShardingType) {
+    self.t = t;
+  }
+
+  pub fn set_tile_shape(&mut self, tile_shape: Shape) {
+    self.tile_shape = tile_shape;
+  }
+
+  pub fn add_tile_assignment_dimensions(&mut self, dimension: i64) {
+    self.tile_assignment_dimensions.push(dimension);
+  }
+
+  pub fn add_tile_assignment_devices(&mut self, device: i64) {
+    self.tile_assignment_devices.push(device);
+  }
+}
 
 pub struct DotDimensionNumbers {
   lhs_contracting_dimensions: i64,
@@ -876,6 +910,20 @@ pub struct ExecutionHandle {
   handle: i64
 }
 
+impl ExecutionHandle {
+  pub fn new() -> Self {
+    ExecutionHandle { handle: 0 }
+  }
+
+  pub fn handle(&self) -> i64 {
+    self.handle
+  }
+
+  pub fn set_handle(&mut self, handle: i64) {
+    self.handle = handle;
+  }
+}
+
 pub enum ChannelType {
   Invalid,
   DeviceToDevice,
@@ -935,4 +983,29 @@ impl ExecutionOptions {
   pub fn set_debug_options(&mut self, debug_options: DebugOptions) {
     self.debug_options = Some(debug_options);
   }
+}
+
+// Specifies the data type used by an operation.
+pub enum DataType {
+  Float,
+  Double,
+  Half,
+  Int8,
+  Int32,
+  ComplexFloat,
+  ComplexDouble,
+  BF16,
+  F8E5M2,
+  F8E4M3FN,
+  F8E5M2FNUZ,
+  F8E4M3FNUZ,
+  Int64,
+}
+
+// Handle given to a user that represents a replicated virtual device. Each
+// replicated device represents N physical devices for execution where N is the
+// number of replicas.
+pub struct DeviceHandle {
+  handle: i64,
+  device_count: i64
 }

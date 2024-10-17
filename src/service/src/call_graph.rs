@@ -8,7 +8,7 @@ use hlo::{
   hlo_module::HloModule, hlo_opcode::HloOpcode
 };
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CallContext {
   Embedded,
   ControlFlow,
@@ -76,6 +76,10 @@ impl CallSite {
     &self.instruction
   }
 
+  pub fn mutable_instruction(&mut self) -> &mut HloInstruction {
+    &mut self.instruction
+  }  
+
   // Returns the computations called at this call site.
   pub fn called_computations(&self) -> &Vec<HloComputation> {
     &self.called_computations
@@ -124,9 +128,18 @@ impl CallGraphNode {
     &self.computation
   }
 
-  // Returns the call sites in this computation.
+  pub fn mutable_computation(&mut self) -> &mut HloComputation {
+    &mut self.computation
+  }
+
+  // Returns the call sites in this computation. These are the instructions in
+  // this computation which call other computations.
   pub fn callsites(&self) -> &Vec<CallSite> {
     &self.callsites
+  }
+
+  pub fn mutable_callsites(&mut self) -> &mut Vec<CallSite> {
+    &mut self.callsites
   }
 
   // Returns the callsite associated with the given instruction.
@@ -228,10 +241,12 @@ pub struct CallGraph {
 impl CallGraph {
   pub fn new() {}
 
-  // Builds and return a call graph for the given HLO module.
+  // Builds and returns a call graph for the given HLO module. If a non-empty
+  // execution_threads is provided, only computations that are in
+  // execution_threads will be part of the returned call graph.
   pub fn build(
     _module: &HloModule,
-    _execution_threads: HashSet<String>) -> Self
+    _execution_threads: &HashSet<String>) -> Self
   {
     unimplemented!()
   }

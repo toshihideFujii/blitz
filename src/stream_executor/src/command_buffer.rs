@@ -51,7 +51,7 @@ impl CommandBuffer {
   // invocation using a user provided stream that will be passed to `function`.
   pub fn trace_by_stream(
     _executor: &dyn StreamExecutor,
-    _stream: &Stream,
+    _stream: &dyn Stream,
     _func: Box<dyn Fn()>,
     _mode: CommandBufferMode) -> Self
   {
@@ -77,7 +77,7 @@ impl CommandBuffer {
     _execution_scope_id: u64,
     _threads: &ThreadDim,
     _blocks: &BlockDim,
-    _kernel: &Kernel,
+    _kernel: &dyn Kernel,
     _args: &KernelArgs) -> Result<(), String>
   {
     unimplemented!()

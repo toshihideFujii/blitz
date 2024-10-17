@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
-use crate::{device_memory::DeviceMemoryBase, stream_executor::StreamExecutor};
+use crate::{
+  device_memory::DeviceMemoryBase, launch_dim::ThreadDim,
+  //stream_executor::StreamExecutor
+};
 
 pub enum KernelCacheConfig {
   NoPreference,
@@ -159,26 +162,30 @@ impl KernelArgsDeviceMemoryArray {
   }
 }
 
-pub struct Kernel {
-  parent: Box<dyn StreamExecutor>,
-  name: String,
-  demangle_name: String,
-  metadata: KernelMetadata
-}
+// A data-parallel kernel (code entity) for launching via the StreamExecutor,
+// analogous to a void* device function pointer. See TypedKernel for the typed
+// variant.
+//
+// Thread-compatible.
+pub trait Kernel {
+  // Returns the number of parameters that this kernel accepts. (Arity refers to
+  // nullary, unary, ...).
+  fn arity(&self) -> usize;
 
-impl Kernel {
-  pub fn new() {}
-  pub fn arity() {}
-  pub fn parent() {}
-  pub fn implementation() {}
-  pub fn metadata() {}
-  pub fn set_metadata() {}
-  pub fn set_preferred_cache_config() {}
-  pub fn get_preferred_cache_config() {}
-  pub fn get_max_occupied_blocks_per_core() {}
-  pub fn set_kernel_args_packing() {}
-  pub fn kernel_args_packing() {}
-  pub fn name() {}
-  pub fn set_name() {}
-  pub fn demangled_name() {}
+  fn metadata(&self) -> &KernelMetadata;
+
+  fn set_metadata(&mut self, metadata: KernelMetadata);
+
+  // Returns the maximum number of blocks (per multiprocessor) occupied by the
+  // kernel given the number of threads per block and shared memory size.
+  fn get_max_occupied_blocks_per_core(
+    &self, _threads: &ThreadDim, _dynamic_shared_memory_bytes: usize) -> Result<i64, String>;
+
+  fn args_packing(&self);
+
+  fn set_args_packing(&mut self);
+
+  fn name(&self) -> &String;
+
+  fn set_name(&mut self, name: String);
 }

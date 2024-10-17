@@ -17,7 +17,7 @@ pub struct HloLivenessAnalysis {
 impl HloLivenessAnalysis {
   pub fn new(module: &HloModule) -> Self {
     HloLivenessAnalysis {
-      call_graph: CallGraph::build(module, HashSet::new()),
+      call_graph: CallGraph::build(module, &HashSet::new()),
       live_index_map: HashMap::new(),
     }
   }

@@ -367,7 +367,32 @@ impl ShapeUtil {
     result
   }
 
-  pub fn equal_structure() {}
+  // Two shapes have same structure if all subshape indices of lhs are presented
+  // on rhs and vice versa.
+  // A nested tuple shape of (F32, (S32[2], F32[2, 2])) is structurally equal to
+  // (S32, (F32[3], S32[2])) as their structures are both (,(,))
+  //
+  // In contrast, (F32, (F32, F32)) is structurally different from
+  // ((F32, F32), F32) as the former has structure (,(,)) while the latter has
+  // ((,),)
+  pub fn equal_structure(_lhs: &Shape, _rhs: &Shape) -> bool {
+    /*
+    let mut equal = true;
+
+    let func_rhs = |subshape: &Shape, index_vec: &Vec<usize>| {
+      equal = equal & ShapeUtil::index_is_valid(rhs, index_vec);
+    };
+    ShapeUtil::for_each_mutable_subshape(lhs, &mut func_rhs);
+
+    let func_lhs = |subshape: &Shape, index_vec: &Vec<usize>| {
+      equal = equal & ShapeUtil::index_is_valid(lhs, index_vec);
+    };
+    ShapeUtil::for_each_mutable_subshape(rhs, &mut func);
+
+    equal
+    */
+    unimplemented!()
+  }
 
   pub fn true_rank(shape: &Shape) -> i64 {
     let mut acum: i64 = 0;
@@ -813,13 +838,13 @@ impl ShapeUtil {
   pub fn slice_tuple() {}
   pub fn complex_component_shape() {}
 
-  pub fn index_is_valid(shape: &Shape, index_vec: Vec<i64>) -> bool {
+  pub fn index_is_valid(shape: &Shape, index_vec: &Vec<usize>) -> bool {
     let mut subshape: &Shape = shape;
     for i in index_vec {
-      if !subshape.is_tuple() || i as usize >= subshape.tuple_shapes_size() || i < 0 {
+      if !subshape.is_tuple() || *i >= subshape.tuple_shapes_size() /*|| *i < 0*/ {
         return false;
       }
-      subshape = subshape.tuple_shapes(i as usize);
+      subshape = subshape.tuple_shapes(*i);
     }
     true
   }
@@ -1033,7 +1058,12 @@ impl ShapeUtil {
   pub fn for_each_index_parallel_with_status() {}
   pub fn get_normalized_transpose_shape() {}
   pub fn get_normalized_logical_transpose_shape() {}
-  pub fn device_shape_to_host_shape() {}
+
+  // Strips device-specific information, namely tiling and memory-space
+  // information, from a shape.
+  pub fn device_shape_to_host_shape(_s: Shape) -> Shape {
+    unimplemented!()
+  }
 
   pub fn element_can_upcast(from: &Shape, to: &Shape) -> bool {
     ShapeUtil::higher_precision_element_type(from, to) == to.element_type()

@@ -2,24 +2,23 @@
 
 use std::collections::HashSet;
 
-use common::blitz_data::{
-  CompileRequest, CompileResponse, ComputationGraphStatsRequest,
-  ComputationStatsResponse, ComputeConstantGraphRequest, ComputeConstantResponse,
-  CreateChannelHandleRequest, CreateChannelHandleResponse, DeconstructTupleRequest,
-  DeconstructTupleResponse, ExecuteGtaphParallelRequest, ExecuteParallelResponse,
-  ExecuteRequest, ExecuteResponse, GetDeviceHandlesRequest, GetDeviceHandlesResponse,
-  GetShapeRequest, GetShapeResponse, ResetDeviceRequest, ResetDeviceResponse,
-  TransferFromOutfeedRequest, TransferFromOutfeedResponse, TransferToClientRequest,
-  TransferToClientResponse, TransferToInfeedRequest, TransferToInfeedResponse,
-  TransferToServerRequest, TransferToServerResponse, UnregisterRequest, UnregisterResponse
-};
+use common::{blitz_data::{
+  ChannelHandle, ChannelType,
+  ComputationGraphStatsRequest, ComputationStatsResponse, ComputeConstantGraphRequest,
+  ComputeConstantResponse, DeviceHandle, ExecuteGtaphParallelRequest,
+  ExecuteParallelResponse, ExecutionHandle, ExecutionOptions,
+  ExecutionProfile, GlobalDataHandle
+}, literal::Literal, shape::Shape};
+
 use stream_executor::platform::Platform;
 
-use crate::{allocation_tracker::AllocationTracker, channel_tracker::ChannelTracker, compilation_cache::CompilationCache, execution_tracker::ExecutionTracker};
+use crate::{
+  allocation_tracker::AllocationTracker, backend::Backend, channel_tracker::ChannelTracker, compilation_cache::CompilationCache, execution_tracker::ExecutionTracker
+};
 
 // Options to configure the service when it is created.
 pub struct ServiceOptions {
-  platform: Option<Platform>,
+  platform: Option<Box<dyn Platform>>,
   number_of_replicas: i64,
   intra_op_parallelism_threads: i64,
   allowed_devices: Option<HashSet<i64>>
@@ -36,12 +35,12 @@ impl ServiceOptions {
   }
 
   // Set the platform backing the service, or nullptr for the default platform.
-  pub fn set_platform(&mut self, platform: Platform) -> &mut Self {
+  pub fn set_platform(&mut self, platform: Box<dyn Platform>) -> &mut Self {
     self.platform = Some(platform);
     self
   }
 
-  pub fn platform(&self) -> &Option<Platform> {
+  pub fn platform(&self) -> &Option<Box<dyn Platform>> {
     &self.platform
   }
 
@@ -87,7 +86,9 @@ pub struct Service {
   compilation_cache: CompilationCache,
   channel_tracker: ChannelTracker,
   allocation_tracker: AllocationTracker,
-  execution_tracker: ExecutionTracker
+  execution_tracker: ExecutionTracker,
+  // Backend to compile and execute computations on.
+  execute_backend: Backend,
 }
 
 impl Service {
@@ -97,21 +98,13 @@ impl Service {
   //
   // If the handle given is not currently allocated, a NOT_FOUND status is
   // returned.
-  pub fn unregister(
-    &self,
-    _arg: &UnregisterRequest,
-    _result: &UnregisterResponse) -> Result<(), String>
-  {
+  pub fn unregister(&self, _data: &GlobalDataHandle) -> Result<(), String> {
     unimplemented!()
   }
 
   // Deconstructs a tuple. Returns a newly created GlobalDataHandle for each
   // element in the tuple.
-  pub fn deconstruct_tuple(
-    &self,
-    _arg: &DeconstructTupleRequest,
-    _result: &DeconstructTupleResponse) -> Result<(), String>
-  {
+  pub fn deconstruct_tuple(&self, _data: &GlobalData) -> Result<Vec<GlobalData>, String> {
     unimplemented!()
   }
 
@@ -119,8 +112,9 @@ impl Service {
   // computation graph. Returns the handle to the executable.
   pub fn compile(
     &self,
-    _arg: &CompileRequest,
-    _result: &CompileResponse) -> Result<(), String>
+    //computation: &BlitzComputation,s
+    _argument_shapes: &Vec<Shape>,
+    _execution_options: ExecutionOptions) -> Result<ExecutionHandle, String>
   {
     unimplemented!()
   }
@@ -130,8 +124,9 @@ impl Service {
   // global data output and execution timing.
   pub fn execute(
     &self,
-    _arg: &ExecuteRequest,
-    _result: &ExecuteResponse) -> Result<(), String>
+    _handle: &ExecutionHandle,
+    _arguments: &Vec<GlobalData>,
+    _execution_profile: Option<ExecutionProfile>) -> Result<GlobalData, String>
   {
     unimplemented!()
   }
@@ -155,19 +150,15 @@ impl Service {
   // the first set of replicas, and the next R devices to the second set of
   // replicas, etc. Each returned device handle represents the device with the
   // replica id 0.
-  pub fn get_device_handles(
-    &self,
-    _arg: &GetDeviceHandlesRequest,
-    _result: &GetDeviceHandlesResponse) -> Result<(), String>
-  {
+  pub fn get_device_handles(&self, _device_count: i64) -> Result<Vec<DeviceHandle>, String> {
     unimplemented!()
   }
 
   // Requests that global data be transferred to the client in literal form.
   pub fn transfer_to_client(
     &self,
-    _arg: &TransferToClientRequest,
-    _result: &TransferToClientResponse)
+    _data: &GlobalData,
+    _shape_with_layout: Option<Shape>) -> Result<Literal, String>
   {
     unimplemented!()
   }
@@ -175,8 +166,8 @@ impl Service {
   // Transfers data from a literal provided by the client, into device memory.
   pub fn transfer_to_server(
     &self,
-    _arg: &TransferToServerRequest,
-    _result: &TransferToServerResponse) -> Result<(), String>
+    _literal: &Literal,
+    _device_handle: Option<DeviceHandle>) -> Result<GlobalData, String>
   {
     unimplemented!()
   }
@@ -185,8 +176,9 @@ impl Service {
   // buffer of the device.
   pub fn transfer_to_infeed(
     &self,
-    _arg: &TransferToInfeedRequest,
-    _result: &TransferToInfeedResponse) -> Result<(), String>
+    _literal: &Literal,
+    _replica_id: i64,
+    _device_handle: Option<DeviceHandle>) -> Result<(), String>
   {
     unimplemented!()
   }
@@ -195,8 +187,9 @@ impl Service {
   // client.
   pub fn transfer_from_outfeed(
     &self,
-    _arg: &TransferFromOutfeedRequest,
-    _result: &TransferFromOutfeedResponse) -> Result<(), String>
+    _shape_with_layout: &Shape,
+    _replica_id: i64,
+    _device_handle: Option<DeviceHandle>) -> Result<Literal, String>
   {
     unimplemented!()
   }
@@ -210,11 +203,7 @@ impl Service {
   // ResetDevice should be called before an Execution that expect the device to
   // be in the reset state. For example, if the prior Execution modifies device
   // state (e.g., architectural state) that the next Execution depends on.
-  pub fn reset_device(
-    &self,
-    _arg: &ResetDeviceRequest,
-    _result: &ResetDeviceResponse) -> Result<(), String>
-  {
+  pub fn reset_device(&self) -> Result<(), String> {
     unimplemented!()
   }
 
@@ -228,9 +217,7 @@ impl Service {
 
   // Returns the shape (with layout) of an array associated with a given data
   // handle.
-  pub fn get_shape(
-    &self, _arg: &GetShapeRequest, _result: &GetShapeResponse) -> Result<(), String>
-  {
+  pub fn get_shape(&self, _data: &GlobalData) -> Result<Shape, String> {
     unimplemented!()
   }
 
@@ -245,16 +232,39 @@ impl Service {
 
   // Creates a unique channel handle that can be used for Send/Recv
   // instructions.
-  pub fn create_channel_handle(
-    &self,
-    _arg: &CreateChannelHandleRequest,
-    _result: &CreateChannelHandleResponse) -> Result<(), String>
-  {
+  pub fn create_channel_handle(&self, _t: ChannelType) -> Result<ChannelHandle, String> {
     unimplemented!()
   }
 
-  pub fn backend() {}
+  pub fn backend(&self) -> &Backend {
+    &self.execute_backend
+  }
+
   pub fn mutable_backend() {}
   pub fn create_module_config() {}
   pub fn validate_result_shape() {}
+}
+
+// A GlobalData object represents a globally-accessible allocation of
+// data in the associated Blitz service.
+pub struct GlobalData {
+  handle: GlobalDataHandle,
+  parent: Service
+}
+
+impl GlobalData {
+  pub fn new() {}
+
+  pub fn handle(&self) -> &GlobalDataHandle {
+    &self.handle
+  }
+}
+
+// A struct to represent a computation instance to be executed.
+// * If execution_options.device_handles is not empty, the computation is
+//   executed on the devices associated with the handles by partitioning the
+//   computation based on the attached sharding attributes. Otherwise, a
+//   device is chosen by the service.
+pub struct BlitzComputationInstance {
+  
 }

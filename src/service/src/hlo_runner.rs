@@ -10,7 +10,7 @@ pub struct HloRunner {
 }
 
 impl HloRunner {
-  pub fn new(_platform: &Platform, _intra_op_parallelism_threads: i64) {}
+  pub fn new(_platform: &dyn Platform, _intra_op_parallelism_threads: i64) {}
 
   pub fn transfer_literal_to_device() {}
   pub fn transfer_literals_to_device() {}

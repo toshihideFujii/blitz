@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+/*
 pub enum DataType {
   Invalid,
   Pred,
@@ -18,4 +19,10 @@ pub enum DataType {
   C64,
   C128,
   Token,
+  F8E5M2,
+  F8E4M3FN,
+  F8E4M3B11FNUZ,
+  F8E5M2FNUZ,
+  F8E4M3FNUZ,
 }
+  */

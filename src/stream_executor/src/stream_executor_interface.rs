@@ -14,7 +14,7 @@ impl StreamExecutorInterface {
   }
 
   // Returns a reference to the platform that created this executor.
-  pub fn get_platform(&self) -> &Platform {
+  pub fn get_platform(&self) -> &dyn Platform {
     unimplemented!()
   }
 
@@ -33,7 +33,7 @@ impl StreamExecutorInterface {
   pub fn get_kernel(
     &self,
     _spec: MultiKernelLoaderSpec,
-    _kernel: &Kernel) -> Result<(), String>
+    _kernel: &dyn Kernel) -> Result<(), String>
   {
     unimplemented!()
   }
@@ -58,7 +58,7 @@ impl StreamExecutorInterface {
 
   // Creates a shared constant using the content provided.
   pub fn create_or_share_constant(
-    &self, _stream: &Stream, _content: &Vec<u8>) -> Result<DeviceMemoryBase, String>
+    &self, _stream: &dyn Stream, _content: &Vec<u8>) -> Result<DeviceMemoryBase, String>
   {
     unimplemented!()    
   }
@@ -68,10 +68,10 @@ impl StreamExecutorInterface {
   // platform driver.
   pub fn launch(
     &self,
-    _stream: &Stream,
+    _stream: &dyn Stream,
     _thread_dims: &ThreadDim,
     _block_dims: &BlockDim,
-    _k: &Kernel,
+    _k: &dyn Kernel,
     _args: &KernelArgs) -> Result<(), String>
   {
     unimplemented!()
@@ -80,14 +80,14 @@ impl StreamExecutorInterface {
   // Submits command buffer for execution to the underlying platform driver.
   pub fn submit(
     &self,
-    _stream: &Stream,
+    _stream: &dyn Stream,
     _command_buffer: &CommandBuffer) -> Result<(), String>
   {
     unimplemented!()
   }
 
   // Releases any state associated with the previously loaded kernel.
-  pub fn unload_kernel(&self, _kernel: &Kernel) {
+  pub fn unload_kernel(&self, _kernel: &dyn Kernel) {
     unimplemented!()
   }
 
@@ -169,7 +169,7 @@ impl StreamExecutorInterface {
   // device memory location. Neither stream nor location may be null. Returns
   // whether the operation was successfully enqueued onto the stream.
   pub fn mem_zero(
-    &self, _stream: &Stream, _location: &DeviceMemoryBase, _size: u64) -> Result<(), String>
+    &self, _stream: &dyn Stream, _location: &DeviceMemoryBase, _size: u64) -> Result<(), String>
   {
     unimplemented!()
   }
@@ -179,7 +179,7 @@ impl StreamExecutorInterface {
   // successfully enqueued onto the stream.
   pub fn memset(
     &self,
-    _stream: &Stream,
+    _stream: &dyn Stream,
     _location: &DeviceMemoryBase,
     _pattern: u8,
     _size: u64) -> Result<(), String>
@@ -190,7 +190,7 @@ impl StreamExecutorInterface {
   // Enqueues a memcpy operation onto stream, with a host destination location
   // host_dst and a device memory source, with target size size.
   pub fn memcpy(
-    &self, _stream: &Stream, _device_src: &DeviceMemoryBase, _size: u64) -> Result<(), String>
+    &self, _stream: &dyn Stream, _device_src: &DeviceMemoryBase, _size: u64) -> Result<(), String>
   {
     unimplemented!()
   }
@@ -201,7 +201,7 @@ impl StreamExecutorInterface {
   // regions.
   pub fn memcpy_device_to_device(
     &self,
-    _stream: &Stream,
+    _stream: &dyn Stream,
     _device_dst: &DeviceMemoryBase,
     _device_src: &DeviceMemoryBase,
     _size: u64) -> bool
@@ -210,61 +210,61 @@ impl StreamExecutorInterface {
   }
 
   // Enqueues on a stream a user-specified function to be run on the host.
-  pub fn host_callback(&self, _stream: &Stream /* callback */) -> bool {
+  pub fn host_callback(&self, _stream: &dyn Stream /* callback */) -> bool {
     unimplemented!()
   }
 
   // Performs platform-specific allocation and initialization of an event.
-  pub fn allocate_event(&self, _event: &Event) -> Result<(), String> {
+  pub fn allocate_event(&self, _event: &dyn Event) -> Result<(), String> {
     unimplemented!()
   }
 
   // Performs platform-specific deallocation and cleanup of an event.
-  pub fn deallocate_event(&self, _event: &Event) -> Result<(), String> {
+  pub fn deallocate_event(&self, _event: &dyn Event) -> Result<(), String> {
     unimplemented!()
   }
 
   // Inserts the specified event at the end of the specified stream.
-  pub fn record_event(&self, _stream: &Stream, _event: &Event) -> Result<(), String> {
+  pub fn record_event(&self, _stream: &dyn Stream, _event: &dyn Event) -> Result<(), String> {
     unimplemented!()
   }
 
   // Waits for the specified event at the end of the specified stream.
-  pub fn wait_for_event(&self, _stream: &Stream, _event: &Event) -> Result<(), String> {
+  pub fn wait_for_event(&self, _stream: &dyn Stream, _event: &dyn Event) -> Result<(), String> {
     unimplemented!()
   }
 
   // Requests the current status of the event from the underlying platform.
-  pub fn poll_for_event_status(&self, _event: &Event) -> Result<(), String> {
+  pub fn poll_for_event_status(&self, _event: &dyn Event) -> Result<(), String> {
     unimplemented!()
   }
 
   // Allocates stream resources on the underlying platform and initializes its
   // internals.
-  pub fn allocate_stream(&self, _stream: &Stream) -> bool {
+  pub fn allocate_stream(&self, _stream: &dyn Stream) -> bool {
     unimplemented!()
   }
 
   // Deallocates stream resources on the underlying platform.
-  pub fn deallocate_stream(&self, _stream: &Stream) {
+  pub fn deallocate_stream(&self, _stream: &dyn Stream) {
     unimplemented!()
   }
 
   // Causes dependent to not begin execution until other has finished its
   // last-enqueued work.
-  pub fn create_stream_dependency(&self, _dependent: &Stream, _other: &Stream) -> bool {
+  pub fn create_stream_dependency(&self, _dependent: &dyn Stream, _other: &dyn Stream) -> bool {
     unimplemented!()
   }
 
   // Causes the host code to synchronously wait for operations enqueued
   // onto stream to complete. Effectively a join on the asynchronous device
   // operations enqueued on the stream before this program point.
-  pub fn block_host_until_done(&self, _stream: &Stream) -> Result<(), String> {
+  pub fn block_host_until_done(&self, _stream: &dyn Stream) -> Result<(), String> {
     unimplemented!()
   }
 
   // Without blocking the device, retrieve the current stream status.
-  pub fn get_status(&self, _stream: &Stream) -> Result<(), String> {
+  pub fn get_status(&self, _stream: &dyn Stream) -> Result<(), String> {
     unimplemented!()
   }
 
