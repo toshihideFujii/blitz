@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use common::{
-  blitz_data::{OpMetadata, OpShardingType},
+  blitz_data::{OpMetadata, OpSharding, OpShardingType},
   shape::Shape, shape_util::ShapeUtil
 };
 
@@ -90,17 +90,29 @@ impl HloSharding {
   pub fn single_tuple(&self, _tuple_shape: &Shape, _sharding: &HloSharding) {}
 
   pub fn single() {}
-  pub fn from_proto() {}
+
+  // Create a new sharding from a protobuf OpSharding.
+  pub fn from_proto(_proto: &OpSharding) -> Result<HloSharding, String> {
+    unimplemented!()
+  }
 
   // Checks whether device is a reserved device number.
   pub fn is_reserved_device(device: i64) -> bool {
     device < 0
   }
 
-  pub fn to_proto() {}
+  pub fn to_proto(&self) -> OpSharding {
+    unimplemented!()
+  }
+  
   pub fn print() {}
   pub fn to_string() {}
-  pub fn validate() {}
+
+  // Validate that this sharding can be applied to a tensor with shape `shape`.
+  pub fn validate(&self, _shape: &Shape, _num_devices: Option<i64>) -> Result<(), String>
+  {
+    unimplemented!()
+  }
 
   // Returns true if the sharding has tuple type.
   pub fn is_tuple(&self) -> bool {
@@ -299,7 +311,14 @@ impl HloSharding {
   pub fn get_as_shape_tree() {}
   pub fn get_sub_sharding() {}
   pub fn get_tuple_sharding() {}
-  pub fn normalize_tuple_sharding() {}
+
+  // If the shape is tuple and the current sharding is not a tuple, attempt to
+  // construct a sharding that is compatible with the shape by replicating the
+  // current sharding across all tuple elements. Note that the returned
+  // sharding is not guaranteed to be compatible with the input shape.
+  pub fn normalize_tuple_sharding(&self, _shape: &Shape) -> Self {
+    unimplemented!()
+  }
 
   // Extracts the sharding that is common within the current sharding.
   pub fn extract_single_sharding(&self) -> Option<&HloSharding> {

@@ -72,10 +72,65 @@ impl PrecisionConfig {
   }
 }
 
+// The type optimization profiles in use for Op-level optimizations.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct OpMetadata {}
+pub enum ProfileType {
+  Invalid,
+  Window,
+  Flag,
+  Integer,
+}
+
+// The source of the optimization profile.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ProfileSource {
+  Unknown,
+  Embedded,
+  Remote,
+}
+
+// The compilation event that triggered the use of the profile.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CompilationEvent {
+  Unknown,
+  ForstCompilation,
+  Recompilation,
+}
+
+// Information about the optimization profile that this operation contains.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct ProfileInfo {
+  profile_type: Vec<ProfileType>,
+  //relative_speedup: f64,
+  profile_source: ProfileSource,
+  compilation_event: CompilationEvent,
+}
+
+// Symbolization metadata for HLO Instructions.
+//
+// This metadata is used for debugging Blitz code generation, as well as
+// performance profiling of Blitz-generated executables.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct OpMetadata {
+  op_type: String,
+  op_name: String,
+  source_file: String,
+  source_line: i64,
+  profile_type: ProfileType,
+  size_of_generated_code_in_bytes: i64,
+  size_of_memory_working_set_in_bytes: i64,
+  profile_info: ProfileInfo,
+  deduplicated_name: String,
+  preserve_layout: bool,
+  stack_frame_id: i64,
+  scheduling_name: String
+}
 
 impl OpMetadata {
+  pub fn new() -> Self {
+    unimplemented!()
+  }
+
   pub fn creation_pass_id(&self) -> i64 { 0 }
   pub fn set_creation_pass_id(&mut self, _id: i64) {}
   pub fn set_size_of_generated_code_in_bytes(&mut self, _code_size_in_bytes: i64) {}
@@ -91,9 +146,13 @@ impl OpMetadata {
   pub fn profile_type(&self) -> String { "".to_string() }
   pub fn deduplicated_name(&self) -> String { "".to_string() }
   pub fn preserve_layout(&self) -> bool { false }
+
+  pub fn clear(&mut self) {
+    unimplemented!()
+  }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FrontendAttributes {
   //map: HashMap<String, String>
 }
@@ -112,6 +171,14 @@ impl FrontendAttributes {
   //pub fn mutable_map(&mut self) -> &mut HashMap<String, String> {
     //&mut self.map
   //}
+
+  pub fn set_attribute(&mut self, _value: String) {
+    unimplemented!()
+  }
+
+  pub fn clear(&mut self) {
+    unimplemented!()
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -158,6 +225,14 @@ impl StatisticsViz {
   }
 }
 
+pub enum PaddingType {
+  Invalid,
+  // Only valid portion of the base are covered.
+  Valid,
+  // Extra is added to produce same output size as the input.
+  Same,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum FftType {
   FFT,
@@ -176,6 +251,7 @@ pub enum OpShardingType {
   Unknown,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct OpSharding {
   t: OpShardingType,
   tile_shape: Shape,
@@ -246,20 +322,143 @@ impl ParameterReplication {
 }
 
 pub struct ConvolutionDimensionNumbers {
-
+  input_batch_dimension: i64,
+  input_feature_dimension: i64,
+  input_spatial_dimensions: Vec<i64>,
+  kernel_input_feature_dimension: i64,
+  kernel_output_feature_dimension: i64,
+  kernel_spatial_dimensions: Vec<i64>,
+  output_batch_dimension: i64,
+  output_feature_dimension: i64,
+  output_spatial_dimensions: Vec<i64>
 }
 
 impl ConvolutionDimensionNumbers {
   pub fn new() -> Self {
-    ConvolutionDimensionNumbers {  }
+    ConvolutionDimensionNumbers {
+      input_batch_dimension: 0,
+      input_feature_dimension: 0,
+      input_spatial_dimensions: Vec::new(),
+      kernel_input_feature_dimension: 0,
+      kernel_output_feature_dimension: 0,
+      kernel_spatial_dimensions: Vec::new(),
+      output_batch_dimension: 0,
+      output_feature_dimension: 0,
+      output_spatial_dimensions: Vec::new()
+    }
+  }
+
+  pub fn input_batch_dimension(&self) -> i64 {
+    self.input_batch_dimension
+  }
+
+  pub fn set_input_batch_dimension(&mut self, dimension: i64) {
+    self.input_batch_dimension = dimension;
+  }
+
+  pub fn input_feature_dimension(&self) -> i64 {
+    self.input_feature_dimension
+  }
+
+  pub fn set_input_feature_dimension(&mut self, dimension: i64) {
+    self.input_feature_dimension = dimension;
+  }
+
+  pub fn output_batch_dimension(&self) -> i64 {
+    self.output_batch_dimension
+  }
+
+  pub fn set_output_batch_dimension(&mut self, dimension: i64) {
+    self.output_batch_dimension = dimension;
+  }
+
+  pub fn output_feature_dimension(&self) -> i64 {
+    self.output_feature_dimension
+  }
+
+  pub fn set_output_feature_dimension(&mut self, dimension: i64) {
+    self.output_feature_dimension = dimension;
+  }
+
+  pub fn kernel_input_feature_dimension(&self) -> i64 {
+    self.kernel_input_feature_dimension
+  }
+
+  pub fn set_kernel_input_feature_dimension(&mut self, dimension: i64) {
+    self.kernel_input_feature_dimension = dimension;
+  }
+
+  pub fn kernel_output_feature_dimension(&self) -> i64 {
+    self.kernel_output_feature_dimension
+  }
+
+  pub fn set_kernel_output_feature_dimension(&mut self, dimension: i64) {
+    self.kernel_output_feature_dimension = dimension;
+  }
+
+  pub fn input_spatial_dimensions_size(&self) -> usize {
+    self.input_spatial_dimensions.len()
+  }
+
+  pub fn input_spatial_dimensions(&self, index: usize) -> i64 {
+    self.input_spatial_dimensions[index]
+  }
+
+  pub fn add_input_spatial_dimensions(&mut self, dimension: i64) {
+    self.input_spatial_dimensions.push(dimension);
+  }
+
+  pub fn output_spatial_dimensions_size(&self) -> usize {
+    self.output_spatial_dimensions.len()
+  }
+
+  pub fn output_spatial_dimensions(&self, index: usize) -> i64 {
+    self.output_spatial_dimensions[index]
+  }
+
+  pub fn add_output_spatial_dimensions(&mut self, dimension: i64) {
+    self.output_spatial_dimensions.push(dimension);
+  }
+
+  pub fn kernel_spatial_dimensions_size(&self) -> usize {
+    self.kernel_spatial_dimensions.len()
+  }
+
+  pub fn kernel_spatial_dimensions(&self, index: usize) -> i64 {
+    self.kernel_spatial_dimensions[index]
+  }
+
+  pub fn add_kernel_spatial_dimensions(&mut self, dimension: i64) {
+    self.kernel_spatial_dimensions.push(dimension);
   }
 }
 
+pub struct PaddingConfigDimension {
+  edge_padding_low: i64,
+  edge_padding_high: i64,
+  interior_padding: i64,
+}
+
+impl PaddingConfigDimension {
+  pub fn set_edge_padding_low(&mut self, edge_padding_low: i64) {
+    self.edge_padding_low = edge_padding_low;
+  }
+
+  pub fn set_edge_padding_high(&mut self, edge_padding_high: i64) {
+    self.edge_padding_high = edge_padding_high;
+  }
+}
+
+#[derive(Debug, Clone)]
 pub struct PaddingConfig {}
 
 impl PaddingConfig {
   pub fn new() -> Self {
     PaddingConfig {  }
+  }
+
+  pub fn mutable_dimensions(&mut self, _dimno: i64) -> &mut PaddingConfigDimension {
+    unimplemented!()
   }
 }
 
@@ -271,8 +470,20 @@ impl ReplicaGroup {
 
 pub enum RandomDistribution {
   Invalid,
+  // Creates a uniform-distribution-generated random number on the semi-open
+  // interval [parameter[0], parameter[1]).
   Uniform,
+  // Creates a normal-distribution-generated random number with mean
+  // parameter[0] and standard deviation parameter[1].
   Normal,
+}
+
+pub fn random_distribution_name(dist: &RandomDistribution) -> String {
+  match dist {
+    RandomDistribution::Invalid => return "Invalid".to_string(),
+    RandomDistribution::Uniform => return "Unform".to_string(),
+    RandomDistribution::Normal => return "Normal".to_string(),
+  }
 }
 
 pub enum RandomAlgorithm {
@@ -786,6 +997,7 @@ pub struct TriangularSolveOptions {
   transpose_a: Transpose,
 }
 
+#[derive(Debug, Clone)]
 pub struct GatherDimensionNumbers {}
 
 pub enum SparsityType {
@@ -793,10 +1005,19 @@ pub enum SparsityType {
   StructuredNM,  
 }
 
+// Contains sparsity metadata for a sparse dot operation.
+// The only supported type atm is structured 2:4 sparsity, which is natively
+// supported on NVidia GPUs.
+// Restrictions:
+// - only one operand of the dot operation may be sparse;
+// - only the contracting dimension may be sparse.
 pub struct SparsityDescriptor {
   t: SparsityType,
+  // Sparse operand index (0 or 1).
   index: i64,
+  // Sparse dimension number.
   dimension: i64,
+  // Structured N:M sparsity (N < M).
   n: i64,
   m: i64,
 }
@@ -1008,4 +1229,45 @@ pub enum DataType {
 pub struct DeviceHandle {
   handle: i64,
   device_count: i64
+}
+
+pub enum CustomCallSchedule {
+  None,
+  Latest,
+  Earliest,
+}
+
+// The version of the API used by the custom call function. The signatures for
+// each version are given below.
+pub enum CustomCallApiVersion {
+  Unspecified,
+  Original,
+  StatusReturning,
+  StatusReturningUnified,
+  TypedFfi
+}
+
+// Describes the [begin, end) index range and stride for slices.
+pub struct SliceDimensions {
+  start: i64,
+  limit: i64,
+  stride: i64,
+}
+
+impl SliceDimensions {
+  pub fn default() -> Self {
+    SliceDimensions { start: 0, limit: 0, stride: 0 }
+  }
+  
+  pub fn set_start(&mut self, start: i64) {
+    self.start = start;
+  }
+
+  pub fn set_limit(&mut self, limit: i64) {
+    self.limit = limit;
+  }
+
+  pub fn set_stride(&mut self, stride: i64) {
+    self.stride = stride;
+  }
 }

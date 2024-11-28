@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 common = { workspace = true }
+hlo = { workspace = true }
 service = { workspace = true }
 stream_executor = { workspace = true }

@@ -37,6 +37,7 @@ fn try_intern_shape(shape: &Shape) -> Option<Shape> {
   None
 }
 
+#[derive(Debug, Clone)]
 pub struct LiteralBase {
   root_piece: Piece,
 }
@@ -111,6 +112,21 @@ impl LiteralBase {
   // scalar literal.
   pub fn is_all(&self, scalar: &Literal) -> bool {
     self.root_piece().is_all(scalar)
+  }
+
+  // Returns whether every element in this literal is equal to value.
+  //
+  // value is an int8_t because we expect this to be called with small
+  // compile-time constants (0, -1, etc.) and so that whatever value you pass
+  // can be represented exactly by floating-point types as small as 16 bits.
+  //
+  // If value doesn't fit in this literal's type, returns false.  Values of 1/0
+  // are considered equal to true/false; other values are not considered equal
+  // to true.
+  //
+  // Returns false if this literal is not array-shaped.
+  pub fn is_all_int(&self, _value: i8) -> bool {
+    unimplemented!()
   }
 
   pub fn is_all_float() {}
@@ -283,7 +299,7 @@ impl LiteralBase {
   }
 }
 
-//#[derive(Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Literal {
   base: LiteralBase,
   shape: Shape,
@@ -384,6 +400,18 @@ impl Literal {
   pub fn get_first_element<T>(&self) -> &T {
     unimplemented!()
   }
+
+  pub fn is_all_int(&self, value: i8) -> bool {
+    self.base.is_all_int(value)
+  }
+
+  pub fn is_all_first(&self) -> bool {
+    unimplemented!()
+  }
+
+  pub fn element_count(&self) -> usize {
+    unimplemented!()
+  }
 }
 
 // A read-only view of a Literal. A LiteralSlice contains pointers to shape and
@@ -404,6 +432,7 @@ pub enum ArrayValueState {
   Undetermined,
 }
 
+#[derive(Debug, Clone)]
 pub struct Piece {
   subshape: Shape,
   children: Option<Vec<Piece>>,

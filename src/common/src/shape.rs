@@ -155,8 +155,14 @@ impl Shape {
     !self.is_bounded_dynamic_dimension(dimension)
   }
 
+  // Returns true if the given dimension is dynamically-sized.
   pub fn is_dynamic_dimension(&self, dimension: usize) -> bool {
     self.dynamic_dimensions[dimension]
+  }
+
+  // Returns true if the given dimension is statically-sized.
+  pub fn is_static_dimension(&self, dimension: usize) -> bool {
+    !self.dynamic_dimensions[dimension]
   }
 
   // Sets whether or not the given dimension is dynamically-sized.
@@ -222,6 +228,10 @@ impl Shape {
 
   pub fn dimensions_vec(&self) -> &DimensionVector{
     &self.dimensions
+  }
+
+  pub fn mutable_dimensions_vec(&mut self) -> &mut DimensionVector {
+    &mut self.dimensions
   }
 
   pub fn tuple_shapes_size(&self) -> usize {
@@ -480,9 +490,11 @@ impl ShapeEqual {
   }
 }
 
+#[derive(Debug, Clone)]
 pub struct ProgramShape {
   parameters: Vec<Shape>,
   parameter_names: Vec<String>,
+  // The shape of the result of the computation represented by this object.
   result: Shape,
 }
 
@@ -511,8 +523,16 @@ impl ProgramShape {
     &self.parameters[index]
   }
 
-  pub fn add_parameters(&mut self, shape: Shape) {
+  pub fn add_parameter(&mut self, shape: Shape) {
     self.parameters.push(shape);
+  }
+
+  pub fn set_parameter(&mut self, index: usize, shape: Shape) {
+    self.parameters[index] = shape;
+  }
+
+  pub fn add_parameters(&mut self) {
+    //self.parameters.
   }
 
   pub fn clear_parameters(&mut self) {
@@ -523,8 +543,17 @@ impl ProgramShape {
     &self.parameters
   }
 
+  // Methods for accessing and manipulating the Shape of the result.
   pub fn result(&self) -> &Shape {
     &self.result
+  }
+
+  pub fn mutable_result(&mut self) -> &mut Shape {
+    &mut self.result
+  }
+
+  pub fn set_result(&mut self, shape: Shape) {
+    self.result = shape;
   }
 
   pub fn parameter_names_size(&self) -> usize {
@@ -535,12 +564,16 @@ impl ProgramShape {
     self.parameter_names[index].clone()
   }
 
-  pub fn set_parameter_names(&mut self, index: usize, value: String) {
+  pub fn set_parameter_name(&mut self, index: usize, value: String) {
     self.parameter_names[index] = value;
   }
 
   pub fn add_parameter_names(&mut self, value: String) {
     self.parameter_names.push(value);
+  }
+
+  pub fn add_parameter_names_empty(&mut self) {
+    self.parameter_names.push("".to_string());
   }
 
   pub fn clear_parameter_names(&mut self) {

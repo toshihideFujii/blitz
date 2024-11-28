@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use common::{blitz_data::{ConvolutionDimensionNumbers, DotDimensionNumbers, FftType, GatherDimensionNumbers, PaddingConfig, PrimitiveType, SparsityDescriptor, TriangularSolveOptions, Window}, shape::Shape};
+use common::{blitz_data::{ConvolutionDimensionNumbers, DotDimensionNumbers, FftType, GatherDimensionNumbers, PaddingConfig, PrimitiveType, SparsityDescriptor, TriangularSolveOptions, Window}, shape::{ProgramShape, Shape}};
 use hlo::{hlo_instruction::HloInstruction, hlo_opcode::HloOpcode};
 
 // For a given operation and input shapes, infers what the resulting shape
@@ -104,7 +104,7 @@ impl ShapeInference {
   pub fn infer_reduce_precision_shape(
     _operand_shape: &Shape,
     _operand_bits: i64,
-    _manrissa_bits: i64) -> Result<Shape, String>
+    _mantissa_bits: i64) -> Result<Shape, String>
   {
     unimplemented!()    
   }
@@ -239,6 +239,30 @@ impl ShapeInference {
     _window: &Window,
     _dnums: &ConvolutionDimensionNumbers,
     _preferred_element_type: Option<PrimitiveType>) -> Result<Shape, String>
+  {
+    unimplemented!()    
+  }
+
+  pub fn infer_while_shape(
+    _condition: &ProgramShape,
+    _body: &ProgramShape,
+    _init: &Shape) -> Result<Shape, String>
+  {
+    unimplemented!()    
+  }
+
+  pub fn infer_broadcast_shape(
+    _operand: &Shape,
+    _broadcast_sizes: &Vec<i64>) -> Result<Shape, String>
+  {
+    unimplemented!()    
+  }
+
+  pub fn infer_reshape_shpae(
+    _operand: &Shape,
+    _dimensions: &Vec<i64>,
+    _new_sizes: &Vec<i64>,
+    _inferred_dimension: i64) -> Result<Shape, String>
   {
     unimplemented!()    
   }

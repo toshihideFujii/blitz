@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
 
-use crate::{blitz_data::PrimitiveType, layout::Layout, literal::{Literal, LiteralBase, LiteralSlice}};
+use crate::{blitz_data::PrimitiveType, layout::Layout, literal::{Literal, LiteralBase, /*LiteralSlice*/}};
 
 // Utilities for dealing with Literal protobufs.
 pub struct LiteralUtil {}
 
 impl LiteralUtil {
   // Returns a literal scalar representing the first element.
-  pub fn get_first_scalar_literal(_literal: &LiteralSlice) -> &Literal {
+  pub fn get_first_scalar_literal(_literal: &Literal) -> &Literal {
     unimplemented!()
   }
 

@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use common::{
   blitz_data::{
-    Algorithm, ConvolutionDimensionNumbers, DotDimensionNumbers, FftType, FrontendAttributes, GatherDimensionNumbers, OpMetadata, PaddingConfig, Precision, PrecisionConfig, PrimitiveType, RandomAlgorithm, RandomDistribution, ScatterDimensionNummbers, SparsityDescriptor, Statisitic, StatisticsViz, TriangularSolveOptions, WhileLoopBackendConfig, Window
+    Algorithm, ConvolutionDimensionNumbers, DotDimensionNumbers, FftType, FrontendAttributes, GatherDimensionNumbers, OpMetadata, PaddingConfig, ParameterReplication, Precision, PrecisionConfig, PrimitiveType, RandomAlgorithm, RandomDistribution, ScatterDimensionNummbers, SliceDimensions, SparsityDescriptor, Statisitic, StatisticsViz, TriangularSolveOptions, WhileLoopBackendConfig, Window
   },
   comparison_util::{ComparisonDirection, ComparisonType},
   literal::Literal,
@@ -396,7 +396,9 @@ struct Users {
 }
 
 impl Users {
-  pub fn new() {}
+  pub fn new() -> Self {
+    Users { users: Vec::new() }
+  }
 
   pub fn empty(&self) -> bool {
     self.users.is_empty()
@@ -473,6 +475,26 @@ pub struct HloInstruction {
 }
 
 impl HloInstruction {
+  pub fn default() -> Self {
+    HloInstruction {
+      unique_id: 0,
+      index_in_parent: 0,
+      opcode: HloOpcode::Abs,
+      is_default_config: false,
+      cleaned_up: false,
+      marked_as_dead: false,
+      operands: Vec::new(),
+      rare: None,
+      users: Users::new(),
+      parent: None,
+      sharding: None,
+      shape: Shape::new(),
+      name: "".to_string(),
+      metadata: None,
+      collective_instruction: None
+    }
+  }
+
   pub fn create_from_proto() {}
 
   // Creates a parameter-retrieving insstruction.
@@ -955,6 +977,10 @@ impl HloInstruction {
 
   pub fn mutable_shape(&mut self) -> &mut Shape {
     &mut self.shape
+  }
+
+  pub fn set_shape(&mut self, shape: Shape) {
+    self.shape = shape;
   }
 
   // Returns the i-th operand to this instruction.
@@ -1608,6 +1634,10 @@ impl HloInstruction {
     self.name.clone()
   }
 
+  pub fn set_name(&mut self, _name: String) {
+    unimplemented!()
+  }
+
   // Sets the string identifier for this instruction. Name will be sanitized to
   // match the regexp "[a-zA-Z_][a-zA-Z0-9.-]*".
   pub fn set_and_sanitize_name(&mut self, _name: String) {
@@ -1662,6 +1692,10 @@ impl HloInstruction {
 
   pub fn frontend_attributes(&self) -> &FrontendAttributes {
     &self.rare().frontend_attributes
+  }
+
+  pub fn mutable_frontend_attributes(&mut self) -> &mut FrontendAttributes {
+    &mut self.mutable_rare().frontend_attributes
   }
 
   pub fn add_single_statistic(&mut self, statistic: Statisitic) {
@@ -1812,6 +1846,10 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn add_dimensions(&mut self, _dim: i64) {
+    unimplemented!()
+  }
+
   pub fn dimensions_number(&self, _index: i64) -> i64 {
     unimplemented!()
   }
@@ -1843,7 +1881,15 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn add_slice_dimensions(&mut self, _slice_dim: SliceDimensions) {
+    unimplemented!()
+  }
+
   pub fn literal(&self) -> &Literal {
+    unimplemented!()
+  }
+
+  pub fn set_literal(&mut self, _literal: Literal) {
     unimplemented!()
   }
 
@@ -1896,12 +1942,24 @@ impl HloInstruction {
 
   pub fn random_distribution() {}
 
+  pub fn set_distribution(&mut self, _distribution: RandomDistribution) {
+    unimplemented!()
+  }
+
   pub fn parameter_number(&self) -> i64 {
+    unimplemented!()
+  }
+
+  pub fn set_parameter_number(&mut self, _parameter_number: i64) {
     unimplemented!()
   }
 
   pub fn set_parameter_replicated_at_leaf_buffers() {}
   pub fn parameter_replicated_at_leaf_byffers() {}
+
+  pub fn mutable_parameter_replication(&mut self) -> &mut ParameterReplication {
+    unimplemented!()
+  }
 
   pub fn tuple_index(&self) -> i64 {
     unimplemented!()
@@ -1909,6 +1967,11 @@ impl HloInstruction {
 
   pub fn set_tuple_index() {}
   pub fn exponent_bits() {}
+
+  pub fn set_exponent_bits(&mut self, _exponent_bits: i64) {
+    unimplemented!()    
+  }
+
   pub fn infeed_config() {}
   pub fn set_infeed_config() {}
   pub fn outfeed_config() {}
@@ -1950,10 +2013,19 @@ impl HloInstruction {
   }
 
   pub fn mutable_padding_config() {}
+
+  pub fn set_padding_config(&mut self, _padding_config: PaddingConfig) {
+    unimplemented!()
+  }
+
   pub fn padding_type() {}
   pub fn slice_sizes() {}
 
   pub fn dynamic_slice_sizes(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+
+  pub fn add_dynamic_slice_sizes(&mut self, _size: i64) {
     unimplemented!()
   }
 
@@ -1967,7 +2039,17 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn set_gather_dimension_numbers(
+    &mut self, _dimension_numbers: GatherDimensionNumbers)
+  {
+    unimplemented!()    
+  }
+
   pub fn gather_slice_sizes(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+
+  pub fn add_gather_slice_sizes(&mut self, _size: i64) {
     unimplemented!()
   }
 
@@ -2008,6 +2090,15 @@ impl HloInstruction {
   pub fn set_called_computations_execution_thread() {}
   pub fn cross_program_prefetch_index() {}
   pub fn comparison_direction() {}
+
+  pub fn set_comparison_direction(&mut self, _direction: ComparisonDirection) {
+    unimplemented!()
+  }
+
+  pub fn set_comparison_type(&mut self, _t: ComparisonType) {
+    unimplemented!()
+  }
+
   pub fn comparison_order() {}
 
   pub fn triangular_solve_options(&self) -> &TriangularSolveOptions {
@@ -2024,6 +2115,10 @@ impl HloInstruction {
   }
 
   pub fn mantissa_bits(&self) -> i64 {
+    unimplemented!()
+  }
+
+  pub fn set_mantissa_bits(&mut self, _mantissa_bits: i64) {
     unimplemented!()
   }
   // HloReducePrecisionInstruction
@@ -2062,6 +2157,10 @@ impl HloInstruction {
   }
 
   pub fn scatter_updates(&self) -> &Vec<HloInstruction> {
+    unimplemented!()
+  }
+
+  pub fn set_indices_are_sorted(&mut self, _indices_are_sorted: bool) {
     unimplemented!()
   }
 
