@@ -289,8 +289,8 @@ impl HloSharding {
       return unique_device;
     }
     if !self.replicated && self.maximal {
-      let val = self.tile_assignment.array().first().unwrap();
-      return Some(*val);
+      //let val = self.tile_assignment.array().first().unwrap();
+      //return Some(*val);
     }
     None
   }

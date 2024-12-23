@@ -8,34 +8,27 @@ use crate::shape::Shape;
 pub enum PrimitiveType {
   Invalid,
   Pred,
-
   S4,
   S8,
   S16,
   S32,
   S64,
-
   U4,
   U8,
   U16,
   U32,
   U64,
-
   F16,
   F32,
   BF16,
   F64,
-
   F8E5M2,
   F8E4M3FN,
   F8E4M3B11FNUZ,
-
   F8E5M2FNUZ,
   F8E4M3FNUZ,
-
   C64,
   C128,
-
   Tuple,
   Token,
   OpaqueType,
@@ -462,10 +455,20 @@ impl PaddingConfig {
   }
 }
 
-pub struct ReplicaGroup {}
+// Describes the replica groups in a cross replica op (e.g., all-reduce and
+// all-to-all).
+pub struct ReplicaGroup {
+  // The ids of the replicas that belongs to the same group. The ordering of the
+  // ids matters in some ops (e.g., all-to-all).
+  replica_ids: Vec<i64>
+}
 
 impl ReplicaGroup {
   pub fn new() {}
+
+  pub fn replica_ids(&self) -> &Vec<i64> {
+    &self.replica_ids
+  }
 }
 
 pub enum RandomDistribution {

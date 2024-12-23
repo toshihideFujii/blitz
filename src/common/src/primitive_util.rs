@@ -192,6 +192,37 @@ pub fn string_to_primitive_type(name: &String) -> Option<&PrimitiveType> {
   map.get(name.as_str())
 }
 
+pub fn primitive_type_name(t: &PrimitiveType) -> String {
+  match t {
+    PrimitiveType::BF16 => "BF16".to_string(),
+    PrimitiveType::Pred => "PRED".to_string(),
+    PrimitiveType::F16 => "F16".to_string(),
+    PrimitiveType::F32 => "F32".to_string(),
+    PrimitiveType::F64 => "F64".to_string(),
+    PrimitiveType::S4 => "S4".to_string(),
+    PrimitiveType::S8 => "S8".to_string(),
+    PrimitiveType::S16 => "S16".to_string(),
+    PrimitiveType::S32 => "S32".to_string(),
+    PrimitiveType::S64 => "S64".to_string(),
+    PrimitiveType::U4 => "U4".to_string(),
+    PrimitiveType::U8 => "U8".to_string(),
+    PrimitiveType::U16 => "U16".to_string(),
+    PrimitiveType::U32 => "U32".to_string(),
+    PrimitiveType::U64 => "U64".to_string(),
+    PrimitiveType::C64 => "C64".to_string(),
+    PrimitiveType::C128 => "C128".to_string(),
+    PrimitiveType::F8E4M3FN => "F8E4M3FN".to_string(),
+    PrimitiveType::F8E4M3FNUZ => "F8E4M3FNUZ".to_string(),
+    PrimitiveType::F8E4M3B11FNUZ => "F8E4M3B11FNUZ".to_string(),
+    PrimitiveType::F8E5M2 => "F8E5M2".to_string(),
+    PrimitiveType::F8E5M2FNUZ => "F8E5M2FNUZ".to_string(),
+    PrimitiveType::Tuple => "TUPLE".to_string(),
+    PrimitiveType::Token => "TOKEN".to_string(),
+    PrimitiveType::OpaqueType => "OPAQUETYPE".to_string(),
+    PrimitiveType::Invalid => panic!("Invalid"),
+  }
+}
+
 // Returns true if the given name is a primitive type string (lower-case).
 pub fn is_primitive_type_name(name: &String) -> bool {
   let map = get_or_create_map();

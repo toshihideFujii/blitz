@@ -1,9 +1,10 @@
 
 pub mod evaluator;
 pub mod utils;
+pub mod buffer_value;
+pub mod collective_device_list;
 pub mod dfs_hlo_visitor_with_default;
 pub mod dfs_hlo_visitor;
-pub mod buffer_value;
 pub mod hlo_buffer;
 pub mod hlo_clone_context;
 pub mod hlo_computation;
