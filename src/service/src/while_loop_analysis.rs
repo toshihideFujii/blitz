@@ -143,8 +143,11 @@ fn check_subtract(a: i64, b: i64) -> Option<i64> {
 //  - the while body does `i++`.
 // If so, it's trivial to compute the loop bound as `N - k` or `N - k + 1`,
 // respectively.
-pub fn match_trivial_loop_trip_count(
-  _while_op: &HloInstruction, _indvar_tuple_idx: i64, _indvar_init: Literal) -> Option<i64>
+pub fn match_trivial_loop_trip_count<T>(
+  _while_op: &HloInstruction,
+  _indvar_tuple_idx: i64,
+  _indvar_init: Literal<T>) -> Option<i64>
+  where T: Clone + Default + PartialEq
 {
   unimplemented!()
 }
@@ -206,7 +209,7 @@ pub fn compute_while_loop_trip_count(
   let _while_cond_indvar = non_constant_operand(while_cond_root);
 
   for trip_count in 0..max_brute_force_iters + 1 {
-    let map: HashMap<HloInstruction, Literal> = HashMap::new();
+    let map: HashMap<HloInstruction, Literal<bool>> = HashMap::new();
     //map.insert(while_cond_indvar.clone(), indvar_init_result.unwrap());
     let result =
       evaluator.evaluate_with_substitutions(while_cond_root, map); 
@@ -214,7 +217,8 @@ pub fn compute_while_loop_trip_count(
       println!("Couldn't evaluate while cond: {:?}", result.err().unwrap());
       return None;
     }
-    for val in result.unwrap().data_default::<bool>() {
+    for val in result.unwrap().data_default() {
+      // TODO
       if *val == true {
         println!("Loop has static trip count of {:?}", trip_count);
         return Some(trip_count);
@@ -222,7 +226,7 @@ pub fn compute_while_loop_trip_count(
     }
     // Calculate the value of the induction variable after one iteration of the
     // loop, and check whether the while condition is true with this new value.
-    let map2: HashMap<HloInstruction, Literal> = HashMap::new();
+    let map2: HashMap<HloInstruction, Literal<bool>> = HashMap::new();
     let indvar_next_result =
       evaluator.evaluate_with_substitutions(
         while_body_indvar_update, map2);
@@ -256,7 +260,8 @@ fn get_only_gte(inst: &HloInstruction) -> Option<&HloInstruction> {
   user
 }
 
-pub fn compute_while_loop_trip_count_upper_bound(while_op: &HloInstruction) -> Option<i64>
+pub fn compute_while_loop_trip_count_upper_bound<T>(while_op: &HloInstruction) -> Option<i64>
+  where T: Clone + Default
 {
   // If we know the exact trip count, it's also the upper bound.
   let exact_trip_count =
@@ -326,11 +331,14 @@ pub fn compute_while_loop_trip_count_upper_bound(while_op: &HloInstruction) -> O
       "clone".to_string(), None));
 
   // We have a constant. Evaluate the condition on this constant.
-  let evaluator = HloEvaluator::new(0);
-  let fake_input = Literal::new_from_shape(
+  let evaluator: HloEvaluator<bool> = HloEvaluator::new(0);
+  let mut fake_input = Literal::new_from_shape(
     new_computation.parameter_instruction(0).unwrap().shape());
   let result = fake_input.copy_from(
-    while_body_indvar.literal(), vec![0], vec![], false);
+    while_body_indvar.mutable_literal(),
+    &vec![0],
+    &vec![],
+    false);
   assert!(result.is_ok());
   let eval_result =
     evaluator.evaluate_computation(new_computation, &vec![fake_input]);
@@ -346,7 +354,7 @@ pub fn compute_while_loop_trip_count_upper_bound(while_op: &HloInstruction) -> O
 
   // Per the explanation above, if the evaluated condition returns false, the
   // loop executes at most once.
-  let cond_returns_true = cond_result_pred.get_first_element::<bool>();
+  let cond_returns_true = cond_result_pred.get_first_element();
   if !(*cond_returns_true) {
     println!("Upper bound on the trip count is 1");
     return Some(1);

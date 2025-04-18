@@ -596,8 +596,8 @@ mod tests {
     let matrix2 =
       ShapeUtil::make_shape_with_dense_layout(
         &PrimitiveType::S32,
-        vec![3, 4],
-        vec![0, 1],
+        &vec![3, 4],
+        &vec![0, 1],
         Vec::new(),
         1,
         0,
@@ -617,8 +617,8 @@ mod tests {
     let matrix2 =
       ShapeUtil::make_shape_with_dense_layout(
         &PrimitiveType::S32,
-        vec![3, 4],
-        vec![0, 1],
+        &vec![3, 4],
+        &vec![0, 1],
         Vec::new(),
         1,
         0,
@@ -626,8 +626,8 @@ mod tests {
       );
     let scalar_with_tile = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F32,
-      Vec::new(),
-      Vec::new(),
+      &Vec::new(),
+      &Vec::new(),
       vec![Tile::new(vec![256])],
       1,
       0,
@@ -686,8 +686,8 @@ mod tests {
     let matrix2 =
     ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::S32,
-      vec![3, 4],
-      vec![0, 1],
+      &vec![3, 4],
+      &vec![0, 1],
       Vec::new(),
       1,
       0,

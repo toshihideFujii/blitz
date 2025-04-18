@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::{blitz_data::PrimitiveType, primitive_util::{
   is_array_type, is_complex_type, is_floating_point_type, is_integral_type,
   is_signed_integral_type, is_unsigned_integral_type, primitive_type_name}

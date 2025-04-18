@@ -27,7 +27,7 @@ impl ShapeLayout {
   // given shape.
   pub fn matches_layout_in_shape(
     &self,
-    shape: &Shape,
+    shape: &mut Shape,
     minor_to_major_only: bool,
     ignore_fully_empty_tiling: bool) -> bool
   {
@@ -35,11 +35,14 @@ impl ShapeLayout {
     equal.ignore_dynamic_dimension();
     if ignore_fully_empty_tiling {
       let mut fully_empty_tiling = true;
-      let mut check_tiling = |subshape: &Shape, _index: usize| {
+      let mut check_tiling
+        = |subshape: &mut Shape, _index: &Vec<i64>| {
         if !fully_empty_tiling {
           return;
         }
-        if subshape.is_array() && !subshape.layout().as_ref().unwrap().tiles_vec().is_empty() {
+        if subshape.is_array() &&
+          !subshape.layout().as_ref().unwrap().tiles_vec().is_empty()
+        {
           fully_empty_tiling = false;
         }
       };

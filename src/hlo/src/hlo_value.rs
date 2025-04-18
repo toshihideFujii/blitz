@@ -299,8 +299,8 @@ pub struct InstructionValueSet {
 }
 
 impl InstructionValueSet {
-  pub fn new(shape: Shape) -> Self {
-    InstructionValueSet { shape_tree: ShapeTree::new(shape) }
+  pub fn new(mut shape: Shape) -> Self {
+    InstructionValueSet { shape_tree: ShapeTree::new(&mut shape) }
   }
 
   // Sets this value set to the union of the given value sets.

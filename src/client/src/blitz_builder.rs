@@ -668,7 +668,9 @@ impl BlitzBuilder {
     result.unwrap()
   }
 
-  fn constant_literal(&self, literal: &Literal) -> BlitzOp {
+  fn constant_literal<T>(&self, literal: &Literal<T>) -> BlitzOp
+    where T: Clone + Default + PartialEq
+  {
     if literal.shape().is_array() && literal.element_count() > 1 &&
       literal.is_all_first()
     {
@@ -1280,7 +1282,7 @@ impl BlitzBuilder {
     unimplemented!()    
   }
 
-  fn custom_call(
+  fn custom_call<T>(
     &self,
     _call_target_name: &String,
     _operands: &Vec<BlitzOp>,
@@ -1289,11 +1291,12 @@ impl BlitzBuilder {
     _operand_shapes_with_layout: Option<Vec<Shape>>,
     _has_side_effect: bool,
     _output_operand_aliasing: &Vec<(usize, (i64, usize))>,
-    _lieteral: &Literal,
+    _lieteral: &Literal<T>,
     _window: Option<Window>,
     _dnums: Option<&ConvolutionDimensionNumbers>,
     _schedule: CustomCallSchedule,
     _api_version: CustomCallApiVersion) -> BlitzOp
+    where T: Clone + Default + PartialEq
   {
     unimplemented!()    
   }
@@ -1301,7 +1304,7 @@ impl BlitzBuilder {
   // Internal version of CustomCall without computation that doesn't do op
   // specific error handling and expects arguments to be legal. CustomCall
   // method above calls this method after error handling.
-  fn custom_call_internal(
+  fn custom_call_internal<T>(
     &self,
     _call_target_name: &String,
     _operands: &Vec<BlitzOp>,
@@ -1311,11 +1314,12 @@ impl BlitzBuilder {
     _operand_shapes_with_layout: Option<Vec<Shape>>,
     _has_side_effect: bool,
     _output_operand_aliasing: &Vec<(usize, (i64, usize))>,
-    _lieteral: &Literal,
+    _lieteral: &Literal<T>,
     _window: Option<Window>,
     _dnums: Option<&ConvolutionDimensionNumbers>,
     _schedule: CustomCallSchedule,
     _api_version: CustomCallApiVersion) -> Result<BlitzOp, String>
+    where T: Clone + Default + PartialEq
   {
     unimplemented!()    
   }

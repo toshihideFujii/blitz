@@ -29,9 +29,9 @@ pub struct ExecutionInput {
 }
 
 impl ExecutionInput {
-  pub fn new(shape: Shape) -> Self {
+  pub fn new(mut shape: Shape) -> Self {
     ExecutionInput {
-      buffers: ShapeTree::new(shape),
+      buffers: ShapeTree::new(&mut shape),
       unowned_indices: HashSet::new(),
       dynammic_shape: None,
       host_shape: None

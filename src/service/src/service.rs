@@ -155,41 +155,45 @@ impl Service {
   }
 
   // Requests that global data be transferred to the client in literal form.
-  pub fn transfer_to_client(
+  pub fn transfer_to_client<T>(
     &self,
     _data: &GlobalData,
-    _shape_with_layout: Option<Shape>) -> Result<Literal, String>
+    _shape_with_layout: Option<Shape>) -> Result<Literal<T>, String>
+    where T: Clone + Default + PartialEq
   {
     unimplemented!()
   }
 
   // Transfers data from a literal provided by the client, into device memory.
-  pub fn transfer_to_server(
+  pub fn transfer_to_server<T>(
     &self,
-    _literal: &Literal,
+    _literal: &Literal<T>,
     _device_handle: Option<DeviceHandle>) -> Result<GlobalData, String>
+    where T: Clone + Default + PartialEq
   {
     unimplemented!()
   }
 
   // Transfers data from a literal provided by the client, into the Infeed
   // buffer of the device.
-  pub fn transfer_to_infeed(
+  pub fn transfer_to_infeed<T>(
     &self,
-    _literal: &Literal,
+    _literal: &Literal<T>,
     _replica_id: i64,
     _device_handle: Option<DeviceHandle>) -> Result<(), String>
+    where T: Clone + Default + PartialEq
   {
     unimplemented!()
   }
 
   // Transfers data from the Outfeed othe device to the literal provided by the
   // client.
-  pub fn transfer_from_outfeed(
+  pub fn transfer_from_outfeed<T>(
     &self,
     _shape_with_layout: &Shape,
     _replica_id: i64,
-    _device_handle: Option<DeviceHandle>) -> Result<Literal, String>
+    _device_handle: Option<DeviceHandle>) -> Result<Literal<T>, String>
+    where T: Clone + Default + PartialEq
   {
     unimplemented!()
   }

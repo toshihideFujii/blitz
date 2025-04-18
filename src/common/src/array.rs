@@ -28,12 +28,17 @@ impl<D> Index<i64> for OwnedBuffer<D> {
 // General N dimensional array class with arbitrary value type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Array<T> {
-  //sizes: Vec<T>, //OwnedBuffer<i64>,
-  values_2d: Option<Vec<Vec<T>>>, //OwnedBuffer<T>,
+  sizes: Vec<i64>, //OwnedBuffer<i64>,
+  values: Vec<T>, //OwnedBuffer<T>,
   //sizes_vec: Option<Vec<Vec<i64>>>
 }
 
 impl<T> Array<T> where T: Clone {
+
+  pub fn new(values: Vec<T>) -> Self {
+    Array { sizes: vec![0; values.len()], values: values }
+  }
+
   pub fn new_fill_value(_sizes: Vec<i64>, _value: T) -> Self {
     /*
     let mut mul = 1;
@@ -55,17 +60,14 @@ impl<T> Array<T> where T: Clone {
   // Creates a 2D array from the given nested initializer list. The outer
   // initializer list is the first dimension, the inner is the second dimension.
   // For example, {{1, 2, 3}, {4, 5, 6}} results in an array with n1=2 and n2=3.
-  pub fn new_2d(values_2d: Vec<Vec<T>>) -> Self {
-    Array { values_2d: Some(values_2d) }
-  }
+  //pub fn new_2d(values_2d: Vec<Vec<T>>) -> Self {
+    //Array { values_2d: Some(values_2d) }
+  //}
 
   // Fills the array with the specified value.
   pub fn fill(&mut self, value: T) {
-    if self.values_2d.is_some() {
-      for vec in self.values_2d.as_mut().unwrap() {
-        vec.fill(value.clone());
-      }
-    }
+    let values = vec![value; self.values.len()];
+    self.values = values;
   }
 
   // Fills the array with sequentially increasing values.
@@ -84,29 +86,28 @@ impl<T> Array<T> where T: Clone {
   pub fn each() {}
   pub fn each_status() {}
 
-  pub fn data_2d(&self) -> &Vec<Vec<T>> {
-    assert!(self.values_2d.is_some());
-    self.values_2d.as_ref().unwrap()
+  //pub fn data_2d(&self) -> &Vec<Vec<T>> {
+    //assert!(self.values_2d.is_some());
+    //self.values_2d.as_ref().unwrap()
+  //}
+
+  // Returns the size of the dimension at the given index.
+  pub fn dim(&self, n: usize) -> i64 {
+    self.sizes[n]
   }
 
-  pub fn dim(&self, _n: i64) -> i64 {
-    //self.sizes[n]
-    unimplemented!()
-  }
-
+  // Returns a vector containing the dimensions of the array.
   pub fn dimensions(&self) -> &Vec<i64> {
-    //&self.sizes.data
-    unimplemented!()
+    &self.sizes
   }
 
   pub fn num_dimensions(&self) -> usize {
-    //self.sizes.data.len()
-    unimplemented!()
+    self.sizes.len()
   }
 
+  // Returns the total number of elements in the array.
   pub fn num_elements(&self) -> usize {
-    //self.values.data.len()
-    unimplemented!()
+    self.values.len()
   }
 
   pub fn slice() {}
@@ -165,5 +166,17 @@ impl Array<bool> {
     }
     */
     unimplemented!()
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_uninitialized_dims_ctor() {
+    let uninit = Array::new(vec![2, 3]);
+    assert_eq!(uninit.num_dimensions(), 2);
+    assert_eq!(uninit.dim(0), 2);
   }
 }

@@ -23,8 +23,9 @@ impl TransferManager {
 
   // Transfers the given literal into the Infeed interface of the device,
   // using the given executor.
-  pub fn transfer_literal_to_infeed(
-    &self, _executor: &dyn StreamExecutor, _literal: &Literal) -> Result<(), String>
+  pub fn transfer_literal_to_infeed<T>(
+    &self, _executor: &dyn StreamExecutor, _literal: &Literal<T>) -> Result<(), String>
+    where T: Clone + Default + PartialEq
   {
     unimplemented!()
   }
@@ -32,8 +33,9 @@ impl TransferManager {
   // Transfers the given literal from the Outfeed interface of the device,
   // using the given executor. The shape and layout are determined by the
   // shape and layout of `literal`.
-  pub fn transfer_literal_from_outfeed(
-    &self, _executor: &dyn StreamExecutor, _literal: &Literal) -> Result<(), String>
+  pub fn transfer_literal_from_outfeed<T>(
+    &self, _executor: &dyn StreamExecutor, _literal: &Literal<T>) -> Result<(), String>
+    where T: Clone + Default + PartialEq
   {
     unimplemented!()
   }

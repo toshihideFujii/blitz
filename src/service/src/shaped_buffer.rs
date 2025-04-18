@@ -15,7 +15,7 @@ pub struct ShapedBuffer {
 
 impl ShapedBuffer {
   pub fn new(
-    on_device_shape: Shape,
+    on_device_shape: &mut Shape,
     device_ordinal: i64,
     physical_device_ordinal: i64) -> Self
   {

@@ -573,7 +573,15 @@ impl ShapeUtil {
     
   }
 
-  pub fn copy_dynamic_dimensions() {}
+  // Copy the dynamic dimensions property from one shape to another.
+  pub fn copy_dynamic_dimensions(to: &mut Shape, from: &Shape) {
+    assert_eq!(to.rank(), from.rank());
+    for i in 0..from.rank() {
+      to.set_dynamic_dimension(i, from.is_dynamic_dimension(i));
+    }
+    let result = ShapeUtil::validate_shape(to);
+    assert!(result.is_ok());
+  }
 
   pub fn is_effectively_most_major_dimension(shape: &Shape, dimension: i64) -> bool {
     for i in 0..shape.dimensions_size() {
@@ -621,9 +629,9 @@ impl ShapeUtil {
   // Constructs a new shape with the given element type and sequence of
   // dimensions. Method checks the element type is valid, the shape's
   // size fits in i64::max(), and dynamic size is not marked static.
-  pub fn make_validated_shape(elt_t: &PrimitiveType, dimensions: Vec<i64>) -> Shape {
+  pub fn make_validated_shape(elt_t: &PrimitiveType, dimensions: &Vec<i64>) -> Shape {
     let mut shape = Shape::new();
-    if !ShapeUtil::fill_new_shape(elt_t, &dimensions, &mut shape) {
+    if !ShapeUtil::fill_new_shape(elt_t, dimensions, &mut shape) {
       assert!(false, "Invalid shape type={:?}, dims={:?}.", elt_t, dimensions);
     }
     shape
@@ -656,8 +664,8 @@ impl ShapeUtil {
 
   fn make_shape_with_layout_internal(
     elt_t: &PrimitiveType,
-    dimensions: Vec<i64>,
-    minor_to_major: Vec<i64>,
+    dimensions: &Vec<i64>,
+    minor_to_major: &Vec<i64>,
     dim_level_types: Vec<DimLevelType>,
     dim_unique: Vec<bool>,
     dim_ordered: Vec<bool>,
@@ -699,10 +707,12 @@ impl ShapeUtil {
     shape
   }
 
+  // Constructs a new dense array shape with the given minor_to_major order in
+  // its Layout. Returns a value shape such that shape.has_layout().
   pub fn make_shape_with_dense_layout(
     elt_t: &PrimitiveType,
-    dimensions: Vec<i64>,
-    minor_to_major: Vec<i64>,
+    dimensions: &Vec<i64>,
+    minor_to_major: &Vec<i64>,
     tiles: Vec<Tile>,
     tail_padding_alignment_in_elements: i64,
     elt_size_in_bits: i64,
@@ -869,17 +879,18 @@ impl ShapeUtil {
     return_shape
   }
 
-  pub fn try_get_subshape(shape: &Shape, index_vec: Vec<i64>) -> &Shape {
-    let mut return_shape: &Shape = shape;
+  pub fn try_get_subshape(shape: &Shape, index_vec: &Vec<i64>) -> Result<Shape, String> {
+    let mut return_shape = shape;
     for i in index_vec {
       if !return_shape.is_tuple() ||
-        i < 0 ||
-        i as usize >= return_shape.tuple_shapes_size() {
-          panic!("Shape index {} is not a valid subshape index for tuple shape.", i);
+        *i < 0 ||
+        *i as usize >= return_shape.tuple_shapes_size() {
+          return Err("Shape index is not a valid subshape index for tuple
+            shape.".to_string());
       }
-      return_shape = return_shape.tuple_shapes(i as usize);
+      return_shape = return_shape.tuple_shapes(*i as usize);
     }
-    return_shape
+    Ok(return_shape.clone())
   }
 
   pub fn is_leaf_index(shape: &Shape, index_vec: &Vec<i64>) -> bool {
@@ -910,22 +921,22 @@ impl ShapeUtil {
   pub fn get_leaf_shapes() {}
 
   // Calls the given visitor function for each subshape of the given shape.
-  pub fn for_each_subshape<T>(shape: &Shape, func:  &T)
-    where T: Fn(&Shape, usize)
+  pub fn for_each_subshape<T>(shape: &Shape, func:  &mut T)
+    where T: FnMut(&Shape, &Vec<i64>)
   {
-    let pass_func =
-      |subshape: &Shape, index: usize| -> Result<(), String> {
+    let mut pass_func =
+      |subshape: &Shape, index: &Vec<i64>| -> Result<(), String> {
       func(subshape, index);
       Ok(())
     };
-    ShapeUtil::for_each_subshape_with_status(shape, &pass_func)
+    ShapeUtil::for_each_subshape_with_status(shape, &mut pass_func)
   }
 
-  pub fn for_each_mutable_subshape<T>(shape: &Shape, func: &mut T)
-    where T: FnMut(&Shape, usize)
+  pub fn for_each_mutable_subshape<T>(shape: &mut Shape, func: &mut T)
+    where T: FnMut(&mut Shape, &Vec<i64>)
   {
     let mut pass_func =
-      |subshape: &Shape, index: usize| -> Result<(), String> {
+      |subshape: &mut Shape, index: &Vec<i64>| -> Result<(), String> {
       func(subshape, index);
       Ok(())
     };
@@ -947,16 +958,16 @@ impl ShapeUtil {
 
   // Variants of for_each_subshape wchich propagate status from the
   // visitor functions.
-  pub fn for_each_subshape_with_status<T>(shape: &Shape, func: &T)
-    where T: Fn(&Shape, usize) -> Result<(), String>
+  pub fn for_each_subshape_with_status<T>(shape: &Shape, func: &mut T)
+    where T: FnMut(&Shape, &Vec<i64>) -> Result<(), String>
   {
-    ShapeUtil::for_each_subshape_with_status_helper(shape, func, 0);
+    ShapeUtil::for_each_subshape_with_status_helper(shape, func, &vec![0]);
   }
 
-  pub fn for_each_mutable_subshape_with_status<T>(shape: &Shape, func: &mut T)
-    where T: FnMut(&Shape, usize) -> Result<(), String>
+  pub fn for_each_mutable_subshape_with_status<T>(shape: &mut Shape, func: &mut T)
+    where T: FnMut(&mut Shape, &Vec<i64>) -> Result<(), String>
   {
-    ShapeUtil::for_each_mutable_subshape_with_status_helper(shape, func, 0);
+    ShapeUtil::for_each_mutable_subshape_with_status_helper(shape, func, &vec![0]);
   }
 
   pub fn for_each_subshape_post_order() {}
@@ -971,7 +982,19 @@ impl ShapeUtil {
   }
 
   pub fn drop_degenerate_dimensions() {}
-  pub fn permute_dimensions() {}
+
+  // Permutes the dimensions by the given permutation, so
+  // return_value.dimensions[i] = argument.dimensions[permutation[i]].
+  //
+  // Postcondition: For any valid permutation,
+  //
+  //   !HasLayout(shape) ||
+  //   TransposeIsBitcast(shape, PermuteDimensions(permutation, shape),
+  //                      permutation).
+  pub fn permute_dimensions(_permutation: &Vec<i64>, _shape: &Shape) -> Shape {
+    unimplemented!()
+  }
+
   pub fn inserted_or_deleted_sized_dimensions() {}
   pub fn dimensions_unmodified_by_reshape() {}
   pub fn rehsape_leaves_dimensions_unmodified() {}
@@ -1034,6 +1057,8 @@ impl ShapeUtil {
     ShapeUtil::delete_dimensions(dims_to_delete, shape);
   }
 
+  // Returns true if `dynamic_shape` has dimensions that are less-equal to the
+  // "bounded_shape". Shapes must be arrays.
   pub fn dynamic_array_shape_is_compatible(
     dynamic_shape: &Shape,
     bounded_shape: &Shape) -> bool
@@ -1049,13 +1074,139 @@ impl ShapeUtil {
     true
   }
 
-  pub fn dynamic_shape_is_compatible() {}
-  pub fn for_each_index_with_status() {}
-  pub fn for_each_index() {}
+  // Same as DynamicArrayShapeIsCompatible() but supports tuples.
+  pub fn dynamic_shape_is_compatible(
+    dynamic_shape: &Shape, bounded_shape: &Shape) -> bool
+  {
+    let mut compatible = true;
+    let mut f = |subshape: &Shape, index: &Vec<i64>| {
+      if compatible {
+        let subshape_result =
+          ShapeUtil::try_get_subshape(bounded_shape, index);
+        if subshape_result.is_ok() {
+          if subshape.is_tuple() {
+            if !subshape_result.as_ref().unwrap().is_tuple() {
+              compatible = false;
+            }
+          } else {
+            if subshape_result.as_ref().unwrap().is_tuple() {
+              compatible = false;
+            } else if !subshape.is_static() &&
+              !ShapeUtil::dynamic_array_shape_is_compatible(
+                subshape,
+                subshape_result.as_ref().unwrap()){
+              compatible = false;
+            }
+          }
+        } else {
+          compatible = false;
+        }
+      }
+    };
+    ShapeUtil::for_each_subshape(dynamic_shape, &mut f);
+    compatible
+  }
+
+  pub fn for_each_index<F>(
+    shape: &Shape,
+    base: &Vec<i64>,
+    count: &Vec<i64>,
+    incr: &Vec<i64>,
+    visitor_func: &F) where F: Fn(&Vec<i64>) -> Result<bool, String>
+  {
+    let _ = ShapeUtil::for_each_index_with_status(
+      shape, base, count, incr, visitor_func);
+  }
+
+  pub fn for_each_index_with_status<F>(
+    shape: &Shape,
+    base: &Vec<i64>,
+    count: &Vec<i64>,
+    incr: &Vec<i64>,
+    visitor_func: &F
+  ) -> Result<(), String>
+    where F: Fn(&Vec<i64>) -> Result<bool, String>
+  {
+    ShapeUtil::for_each_index_internal(shape, base, count, incr, visitor_func)
+  }
+
+  pub fn for_each_index_internal<F>(
+    shape: &Shape,
+    base: &Vec<i64>,
+    count: &Vec<i64>,
+    incr: &Vec<i64>,
+    visitor_func: &F) -> Result<(), String>
+    where F: Fn(&Vec<i64>) -> Result<bool, String>
+  {
+    let mut s = ForEachState::new(shape, base, count, incr);
+    if s.is_zero_element_array() { return Ok(()); }
+
+    // Allows handling R0 arrays, such that the visitor function will be called
+    // once with the proper empty indexes.
+    let mut n = -1;
+    let rank = s.rank as i64;
+    while n < rank {
+      let should_continue = visitor_func(&s.indexes_span);
+      if should_continue.is_err() {
+        return Err(should_continue.err().unwrap());
+      }
+      if !should_continue.unwrap() { break; }
+      // Increments dimensions in minor to major order.
+      n = s.increment_dim();
+    }
+    Ok(())
+  }
+
   pub fn for_each_index_no_status() {}
-  pub fn for_each_index_parallel() {}
-  pub fn get_for_each_index_parallel_thread_count() {}
-  pub fn for_each_index_parallel_with_status() {}
+
+
+  // A parallel version of ForEachIndex(WithStatus). This can only be used if
+  // the visitor_function is thread-safe and the order of iteration does not
+  // matter.
+  //
+  // Please use GetForEachIndexParallelThreadCount() to get the number of
+  // threads in the threadpool of ForEachIndexParallel*. This will not change
+  // during the runtime of the process. Please DO NOT use
+  // tsl::port::MaxParallelism() for this purpose, as it may change.
+  pub fn for_each_index_parallel<F>(
+    shape: &Shape,
+    base: &Vec<i64>,
+    count: &Vec<i64>,
+    incr: &Vec<i64>,
+    visitor_func: &F) where F: Fn(&Vec<i64>, i64) -> Result<bool, String>
+  {
+    // The parallel version of ForEachIndexInternal can never fail.
+    ShapeUtil::for_each_index_parallel_with_status(
+      shape, base, count, incr, visitor_func)
+  }
+
+  pub fn for_each_index_parallel_with_status<F>(
+    shape: &Shape,
+    base: &Vec<i64>,
+    count: &Vec<i64>,
+    incr: &Vec<i64>,
+    visitor_func: &F) where F: Fn(&Vec<i64>, i64) -> Result<bool, String>
+  {
+    // The parallel version of ForEachIndexInternal can never fail.
+    ShapeUtil::for_each_index_internal_parallel(
+      shape, base, count, incr, visitor_func)
+  }
+
+  pub fn for_each_index_internal_parallel<F>(
+    _shape: &Shape,
+    _base: &Vec<i64>,
+    _count: &Vec<i64>,
+    _incr: &Vec<i64>,
+    _visitor_func: &F) where F: Fn(&Vec<i64>, i64) -> Result<bool, String>
+  {
+    unimplemented!()   
+  }
+
+  // Returns the number of threads in the threadpool of ForEachIndexParallel*.
+  pub fn get_for_each_index_parallel_thread_count() -> usize {
+    unimplemented!()
+  }
+
   pub fn get_normalized_transpose_shape() {}
   pub fn get_normalized_logical_transpose_shape() {}
 
@@ -1214,8 +1365,8 @@ impl ShapeUtil {
   // in DFS pre-order starting with the index.
   fn for_each_subshape_with_status_helper<T>(
     shape: &Shape,
-    func: &T,
-    index: usize) where T: Fn(&Shape, usize) -> Result<(), String>
+    func: &mut T,
+    index: &Vec<i64>) where T: FnMut(&Shape, &Vec<i64>) -> Result<(), String>
   {
     let result = func(shape, index);
     if result.is_err() {
@@ -1224,15 +1375,15 @@ impl ShapeUtil {
     if shape.is_tuple() {
       for i in 0..ShapeUtil::tuple_element_count(shape) {
         ShapeUtil::for_each_subshape_with_status_helper(
-          shape.tuple_shapes(i), func, i);
+          shape.tuple_shapes(i), func, &vec![i as i64]);
       }
     }
   }
 
   fn for_each_mutable_subshape_with_status_helper<T>(
-    shape: &Shape,
+    shape: &mut Shape,
     func: &mut T,
-    index: usize) where T: FnMut(&Shape, usize) -> Result<(), String>
+    index: &Vec<i64>) where T: FnMut(&mut Shape, &Vec<i64>) -> Result<(), String>
   {
     let result = func(shape, index);
     if result.is_err() {
@@ -1241,11 +1392,89 @@ impl ShapeUtil {
     if shape.is_tuple() {
       for i in 0..ShapeUtil::tuple_element_count(shape) {
         ShapeUtil::for_each_mutable_subshape_with_status_helper(
-          shape.tuple_shapes(i), func, i);
+          shape.mutable_tuple_shapes(i), func, &vec![i as i64]);
       }
     }
   }
 }
+
+// Keeps track of the iteration state for the ForEach...Internal routines
+struct ForEachState {
+  shape: Shape,
+  base: Vec<i64>,
+  count: Vec<i64>,
+  incr: Vec<i64>,
+  minor_to_major: Vec<i64>,
+  rank: usize,
+  indexes: Vec<i64>,
+  indexes_ptr: Vec<i64>,
+  indexes_span: Vec<i64>
+}
+
+impl ForEachState {
+  pub fn new(s: &Shape, b: &Vec<i64>, c: &Vec<i64>, i: &Vec<i64>) -> Self {
+    let mut instance = ForEachState {
+      shape: s.clone(),
+      base: vec![],
+      count: vec![],
+      incr: vec![],
+      minor_to_major: vec![],
+      rank: 0,
+      indexes: vec![],
+      indexes_ptr: vec![],
+      indexes_span: vec![]
+    };
+    instance.base.clone_from(b);
+    instance.count.clone_from(c);
+    instance.incr.clone_from(i);
+    instance.minor_to_major.clone_from(
+      s.layout().as_ref().unwrap().minor_to_major_vec());
+    instance.rank = LayoutUtil::minor_to_major_from_shape(s).len();
+    instance.indexes.clone_from(b);
+
+    if instance.rank != 0 {
+      instance.indexes_ptr.clone_from(&instance.indexes);
+    }
+    instance.indexes_span.clone_from(&instance.indexes);
+    instance
+  }
+
+  pub fn increment_dim(&mut self) -> i64 {
+    let mut n = 0;
+    for i in 0..self.rank {
+      let dim = self.minor_to_major[i];
+      self.indexes_ptr[dim as usize] += self.incr[dim as usize];
+      if self.indexes_ptr[dim as usize] <
+        self.base[dim as usize] + self.count[dim as usize]
+      { break; }
+      self.indexes_ptr[dim as usize] = self.base[dim as usize];
+      n += 1;
+    }
+    n
+  }
+
+  pub fn is_zero_element_array(&self) -> bool {
+    ShapeUtil::is_zero_element_array(&self.shape)
+  }
+
+  // Returns the number of visited elements assuming that the iteration will
+  // not be interrupted.
+  pub fn calculate_num_steps(&self) -> i64 {
+    if self.is_zero_element_array() { return 0; }
+    let mut size = 1;
+    // This works for rank = 0 as well.
+    for i in 0..self.rank {
+      // When the count is zero, it can mean that the given dimension is fixed,
+      // but we still iterate over the others.
+      if self.count[i] == 0 { continue; }
+      let dim = 1 + (self.count[i] - 1) / self.incr[i];
+      size *= dim;
+    }
+    size
+  }
+}
+
+struct ParallelState {}
 
 #[cfg(test)]
 mod tests {
@@ -1373,12 +1602,12 @@ use super::*;
   fn test_equal_ignoring_fp_precision() {
     let shape1 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F32,
-      vec![4, 3], vec![0, 1],
+      &vec![4, 3], &vec![0, 1],
       Vec::new(), 1, 0, 0);
     
     let shape2 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F16,
-      vec![4, 3], vec![0, 1],
+      &vec![4, 3], &vec![0, 1],
       Vec::new(), 1, 0, 0);
 
     assert_eq!(ShapeUtil::equal_ignoring_fp_precision(&shape1, &shape2), true);
@@ -1388,31 +1617,31 @@ use super::*;
   fn test_unequal_ignoring_fp_precision() {
     let shape1 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F32,
-      vec![4, 3], vec![0, 1], vec![],
+      &vec![4, 3], &vec![0, 1], vec![],
       1, 0, 0);
     let shape2 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F16,
-      vec![3, 4], vec![0, 1], vec![],
+      &vec![3, 4], &vec![0, 1], vec![],
       1, 0, 0);
     assert_eq!(ShapeUtil::equal_ignoring_fp_precision(&shape1, &shape2), false);
     
     let shape3 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F32,
-      vec![3, 4], vec![0, 1], vec![],
+      &vec![3, 4], &vec![0, 1], vec![],
       1, 0, 0);
     let shape4 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F16,
-      vec![3, 4], vec![1, 0], vec![],
+      &vec![3, 4], &vec![1, 0], vec![],
       1, 0, 0);
     assert_eq!(ShapeUtil::equal_ignoring_fp_precision(&shape3, &shape4), false);
     
     let shape5 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F32,
-      vec![4, 3], vec![0, 1], vec![],
+      &vec![4, 3], &vec![0, 1], vec![],
       1, 0, 0);
     let shape6 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::Pred,
-      vec![4, 3], vec![0, 1], vec![],
+      &vec![4, 3], &vec![0, 1], vec![],
       1, 0, 0);
     assert_eq!(ShapeUtil::equal_ignoring_fp_precision(&shape5, &shape6), false);
   }
@@ -1421,31 +1650,31 @@ use super::*;
   fn test_equal_ignoring_element_type() {
     let s1 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F32,
-      vec![4, 3], vec![0, 1], vec![],
+      &vec![4, 3], &vec![0, 1], vec![],
       1, 0, 0);
     let s2 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F16,
-      vec![4, 3], vec![0, 1], vec![],
+      &vec![4, 3], &vec![0, 1], vec![],
       1, 0, 0);
     assert_eq!(ShapeUtil::equal_ignoring_element_type(&s1, &s2), true);
 
     let s3 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::S32,
-      vec![4, 3], vec![0, 1], vec![],
+      &vec![4, 3], &vec![0, 1], vec![],
       1, 0, 0);
     let s4 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F16,
-      vec![4, 3], vec![0, 1], vec![],
+      &vec![4, 3], &vec![0, 1], vec![],
       1, 0, 0);
     assert_eq!(ShapeUtil::equal_ignoring_element_type(&s3, &s4), true);
 
     let s5 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F32,
-      vec![4, 3], vec![0, 1], vec![],
+      &vec![4, 3], &vec![0, 1], vec![],
       1, 0, 0);
     let s6 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::Pred,
-      vec![4, 3], vec![0, 1], vec![],
+      &vec![4, 3], &vec![0, 1], vec![],
       1, 0, 0);
     assert_eq!(ShapeUtil::equal_ignoring_element_type(&s5, &s6), true);
   }
@@ -1454,21 +1683,21 @@ use super::*;
   fn test_unequal_ignoring_element_type() {
     let s1 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F32,
-      vec![4, 3], vec![0, 1], vec![],
+      &vec![4, 3], &vec![0, 1], vec![],
       1, 0, 0);
     let s2 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F16,
-      vec![3, 4], vec![0, 1], vec![],
+      &vec![3, 4], &vec![0, 1], vec![],
       1, 0, 0);
     assert_eq!(ShapeUtil::equal_ignoring_element_type(&s1, &s2), false);
 
     let s3 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F32,
-      vec![3, 4], vec![0, 1], vec![],
+      &vec![3, 4], &vec![0, 1], vec![],
       1, 0, 0);
     let s4 = ShapeUtil::make_shape_with_dense_layout(
       &PrimitiveType::F16,
-      vec![3, 4], vec![1, 0], vec![],
+      &vec![3, 4], &vec![1, 0], vec![],
       1, 0, 0);
     assert_eq!(ShapeUtil::equal_ignoring_element_type(&s3, &s4), false);
   }
@@ -1660,7 +1889,7 @@ use super::*;
 
     let scalar_empty_min2maj =
       ShapeUtil::make_shape_with_dense_layout(&PrimitiveType::F32,
-        vec![], vec![], vec![],
+        &vec![], &vec![], vec![],
         1, 0, 0);
     assert_eq!(scalar_empty_min2maj.has_layout(), true);
 

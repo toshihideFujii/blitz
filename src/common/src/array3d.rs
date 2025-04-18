@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 // Simple 3D array structure.
 pub struct Array3D<T> {
   values: Vec<Vec<Vec<T>>>
@@ -57,6 +55,19 @@ impl<T> Array3D<T> where  T: Default + Clone {
     self.values[0][0].len()
   }
 
+  // Returns a vector containing the dimensions of the array.
+  pub fn dimensions(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+
+  pub fn num_dimensions(&self) -> usize {
+    unimplemented!()
+  }
+
+  pub fn dim(&self, _dim: usize) -> usize {
+    unimplemented!()
+  }
+
   pub fn num_elements(&self) -> usize {
     self.n1() * self.n2() * self.n3()
   }
@@ -77,6 +88,16 @@ impl<T> Array3D<T> where  T: Default + Clone {
 
   pub fn set_data(&mut self, n1: usize, n2: usize, n3: usize, data: T) {
     self.values[n1][n2][n3] = data;
+  }
+
+  // Invokes a callback with the (indices, value) for each cell in the array.
+  pub fn each<F>(&self, f: &mut F)
+    where F: FnMut(&Vec<i64>, &T)
+  {
+    let index = vec![0; 0]; // TODO
+    for i in 0..self.num_elements() {
+      f(&index, &self.values[i][i][i]); // TODO
+    }
   }
 }
 

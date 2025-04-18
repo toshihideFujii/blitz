@@ -78,23 +78,23 @@ impl<T> ShapeTree<T> where T: Default + Clone {
     }
   }
 
-  pub fn new(shape: Shape) -> Self {
+  pub fn new(shape: &mut Shape) -> Self {
     let mut instance = ShapeTree {
       nodes: Vec::new(),
       index_table: IndexTable::new(&shape),
       shape: shape.clone()
     };
-    instance.nodes = ShapeTree::create_nodes_default(&shape);
+    instance.nodes = ShapeTree::create_nodes_default(shape);
     instance
   }
 
-  pub fn new_with_value(shape: Shape, init_value: T) -> Self {
+  pub fn new_with_value(shape: &mut Shape, init_value: T) -> Self {
     let mut instance = ShapeTree {
       nodes: Vec::new(),
       index_table: IndexTable::new(&shape),
       shape: shape.clone()
     };
-    instance.nodes = ShapeTree::create_nodes(&shape, init_value);
+    instance.nodes = ShapeTree::create_nodes(shape, init_value);
     instance
   }
 
@@ -200,21 +200,21 @@ impl<T> ShapeTree<T> where T: Default + Clone {
     &mut self.nodes
   }
 
-  fn create_nodes_default(shape: &Shape) -> Vec<(usize, T)> {
-    let mut nodes = Vec::new();
-    let mut func = |_subshape: &Shape, index: usize| {
+  fn create_nodes_default(shape: &mut Shape) -> Vec<(usize, T)> {
+    let nodes = Vec::new();
+    let mut func = |_subshape: &mut Shape, _index: &Vec<i64>| {
       //if !subshape.is_tuple() { nodes.push((index, T::default())); }
-      nodes.push((index, T::default()));
+      //nodes.push((index, T::default()));
     };
     ShapeUtil::for_each_mutable_subshape(shape, &mut func);
     nodes
   }
 
-  fn create_nodes(shape: &Shape, value: T) -> Vec<(usize, T)> {
-    let mut nodes = Vec::new();
-    let mut func = |_subshape: &Shape, index: usize| {
+  fn create_nodes(shape: &mut Shape, _value: T) -> Vec<(usize, T)> {
+    let nodes = Vec::new();
+    let mut func = |_subshape: &mut Shape, _index: &Vec<i64>| {
       //if !subshape.is_tuple() { nodes.push((index, value.clone())); }
-      nodes.push((index, value.clone()));
+      //nodes.push((index, value.clone()));
     };
     ShapeUtil::for_each_mutable_subshape(shape, &mut func);
     nodes
@@ -246,8 +246,8 @@ mod tests {
       vec![create_array_shape(), t1, t2])
   }
 
-  fn shape_constructor_testing(shape: &Shape, expected_num_nodes: i64) {
-    let mut int_tree: ShapeTree<i64> = ShapeTree::new(shape.clone());
+  fn shape_constructor_testing(shape: &mut Shape, expected_num_nodes: i64) {
+    let mut int_tree: ShapeTree<i64> = ShapeTree::new(shape);
     let mut num_nodes = 0;
     let mut func = |_index: usize, data: &mut i64| {
       assert_eq!(*data, 0);
@@ -256,7 +256,7 @@ mod tests {
     int_tree.for_each_mutable_element(&mut func);
     assert_eq!(expected_num_nodes, num_nodes);
 
-    let mut bool_tree: ShapeTree<bool> = ShapeTree::new(shape.clone());
+    let mut bool_tree: ShapeTree<bool> = ShapeTree::new(shape);
     let mut num_nodes = 0;
     let mut func = |_index: usize, data: &mut bool| {
       assert_eq!(*data, false);
@@ -266,8 +266,8 @@ mod tests {
     assert_eq!(expected_num_nodes, num_nodes);
   }
 
-  fn init_value_constructor_testing(shape: &Shape, expected_num_nodes: i64) {
-    let mut tree: ShapeTree<i64> = ShapeTree::new_with_value(shape.clone(), 42);
+  fn init_value_constructor_testing(shape: &mut Shape, expected_num_nodes: i64) {
+    let mut tree: ShapeTree<i64> = ShapeTree::new_with_value(shape, 42);
     let mut num_nodes = 0;
     let mut func = |_index: usize, data: &mut i64| {
       assert_eq!(*data, 42);
@@ -305,37 +305,38 @@ mod tests {
 
   #[test]
   fn test_shape_constructor() {
-    shape_constructor_testing(&create_array_shape(), 1);
-    shape_constructor_testing(&create_tuple_shape(), 4);
-    shape_constructor_testing(&create_nested_tuple_shape(), 10);
+    shape_constructor_testing(&mut create_array_shape(), 1);
+    shape_constructor_testing(&mut create_tuple_shape(), 4);
+    shape_constructor_testing(&mut create_nested_tuple_shape(), 10);
   }
 
   #[test]
   fn test_init_value_constructor() {
-    init_value_constructor_testing(&create_array_shape(), 1);
-    init_value_constructor_testing(&create_tuple_shape(), 4);
-    init_value_constructor_testing(&create_nested_tuple_shape(), 10);
+    init_value_constructor_testing(&mut create_array_shape(), 1);
+    init_value_constructor_testing(&mut create_tuple_shape(), 4);
+    init_value_constructor_testing(&mut create_nested_tuple_shape(), 10);
   }
 
   #[test]
   fn test_empty_tuple_must_have_no_leaves() {
     let shape_tree: ShapeTree<i64> =
-      ShapeTree::new(ShapeUtil::make_tuple_shape(vec![]));
+      ShapeTree::new(&mut ShapeUtil::make_tuple_shape(vec![]));
     assert_eq!(shape_tree.leaf_count(), 0);
   }
 
   #[test]
   fn test_nested_empty_tuple() {
-    let shape = ShapeUtil::make_tuple_shape(
+    let mut shape = ShapeUtil::make_tuple_shape(
       vec![ShapeUtil::make_tuple_shape(vec![]), create_array_shape()]);
 
-    let shape_tree: ShapeTree<i64> = ShapeTree::new(shape.clone());
+    let shape_tree: ShapeTree<i64> = ShapeTree::new(&mut shape);
     assert_eq!(shape_tree.leaf_count(), ShapeUtil::get_leaf_count(&shape));
   }
 
   #[test]
   fn test_array_shape() {
-    let mut shape_tree: ShapeTree<i64> = ShapeTree::new(create_array_shape());
+    let mut shape_tree: ShapeTree<i64> =
+      ShapeTree::new(&mut create_array_shape());
     *shape_tree.mutable_element(0) = 42;
     assert_eq!(shape_tree.element(0), &42);
     *shape_tree.mutable_element(0) = 123;
@@ -358,7 +359,8 @@ mod tests {
 
   #[test]
   fn test_tuple_shape() {
-    let mut shape_tree: ShapeTree<i64> = ShapeTree::new(create_tuple_shape());
+    let mut shape_tree: ShapeTree<i64> =
+      ShapeTree::new(&mut create_tuple_shape());
     *shape_tree.mutable_element(0) = 1;
     *shape_tree.mutable_element(1) = 42;
     *shape_tree.mutable_element(2) = 123;

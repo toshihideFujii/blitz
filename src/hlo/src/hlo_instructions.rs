@@ -29,19 +29,19 @@ impl HloTopKInstruction {
   }
 }
 
-pub struct HloConstantInstruction {
-  literal: Literal
+pub struct HloConstantInstruction<T> where T: Clone + Default + PartialEq + 'static {
+  literal: Literal<T>
 }
 
-impl HloConstantInstruction {
-  pub fn new(literal: Literal) -> Self {
+impl<T> HloConstantInstruction<T> where T: Clone + Default + PartialEq {
+  pub fn new(literal: Literal<T>) -> Self {
     HloConstantInstruction {
       literal: literal
     }
   }
 
   // Returns the literal associated with this instruction.
-  pub fn literal(&self) -> &Literal {
+  pub fn literal(&self) -> &Literal<T> {
     &self.literal
   }
 

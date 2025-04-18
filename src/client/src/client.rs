@@ -105,10 +105,11 @@ impl Client {
   //
   // If shape_with_layout is not nullptr, it points to a shape whose layout will
   // be the layout of the returned literal.
-  pub fn transfer(
+  pub fn transfer<T>(
     &self,
     data: &GlobalData,
-    shape_with_layout: Option<Shape>) -> Result<Literal, String>
+    shape_with_layout: Option<Shape>) -> Result<Literal<T>, String>
+    where T: Clone + Default + PartialEq
   {
     self.stub.transfer_to_client(data, shape_with_layout)
   }
@@ -120,10 +121,11 @@ impl Client {
   // If device_handle is not nullptr, data is transferred to the associated
   // device (and its replicas if replication is enabled). Otherwise, data is
   // transferred to the default device (and its replicas).
-  pub fn transfer_to_server(
+  pub fn transfer_to_server<T>(
     &self,
-    literal: &Literal,
+    literal: &Literal<T>,
     device_handle: Option<DeviceHandle>) -> Result<GlobalData, String>
+    where T: Clone + Default + PartialEq
   {
     self.stub.transfer_to_server(literal, device_handle)
   }
@@ -133,11 +135,12 @@ impl Client {
   // device_handle and replica_id together specify a particular device; a device
   // assigned for the given replica_id among the replicas that the given device
   // handle belongs to.
-  pub fn transfer_to_infeed(
+  pub fn transfer_to_infeed<T>(
     &self,
-    literal: &Literal,
+    literal: &Literal<T>,
     replica_id: i64,
     device_handle: Option<DeviceHandle>) -> Result<(), String>
+    where T: Clone + Default + PartialEq
   {
     self.stub.transfer_to_infeed(literal, replica_id, device_handle)
   }
@@ -147,11 +150,12 @@ impl Client {
   // device_handle and replica_id together specify a particular device; a device
   // assigned for the given replica_id among the replicas that the given device
   // handle belongs to.
-  pub fn transfer_from_outfeed(
+  pub fn transfer_from_outfeed<T>(
     &self,
     shape_with_layout: &Shape,
     replica_id: i64,
-    device_handle: Option<DeviceHandle>) -> Result<Literal, String>
+    device_handle: Option<DeviceHandle>) -> Result<Literal<T>, String>
+    where T: Clone + Default + PartialEq
   {
     self.stub.transfer_from_outfeed(shape_with_layout, replica_id, device_handle)
   }
@@ -164,12 +168,13 @@ impl Client {
   // Executes the computation with the given arguments and transfers the result
   // to the client as a literal. Parameters are defined the same as for
   // Execute() and Transfer().
-  pub fn execute_and_transfer(
+  pub fn execute_and_transfer<T>(
     &self,
     _computation: &BlitzComputation,
     _arguments: &Vec<GlobalData>,
     _execution_options: Option<ExecutionOptions>,
-    _execution_profile: Option<ExecutionProfile>) -> Result<Literal, String>
+    _execution_profile: Option<ExecutionProfile>) -> Result<Literal<T>, String>
+    where T: Clone + Default + PartialEq
   {
     unimplemented!()
   }
@@ -189,10 +194,11 @@ impl Client {
   //
   // If output_layout is non-null, then the output of the computation will be
   // stored using that layout.
-  pub fn compute_constant(
+  pub fn compute_constant<T>(
     &self,
     _computation: &BlitzComputation,
-    _output_layout: Option<Layout>) -> Result<Literal, String>
+    _output_layout: Option<Layout>) -> Result<Literal<T>, String>
+    where T: Clone + Default + PartialEq
   {
     unimplemented!()
   }

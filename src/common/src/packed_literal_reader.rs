@@ -23,7 +23,12 @@ impl PackedLiteralReader {
   //
   // Layout is optional. If it is not provided, no layout is set on the literal
   // that is produced.
-  pub fn read(&self, _shape: &Shape, _layout: &Option<Layout>) -> Result<Literal, String> {
+  pub fn read<T>(
+    &self,
+    _shape: &Shape,
+    _layout: &Option<Layout>) -> Result<Literal<T>, String>
+    where T: Clone + Default + PartialEq
+  {
     unimplemented!()
   }
 

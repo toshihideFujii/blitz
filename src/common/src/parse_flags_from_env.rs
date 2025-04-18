@@ -38,7 +38,7 @@
 //
 // Raises a fatal error if any flags in `envvar` were not recognized, or if flag
 // parsing failed.
-pub fn parse_flags_from_env_and_die_if_unknown(_envvar: String, _flag_list: Vec<i64>) {
+pub fn parse_flags_from_env_and_die_if_unknown(_envvar: String, _flag_list: &Vec<i64>) {
   unimplemented!()
 }
 

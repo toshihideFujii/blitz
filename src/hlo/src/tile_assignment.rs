@@ -155,7 +155,7 @@ impl TileAssignment {
 
   pub fn dim(&self, n: i64) -> i64 {
     if self.array.is_some() {
-      self.array.as_ref().unwrap().dim(n)
+      self.array.as_ref().unwrap().dim(n as usize)
     } else {
       self.iota.as_ref().unwrap().dim(n)
     }

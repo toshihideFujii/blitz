@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use crate::array2d::Array2D;
 
 pub struct Array4D<T> {
@@ -200,6 +198,7 @@ mod tests {
 
   use super::*;
 
+  /*
   fn array_4d_linear_index<T>(arr: &Array4D<T>, idx: Vec<usize>) -> usize
     where T: Default + Clone
   {
@@ -209,6 +208,7 @@ mod tests {
     idx[1] * arr.n3() * arr.n4() +
     idx[0] * arr.n2() * arr.n3() * arr.n4()
   }
+  */
 
   #[test]
   fn test_uninitialized_dims_ctor() {
@@ -234,7 +234,7 @@ mod tests {
     full_of_7.each(&f);
   }
 
-  fn test_container_ctor() {}
+  //fn test_container_ctor() {}
 
   #[test]
   fn test_initializer_list_ctor() {

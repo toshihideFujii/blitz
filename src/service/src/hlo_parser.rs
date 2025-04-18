@@ -440,7 +440,9 @@ impl HloParser {
   // literal
   //  ::= tuple
   //  ::= non_tuple
-  fn parse_literal(&mut self, literal: &mut Literal, shape: &Shape) -> bool {
+  fn parse_literal<T>(&mut self, literal: &mut Literal<T>, shape: &Shape) -> bool
+    where T: Clone + Default + PartialEq
+  {
     if shape.is_tuple() {
       self.parse_tuple_literal(literal, shape)
     } else {
@@ -453,7 +455,9 @@ impl HloParser {
   // literal_list
   //  ::= /*empty*/
   //  ::= literal (',' literal)*
-  fn parse_tuple_literal(&mut self, literal: &mut Literal, shape: &Shape) -> bool {
+  fn parse_tuple_literal<T>(&mut self, literal: &mut Literal<T>, shape: &Shape) -> bool
+    where T: Clone + Default + PartialEq
+  {
     if self.parse_token(&TokKind::Lparen,
         "expects '(' in front of tuple elements".to_string())
     {
@@ -461,7 +465,7 @@ impl HloParser {
     }
 
     let element_count = ShapeUtil::tuple_element_count(shape);
-    let mut elements: Vec<Literal> = Vec::new();
+    let mut elements: Vec<Literal<T>> = Vec::new();
     elements.reserve(element_count);
     if self.lexer.get_kind() == TokKind::Rparen {
       // empty
@@ -491,12 +495,16 @@ impl HloParser {
   //   ::= rank01
   //   ::= rank2345
   // rank2345 ::= shape nested_array
-  fn parse_non_tuple_literal(&mut self, literal: &Literal, shape: &Shape) -> bool {
+  fn parse_non_tuple_literal<T>(&mut self, literal: &Literal<T>, shape: &Shape) -> bool
+    where T: Clone + Default + PartialEq
+  {
     debug_assert!(LayoutUtil::is_dense_array(shape));
     self.parse_dense_literal(literal, shape)
   }
 
-  fn parse_dense_literal(&mut self, _literal: &Literal, _shape: &Shape) -> bool {
+  fn parse_dense_literal<T>(&mut self, _literal: &Literal<T>, _shape: &Shape) -> bool
+    where T: Clone + Default + PartialEq
+  {
     unimplemented!()
   }
 

@@ -508,7 +508,9 @@ impl HloInstruction {
   }
 
   // Creates a literal constant instruction.
-  pub fn create_constant(literal: Literal) -> HloConstantInstruction {
+  pub fn create_constant<T>(literal: Literal<T>) -> HloConstantInstruction<T>
+    where T: Clone + Default + PartialEq
+  {
     HloConstantInstruction::new(literal)
   }
 
@@ -1885,11 +1887,21 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn literal(&self) -> &Literal {
+  pub fn literal<T>(&self) -> &Literal<T>
+    where T: Clone + Default + PartialEq
+  {
     unimplemented!()
   }
 
-  pub fn set_literal(&mut self, _literal: Literal) {
+  pub fn mutable_literal<T>(&self) -> &mut Literal<T>
+    where T: Clone + Default + PartialEq
+  {
+    unimplemented!()
+  }
+
+  pub fn set_literal<T>(&mut self, _literal: Literal<T>)
+    where T: Clone + Default + PartialEq
+  {
     unimplemented!()
   }
 

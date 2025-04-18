@@ -60,11 +60,83 @@ pub fn exponent_bias(t: &PrimitiveType) -> i64 {
 
 pub fn has_infinity() {}
 
-pub fn native_to_primitive_type() {}
+// Declarations of specializations for each native type which correspond to a
+// Blitz primitive type.
+pub fn native_to_primitive_type<T>(v: &T) -> PrimitiveType {
+  if std::any::type_name_of_val(v) == "bool" {
+    return PrimitiveType::Pred;
+  }
+  // Unsigned integer
+  else if std::any::type_name_of_val(v) == "u8" {
+    return PrimitiveType::U8;
+  } else if std::any::type_name_of_val(v) == "u16" {
+    return PrimitiveType::U16;
+  } else if std::any::type_name_of_val(v) == "u32" {
+    return PrimitiveType::U32;
+  } else if std::any::type_name_of_val(v) == "u64" {
+    return PrimitiveType::U64;
+  } else if std::any::type_name_of_val(v) == "u8" {
+    return PrimitiveType::U8;
+  }
+  // Signed integer
+  else if std::any::type_name_of_val(v) == "i8" {
+    return PrimitiveType::S8;
+  } else if std::any::type_name_of_val(v) == "i16" {
+    return PrimitiveType::S16;
+  } else if std::any::type_name_of_val(v) == "i32" {
+    return PrimitiveType::S32;
+  } else if std::any::type_name_of_val(v) == "i64" {
+    return PrimitiveType::S64;
+  }
+  // Floating point
+  else if std::any::type_name_of_val(v) == "f32" {
+    return PrimitiveType::F32;
+  } else if std::any::type_name_of_val(v) == "f64" {
+    return PrimitiveType::F64;
+  }
+  // Complex
+  else if std::any::type_name_of_val(v) == "num_complex::Complex<f64>" {
+    return PrimitiveType::C64;
+  } else if std::any::type_name_of_val(v) == "c128" {
+    return PrimitiveType::C128;
+  }
+  // Vec
+  else if std::any::type_name_of_val(v) == "alloc::vec::Vec<i32>" {
+    return PrimitiveType::S32;
+  } else if std::any::type_name_of_val(v) == "alloc::vec::Vec<u32>" {
+    return PrimitiveType::U32;
+  }else if std::any::type_name_of_val(v) == "alloc::vec::Vec<f64>" {
+    return PrimitiveType::F64;
+  } else if std::any::type_name_of_val(v) == "alloc::vec::Vec<num_complex::Complex<f64>>" {
+    return PrimitiveType::C64;
+  } else if std::any::type_name_of_val(v) == "alloc::vec::Vec<i64>" {
+    return PrimitiveType::S64;
+  } else if std::any::type_name_of_val(v) == "alloc::vec::Vec<u64>" {
+    return PrimitiveType::U64;
+  }
+
+  unreachable!()
+}
 
 pub fn primitive_type_to_native() {}
 
-pub fn primitive_type_switch() {}
+pub fn primitive_type_switch<F, R>(f: &mut F, t: PrimitiveType) -> R
+  where F: FnMut(PrimitiveType) -> R
+{
+  if is_array_type(&t) {
+    return array_type_switch(f, &t);
+  }
+  if t == PrimitiveType::Tuple {
+    return f(PrimitiveType::Tuple);
+  }
+  if t == PrimitiveType::Token {
+    return f(PrimitiveType::Token);
+  }
+  if t == PrimitiveType::OpaqueType {
+    return f(PrimitiveType::OpaqueType);
+  }
+  panic!("Unhandled type: {:?}", t);
+}
 
 pub fn is_f8_type(t: &PrimitiveType) -> bool {
   *t == PrimitiveType::F8E5M2 || *t == PrimitiveType::F8E4M3FN ||
@@ -73,7 +145,7 @@ pub fn is_f8_type(t: &PrimitiveType) -> bool {
 }
 
 pub fn is_floating_point_type(t: &PrimitiveType) -> bool {
-  *t == PrimitiveType::F16 || *t == PrimitiveType::F32 ||
+  *t == PrimitiveType::F16 || *t == PrimitiveType::F32 || *t == PrimitiveType::F64 ||
   *t == PrimitiveType::F64 || *t == PrimitiveType::BF16 || is_f8_type(t)
 }
 
@@ -122,9 +194,15 @@ pub fn bit_width(_t: &PrimitiveType) -> i64 {
 pub fn byte_width(t: &PrimitiveType) -> i64 {
   match t {
     PrimitiveType::Pred => return 2, // ?
+    PrimitiveType::S4 => return 0,
+    PrimitiveType::S8 => return 1, // 8 / 8
     PrimitiveType::S16 => return 2, // 16 / 8
     PrimitiveType::S32 => return 4, // 32 / 8
+    PrimitiveType::S64 => return 8, // 64 / 8
+    PrimitiveType::U8 => return 1, // 8 / 8
+    PrimitiveType::U16 => return 2, // 16 / 8
     PrimitiveType::U32 => return 4, // 32 / 8
+    PrimitiveType::U64 => return 8, // 64 / 8
     PrimitiveType::BF16 => return 2, // 16 / 8
     PrimitiveType::F16 => return 2, // 16 / 8
     PrimitiveType::F32 => return 4, // 32 / 8
@@ -268,53 +346,53 @@ pub fn lowercase_primitive_type_name(t: &PrimitiveType) -> String {
   gen.lowercase_name(t)
 }
 
-pub fn integral_type_switch<R, F>(f: F, t: &PrimitiveType) -> R
-  where F: Fn(&PrimitiveType) -> R
+pub fn integral_type_switch<R, F>(f: &mut F, t: &PrimitiveType) -> R
+  where F: FnMut(PrimitiveType) -> R
 {
   match t {
-    PrimitiveType::S4 => return f(&PrimitiveType::S4),
-    PrimitiveType::S8 => return f(&PrimitiveType::S8),
-    PrimitiveType::S16 => return f(&PrimitiveType::S16),
-    PrimitiveType::S32 => return f(&PrimitiveType::S32),
-    PrimitiveType::S64 => return f(&PrimitiveType::S64),
-    PrimitiveType::U4 => return f(&PrimitiveType::U4),
-    PrimitiveType::U8 => return f(&PrimitiveType::U8),
-    PrimitiveType::U16 => return f(&PrimitiveType::U16),
-    PrimitiveType::U32 => return f(&PrimitiveType::U32),
-    PrimitiveType::U64 => return f(&PrimitiveType::U64),
+    PrimitiveType::S4 => return f(PrimitiveType::S4),
+    PrimitiveType::S8 => return f(PrimitiveType::S8),
+    PrimitiveType::S16 => return f(PrimitiveType::S16),
+    PrimitiveType::S32 => return f(PrimitiveType::S32),
+    PrimitiveType::S64 => return f(PrimitiveType::S64),
+    PrimitiveType::U4 => return f(PrimitiveType::U4),
+    PrimitiveType::U8 => return f(PrimitiveType::U8),
+    PrimitiveType::U16 => return f(PrimitiveType::U16),
+    PrimitiveType::U32 => return f(PrimitiveType::U32),
+    PrimitiveType::U64 => return f(PrimitiveType::U64),
     _ => unreachable!("Not an integral data type: {:?}.", t)
   }
 }
 
-pub fn floating_point_type_switch<R, F>(f: F, t: &PrimitiveType) -> R
-  where F: Fn(&PrimitiveType) -> R
+pub fn floating_point_type_switch<R, F>(f: &mut F, t: &PrimitiveType) -> R
+  where F: FnMut(PrimitiveType) -> R
 {
   match t {
-    PrimitiveType::F8E4M3FN => return f(&PrimitiveType::F8E4M3FN),
-    PrimitiveType::F8E4M3B11FNUZ => return f(&PrimitiveType::F8E4M3B11FNUZ),
-    PrimitiveType::F8E4M3FNUZ => return f(&PrimitiveType::F8E4M3FNUZ),
-    PrimitiveType::F8E5M2 => return f(&PrimitiveType::F8E5M2),
-    PrimitiveType::F8E5M2FNUZ => return f(&PrimitiveType::F8E5M2FNUZ),
-    PrimitiveType::F16 => return f(&PrimitiveType::F16),
-    PrimitiveType::BF16 => return f(&PrimitiveType::BF16),
-    PrimitiveType::F32 => return f(&PrimitiveType::F32),
-    PrimitiveType::F64 => return f(&PrimitiveType::F64),
+    PrimitiveType::F8E4M3FN => return f(PrimitiveType::F8E4M3FN),
+    PrimitiveType::F8E4M3B11FNUZ => return f(PrimitiveType::F8E4M3B11FNUZ),
+    PrimitiveType::F8E4M3FNUZ => return f(PrimitiveType::F8E4M3FNUZ),
+    PrimitiveType::F8E5M2 => return f(PrimitiveType::F8E5M2),
+    PrimitiveType::F8E5M2FNUZ => return f(PrimitiveType::F8E5M2FNUZ),
+    PrimitiveType::F16 => return f(PrimitiveType::F16),
+    PrimitiveType::BF16 => return f(PrimitiveType::BF16),
+    PrimitiveType::F32 => return f(PrimitiveType::F32),
+    PrimitiveType::F64 => return f(PrimitiveType::F64),
     _ => unreachable!("Not an floating point data type: {:?}.", t)
   }
 }
 
-pub fn complex_type_switch<R, F>(f: F, t: &PrimitiveType) -> R
-  where F: Fn(&PrimitiveType) -> R
+pub fn complex_type_switch<R, F>(f: &mut F, t: &PrimitiveType) -> R
+  where F: FnMut(PrimitiveType) -> R
 {
   match t {
-    PrimitiveType::C64 => return f(&PrimitiveType::C64),
-    PrimitiveType::C128 => return f(&PrimitiveType::C128),
+    PrimitiveType::C64 => return f(PrimitiveType::C64),
+    PrimitiveType::C128 => return f(PrimitiveType::C128),
     _ => unreachable!("Not a complex data type: {:?}.", t)
   }
 }
 
-pub fn array_type_switch<R, F>(f: F, t: &PrimitiveType) -> R
-  where F: Fn(&PrimitiveType) -> R
+pub fn array_type_switch<R, F>(f: &mut F, t: &PrimitiveType) -> R
+  where F: FnMut(PrimitiveType) -> R
 {
   if is_array_type(t) {
     if is_floating_point_type(t) {
@@ -327,7 +405,7 @@ pub fn array_type_switch<R, F>(f: F, t: &PrimitiveType) -> R
       return complex_type_switch(f, t);
     }
     if *t == PrimitiveType::Pred {
-      return f(&PrimitiveType::Pred);
+      return f(PrimitiveType::Pred);
     }
   }
   unreachable!("Not an array data type.");
