@@ -844,7 +844,14 @@ impl ShapeUtil {
     shape.tuple_shapes(index)
   }
 
-  pub fn subshape_count() {}
+  pub fn subshape_count(shape: &Shape) -> usize {
+    let mut n = 0;
+    let mut func =
+      |_literal_subshape: &Shape, _index: &Vec<i64>| { n += 1; };
+    ShapeUtil::for_each_subshape(shape, &mut func);
+    n
+  }
+
   pub fn slice_tuple() {}
   pub fn complex_component_shape() {}
 
@@ -929,7 +936,7 @@ impl ShapeUtil {
       func(subshape, index);
       Ok(())
     };
-    ShapeUtil::for_each_subshape_with_status(shape, &mut pass_func)
+    let _ = ShapeUtil::for_each_subshape_with_status(shape, &mut pass_func);
   }
 
   pub fn for_each_mutable_subshape<T>(shape: &mut Shape, func: &mut T)
@@ -940,7 +947,7 @@ impl ShapeUtil {
       func(subshape, index);
       Ok(())
     };
-    ShapeUtil::for_each_mutable_subshape_with_status(shape, &mut pass_func)
+    let _ = ShapeUtil::for_each_mutable_subshape_with_status(shape, &mut pass_func);
   }
 
   // Calls the given visitor function for each leaf subshape of the given shape.
@@ -958,16 +965,22 @@ impl ShapeUtil {
 
   // Variants of for_each_subshape wchich propagate status from the
   // visitor functions.
-  pub fn for_each_subshape_with_status<T>(shape: &Shape, func: &mut T)
+  pub fn for_each_subshape_with_status<T>(
+    shape: &Shape,
+    func: &mut T
+  ) -> Result<(), String>
     where T: FnMut(&Shape, &Vec<i64>) -> Result<(), String>
   {
-    ShapeUtil::for_each_subshape_with_status_helper(shape, func, &vec![0]);
+    ShapeUtil::for_each_subshape_with_status_helper(shape, func, &mut vec![])
   }
 
-  pub fn for_each_mutable_subshape_with_status<T>(shape: &mut Shape, func: &mut T)
+  pub fn for_each_mutable_subshape_with_status<T>(
+    shape: &mut Shape,
+    func: &mut T
+  ) -> Result<(), String>
     where T: FnMut(&mut Shape, &Vec<i64>) -> Result<(), String>
   {
-    ShapeUtil::for_each_mutable_subshape_with_status_helper(shape, func, &vec![0]);
+    ShapeUtil::for_each_mutable_subshape_with_status_helper(shape, func, &mut vec![])
   }
 
   pub fn for_each_subshape_post_order() {}
@@ -1366,35 +1379,45 @@ impl ShapeUtil {
   fn for_each_subshape_with_status_helper<T>(
     shape: &Shape,
     func: &mut T,
-    index: &Vec<i64>) where T: FnMut(&Shape, &Vec<i64>) -> Result<(), String>
+    index: &mut Vec<i64>
+  ) -> Result<(), String>
+    where T: FnMut(&Shape, &Vec<i64>) -> Result<(), String>
   {
-    let result = func(shape, index);
-    if result.is_err() {
-      assert!(false, "for_each_subshape_with_status_helper is failed.");
-    }
+    let mut result = func(shape, index);
+    if result.is_err() { return result; }
+
     if shape.is_tuple() {
       for i in 0..ShapeUtil::tuple_element_count(shape) {
-        ShapeUtil::for_each_subshape_with_status_helper(
-          shape.tuple_shapes(i), func, &vec![i as i64]);
+        index.push(i as i64);
+        result = ShapeUtil::for_each_subshape_with_status_helper(
+          shape.tuple_shapes(i), func, index);
+        if result.is_err() { return result; }
+        index.pop();
       }
     }
+    Ok(())
   }
 
   fn for_each_mutable_subshape_with_status_helper<T>(
     shape: &mut Shape,
     func: &mut T,
-    index: &Vec<i64>) where T: FnMut(&mut Shape, &Vec<i64>) -> Result<(), String>
+    index: &mut Vec<i64>
+  ) -> Result<(), String>
+    where T: FnMut(&mut Shape, &Vec<i64>) -> Result<(), String>
   {
-    let result = func(shape, index);
-    if result.is_err() {
-      assert!(false, "for_each_subshape_with_status_helper is failed.");
-    }
+    let mut result = func(shape, index);
+    if result.is_err() { return result; }
+
     if shape.is_tuple() {
       for i in 0..ShapeUtil::tuple_element_count(shape) {
-        ShapeUtil::for_each_mutable_subshape_with_status_helper(
-          shape.mutable_tuple_shapes(i), func, &vec![i as i64]);
+        index.push(i as i64);
+        result = ShapeUtil::for_each_mutable_subshape_with_status_helper(
+          shape.mutable_tuple_shapes(i), func, index);
+        if result.is_err() { return result; }
+        index.pop();
       }
     }
+    Ok(())
   }
 }
 

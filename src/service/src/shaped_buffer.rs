@@ -58,13 +58,14 @@ impl ShapedBuffer {
 
   // Returns the buffer at the given shape index where index is defined as in
   // ShapeUtil::GetSubshape.
-  pub fn buffer(&self, index: usize) -> &DeviceMemoryBase {
-    self.buffers.element(index)
+  pub fn buffer(&self, _index: usize) -> &DeviceMemoryBase {
+    //self.buffers.element(index)
+    unimplemented!()
   }
 
   // Sets the device memory buffer at the given index.
-  pub fn set_buffer(&mut self, buffer: DeviceMemoryBase, index: usize) {
-    self.buffers.set_element_value(index, buffer);
+  pub fn set_buffer(&mut self, _buffer: DeviceMemoryBase, _index: usize) {
+    //self.buffers.set_element_value(index, buffer);
   }
 
   // Sets all buffers.

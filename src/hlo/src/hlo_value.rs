@@ -337,24 +337,29 @@ impl InstructionValueSet {
     self.shape_tree.shape()
   }
 
-  pub fn element(&self, index: usize) -> &HloValueSet {
-    self.shape_tree.element(index)
+  pub fn element(&self, _index: usize) -> &HloValueSet {
+    //self.shape_tree.element(index)
+    unimplemented!()
   }
 
-  pub fn mutable_element(&mut self, index: usize) -> &mut HloValueSet {
-    self.shape_tree.mutable_element(index)
+  pub fn mutable_element(&mut self, _index: usize) -> &mut HloValueSet {
+    //self.shape_tree.mutable_element(index)
+    unimplemented!()
   }
 
-  pub fn find(&self, index: usize) -> &(usize, HloValueSet) {
-    self.shape_tree.find(index)
+  pub fn find(&self, _index: usize) -> &(usize, HloValueSet) {
+    //self.shape_tree.find(index)
+    unimplemented!()
   }
 
   pub fn nodes(&self) -> &Vec<(usize, HloValueSet)> {
-    self.shape_tree.nodes()
+    //self.shape_tree.nodes()
+    unimplemented!()
   }
 
   pub fn mutable_nodes(&mut self) -> &mut Vec<(usize, HloValueSet)> {
-    self.shape_tree.mutable_nodes()
+    //self.shape_tree.mutable_nodes()
+    unimplemented!()
   }
 
   pub fn to_string(&mut self) -> String {
@@ -362,14 +367,14 @@ impl InstructionValueSet {
     out.push_str(ShapeUtil::human_string(self.shape()).as_str());
     out.push_str(")\n");
 
-    let mut func = |index: usize, value_set: &mut HloValueSet| {
+    let _func = |index: usize, value_set: &mut HloValueSet| {
       out.push_str("  ");
       out.push_str(&index.to_string());
       out.push_str(" : ");
       out.push_str(&value_set.to_string());
       out.push('\n');
     };
-    self.shape_tree.for_each_mutable_element(&mut func);
+    //self.shape_tree.for_each_mutable_element(&mut func);
     out
   }
 }

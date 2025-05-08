@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use hlo::{
-  dfs_hlo_visitor_with_default::DfsHloRewriteVisitor,
+  //dfs_hlo_visitor_with_default::DfsHloRewriteVisitor,
   hlo_instruction::HloInstruction,
   hlo_module::HloModule
 };
@@ -23,10 +23,11 @@ impl ReshapeDecomposer {
 
   pub fn run(
     &mut self,
-    module: &HloModule,
-    execution_threads: &HashSet<String>) -> Result<bool, String>
+    _module: &HloModule,
+    _execution_threads: &HashSet<String>) -> Result<bool, String>
   {
-    ReshapeDecomposerVisitor::new().run_on_module(module, execution_threads)
+    //ReshapeDecomposerVisitor::new().run_on_module(module, execution_threads)
+    unimplemented!()
   }
 }
 
@@ -34,6 +35,7 @@ struct ReshapeDecomposerVisitor {
   changed: bool
 }
 
+/*
 impl DfsHloRewriteVisitor for ReshapeDecomposerVisitor {
   fn run_on_module(
     &mut self,
@@ -48,6 +50,7 @@ impl DfsHloRewriteVisitor for ReshapeDecomposerVisitor {
     Ok(self.changed)
   }
 }
+*/
 
 impl ReshapeDecomposerVisitor {
   pub fn new() -> Self {

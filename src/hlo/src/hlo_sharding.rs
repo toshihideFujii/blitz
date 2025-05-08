@@ -49,7 +49,7 @@ impl HloSharding {
     metadata: Vec<OpMetadata>) -> Self
   {
     HloSharding {
-      tile_assignment: TileAssignment::new(),
+      tile_assignment: TileAssignment::default(),
       tuple_elements: Vec::new(),
       metadata: metadata,
       subgroup_types: Vec::new(),

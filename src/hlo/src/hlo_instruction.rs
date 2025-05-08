@@ -1677,6 +1677,11 @@ impl HloInstruction {
   pub fn clear_backend_config() {}
   pub fn copy_backend_config_from() {}
 
+    // Adds or overrides a single attribute in the HloInstruction.
+  pub fn set_frontend_attribute(&mut self, key: String, value: String) {
+    self.mutable_rare().frontend_attributes.set_attribute(key, value);
+  }
+
   pub fn set_frontend_attributes(&mut self, frontend_attributes: FrontendAttributes) {
     //if !self.has_rare() && frontend_attributes.map().is_empty() { return; }
     self.mutable_rare().frontend_attributes = frontend_attributes;

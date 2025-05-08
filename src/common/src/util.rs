@@ -1,7 +1,5 @@
-#![allow(dead_code)]
 
 use crate::blitz_data::PaddingConfig;
-
 pub type DimensionVector = Vec<i64>;
 
 pub fn nan_with_sign_and_payload<T>(_sign: bool, _nan_payload: u64) -> T {
@@ -22,6 +20,16 @@ pub fn product(xs: &Vec<i64>) -> i64 {
     result = result * i;
   }
   result
+}
+
+// Splits the lines of the original, replaces leading whitespace with the prefix
+// given by "indentation", and returns the string joined by newlines again. As a
+// side effect, any additional trailing whitespace is removed.
+//
+// Note: even different amounts of leading whitespace on different lines will be
+// uniformly replaced with "indentation".
+pub fn reindent(_original: &String, _indentation: &String) -> String {
+  "".to_string()
 }
 
 // Formats the container as a comma-separated string. StrAppend must support

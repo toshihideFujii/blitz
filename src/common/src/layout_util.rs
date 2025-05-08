@@ -261,7 +261,7 @@ impl LayoutUtil {
           }
           return Ok(());
         };
-        ShapeUtil::for_each_subshape_with_status(
+        let _ = ShapeUtil::for_each_subshape_with_status(
           &mut layout.physical_shape().as_ref().unwrap(),
           &mut shape_fn);
         if layout.index_primitive_type() != PrimitiveType::Invalid &&

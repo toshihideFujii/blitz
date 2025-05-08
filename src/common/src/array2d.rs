@@ -1,6 +1,6 @@
 use crate::util::log_2_ceiling;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Array2D<T> {
   values: Vec<Vec<T>>
 }

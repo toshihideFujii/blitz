@@ -1,9 +1,10 @@
 #![allow(dead_code)]
 
 use std::collections::HashSet;
-
 use crate::hlo_instruction::HloInstruction;
 
+// A Domain data structure captures all the information about a kDomain
+// bounded instruction set.
 pub struct Domain {
   pub reach_set: HashSet<HloInstruction>,
   pub instructions: Vec<HloInstruction>,

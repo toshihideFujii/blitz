@@ -87,12 +87,14 @@ impl ExecutionInput {
     &mut self.buffers
   }
 
-  pub fn mutable_buffer(&mut self, index: usize) -> &mut MaybeOwningDeviceMemory {
-    self.buffers.mutable_element(index)
+  pub fn mutable_buffer(&mut self, _index: usize) -> &mut MaybeOwningDeviceMemory {
+    //self.buffers.mutable_element(index)
+    unimplemented!()
   }
 
-  pub fn buffer(&self, index: usize) -> &MaybeOwningDeviceMemory {
-    self.buffers.element(index)
+  pub fn buffer(&self, _index: usize) -> &MaybeOwningDeviceMemory {
+    //self.buffers.element(index)
+    unimplemented!()
   }
 }
 

@@ -33,10 +33,10 @@ impl HloLivenessAnalysis {
   }
 
   // Returns true if output of 'instruction' at 'shape_index' is live.
-  pub fn is_live(&self, instruction: &HloInstruction, index: usize) -> bool {
+  pub fn is_live(&self, instruction: &HloInstruction, _index: usize) -> bool {
     let target = self.live_index_map.get(instruction);
     if target.is_some() {
-      target.as_ref().unwrap().element(index); // TODO
+      //target.as_ref().unwrap().element(index); // TODO
       return true;
     }
     false

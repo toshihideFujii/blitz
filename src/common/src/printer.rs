@@ -1,9 +1,8 @@
-#![allow(dead_code)]
-
 pub trait Printer {
   fn append(&mut self, _string: &String);
 }
 
+// A printer implementation that accumulates printed strings into `std::string`.
 pub struct StringPrinter {
   result: String
 }
@@ -24,8 +23,35 @@ impl Printer for StringPrinter {
   }
 }
 
-pub struct CordPrinter {}
+pub fn append_join<T>(printer: &mut dyn Printer, vec: &Vec<T>, separator: String)
+  where T: ToString
+{
+  if vec.is_empty() { return; }
+  let mut counter = 0;
+  for value in vec {
+    counter += 1;
+    printer.append(&value.to_string());
+    if counter == vec.len() { break; }
+    printer.append(&separator);
+  }
+}
 
-pub fn apeend_join(_printer: &mut dyn Printer, _separator: String) {}
+// Utility function that appends multiple elements to a Printer as if by calling
+// printer->Append(absl::StrCat(...)), but does it in-place.
+pub fn append_cat_ab(printer: &mut dyn Printer, a: i64, b: i64) {
+  printer.append(&a.to_string());
+  printer.append(&b.to_string());
+}
 
-pub fn appenf_cat() {}
+pub fn append_cat_abc(printer: &mut dyn Printer, a: i64, b: i64, c: u64) {
+  printer.append(&a.to_string());
+  printer.append(&b.to_string());
+  printer.append(&c.to_string());
+}
+
+pub fn append_cat_abcd(printer: &mut dyn Printer, a: i64, b: i64, c: u64, d: i64) {
+  printer.append(&a.to_string());
+  printer.append(&b.to_string());
+  printer.append(&c.to_string());
+  printer.append(&d.to_string());
+}

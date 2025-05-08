@@ -1,3 +1,4 @@
+pub mod analysis;
 pub mod evaluator;
 pub mod utils;
 pub mod buffer_value;

@@ -31,7 +31,7 @@ pub fn assign_device(device: i64) -> OpSharding {
 // If tile_shape is not evenly divisible by the number of devices in
 // tile_assignment, operations behave as if implicit padding had been inserted.
 // The value of this padding is undefined.
-pub fn tile(tile_shape: &Shape, tile_assignment: &Array<i64>) -> OpSharding {
+pub fn tile(tile_shape: &Shape, tile_assignment: &Array) -> OpSharding {
   let mut result = OpSharding::new();
   result.set_type(OpShardingType::Other);
   result.set_tile_shape(tile_shape.clone());

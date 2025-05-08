@@ -1,7 +1,5 @@
-#![allow(dead_code)]
 
-//use std::mem;
-use common::{array::Array, printer::{Printer, StringPrinter}, util::product};
+use common::{array::Array, array2d::Array2D, printer::{append_join, Printer, StringPrinter}, util::product};
 
 // Describes a TileAssignment with a device array generated from reshaping and
 // transposing an iota array, a.k.a. HloShardingV2. This is a more scalable
@@ -23,11 +21,22 @@ pub struct IotaTileAssignment {
 impl IotaTileAssignment {
 
   pub fn new_detail(
-    _dims: &Vec<i64>,
-    _reshape_dims: &Vec<i64>,
-    _transpose_perm: &Vec<i64>) -> Self
+    dims: &Vec<i64>,
+    reshape_dims: &Vec<i64>,
+    transpose_perm: &Vec<i64>) -> Self
   {
-    unimplemented!()
+    let mut instance = IotaTileAssignment {
+      ndims: dims.len() as i64,
+      reshape_ndims: reshape_dims.len() as i64,
+      dims: Vec::new(),
+      reshape_dims: Vec::new(),
+      transpose_perm: Vec::new(),
+      storage: Vec::new(),
+    };
+    instance.dims.clone_from(dims);
+    instance.reshape_dims.clone_from(reshape_dims);
+    instance.transpose_perm.clone_from(transpose_perm);
+    instance
   }
 
   pub fn new(ndims: i64, reshape_dims: i64) -> Self {
@@ -53,19 +62,18 @@ impl IotaTileAssignment {
       linear_index *= self.dims()[i];
       linear_index += index[i];
     }
-
-    let reshape_ndims = (self.reshape_ndims - 1) as usize;
+    let reshape_dims = self.reshape_dims();
+    let transpose_perm = self.transpose_perm();
     let mut reshape_index = vec![0; self.reshape_ndims as usize];
-    for i in reshape_ndims..0 {
-      let dim = self.transpose_perm()[i];
-      let dim_size = self.reshape_dims()[dim as usize];
+    for i in (0..self.reshape_ndims).rev() {
+      let dim = transpose_perm[i as usize];
+      let dim_size = reshape_dims[dim as usize];
       reshape_index[dim as usize] = linear_index % dim_size;
       linear_index /= dim_size;
     }
-
     let mut value = reshape_index[0];
     for i in 1..self.reshape_ndims {
-      value *= self.reshape_dims()[i as usize];
+      value *= reshape_dims[i as usize];
       value += reshape_index[i as usize];
     }
     value
@@ -92,24 +100,48 @@ impl IotaTileAssignment {
   }
 
   pub fn num_elements(&self) -> i64 {
-    unimplemented!()
+    if self.dims.is_empty() {
+      return 0;
+    }
+    let mut num_elements = 1;
+    for dim in self.dims() {
+      num_elements *= dim;
+    }
+    num_elements
   }
 
   pub fn transpose(&self, _perm: &Vec<i64>) -> Option<IotaTileAssignment> {
     None
   }
 
-  pub fn print(&self, _printer: &dyn Printer) {
-    unimplemented!()
+  pub fn print(&self, printer: &mut dyn Printer) {
+    printer.append(&"[".to_string());
+    append_join(printer, self.dims(), ",".to_string());
+    printer.append(&"]<=[".to_string());
+    append_join(printer, self.reshape_dims(), ",".to_string());
+    printer.append(&"]".to_string());
+    if self.reshape_dims.len() > 1 {
+      printer.append(&"T(".to_string());
+      append_join(printer, self.transpose_perm(), ",".to_string());
+      printer.append(&")".to_string());
+    }
   }
 
   pub fn to_string(&self) -> String {
-    unimplemented!()
+    let mut printer = StringPrinter::new();
+    self.print(&mut printer);
+    printer.to_string()
   }
 
   // Materializes array representation of IotaTileAssignment.
-  pub fn to_array(&self) -> &Array<i64> {
-    unimplemented!()
+  pub fn to_array(&self) -> Array {
+    let mut reshape_dims = vec![];
+    reshape_dims.clone_from(self.reshape_dims());
+    let mut array = Array::new(reshape_dims);
+    array.fill_iota(0);
+    //array.transpose_dimensions(self.transpose_perm());
+    //array.reshape(self.dims());
+    array
   }
 }
 
@@ -124,16 +156,53 @@ impl IotaTileAssignment {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TileAssignment {
   iota: Option<IotaTileAssignment>,
-  shared_array: Array<i64>,
-  array: Option<Array<i64>>
+  array: Option<Array>,
+  array_2d: Option<Array2D<i64>>
 }
 
 impl TileAssignment {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     TileAssignment {
       iota: None,
-      shared_array: Array::new_i64(vec![]),
-      array: None
+      array: Some(TileAssignment::replicated_array()),
+      array_2d: None
+    }
+  }
+
+  pub fn new_from_vec(dims: &Vec<i64>) -> Self {
+    TileAssignment {
+      iota: Some(IotaTileAssignment::create(dims)),
+      array: None,
+      array_2d: None
+    }
+  }
+
+  pub fn new_from_array(array: Array) -> Self {
+    TileAssignment {
+      iota: None,
+      array: Some(array),
+      array_2d: None
+    }
+  }
+
+  pub fn new_from_array_2d(array_2d: Array2D<i64>) -> Self {
+    TileAssignment {
+      iota: None, 
+      array: None,
+      array_2d: Some(array_2d)
+    }
+  }
+
+  pub fn new_from_device_id(device_id: i64) -> Self {
+    let array = Array::new_fill(vec![1], device_id);
+    TileAssignment::new_from_array(array)
+  }
+
+  pub fn new_from_iota(iota: IotaTileAssignment) -> Self {
+    TileAssignment {
+      iota: Some(iota),
+      array: None,
+      array_2d: None
     }
   }
 
@@ -171,19 +240,55 @@ impl TileAssignment {
 
   pub fn first(&self) -> i64 {
     if self.array.is_some() {
-      -1 // TODO
+      self.array.as_ref().unwrap().values()[0]
     } else {
       0
     }
   }
 
-  pub fn each() {}
+  #[allow(dead_code)]
+  fn value_at(&self, pos: &Vec<i64>) -> i64 {
+    if self.array.is_some() {
+      return self.array.as_ref().unwrap().value_at(pos);
+    } else {
+      assert!(self.iota.is_some());
+      return self.iota.as_ref().unwrap().value_at(pos);   
+    }
+  }
+
+  pub fn each<F>(&mut self, func: &mut F)
+    where F: FnMut(&Vec<i64>, &mut i64)
+  {
+    self.maybe_materializa_full_array();
+    self.array.as_mut().unwrap().each(func);
+  }
+
   pub fn each_status() {}
 
   // Returns a tile assignment reshaped to the given dimensions.
   // REQUIRES: new shape has the same number of elements.
-  pub fn reshape(&self, _new_dimensions: &Vec<i64>) -> Self {
-    unimplemented!()
+  pub fn reshape(&self, new_dimensions: &Vec<i64>) -> Self {
+    if self.iota.is_some() {
+      assert_eq!(TileAssignment::product(new_dimensions),
+        self.iota.as_ref().unwrap().num_elements());
+      let iota = IotaTileAssignment::new_detail(new_dimensions,
+          self.iota.as_ref().unwrap().reshape_dims(),
+          self.iota.as_ref().unwrap().transpose_perm());
+      return TileAssignment::new_from_iota(iota);
+    }
+    assert!(self.array.is_some());
+    let mut reshaped = self.array.as_ref().unwrap().clone();
+    reshaped.reshape(new_dimensions);
+    TileAssignment::new_from_array(reshaped)
+  }
+
+  fn product(dims: &Vec<i64>) -> i64 {
+    if dims.is_empty() { return 0; }
+    let mut product = 1;
+    for dim in dims {
+      product *= dim;
+    }
+    product
   }
 
   // Returns a tile assignment transposd using the given dimension permutations.
@@ -199,9 +304,9 @@ impl TileAssignment {
       self.iota.as_ref().unwrap().print(printer);
     } else {
       printer.append(&"devices=[".to_string());
-      //printer::apeend_join(printer, separator);
+      append_join(printer, self.array().dimensions(), ",".to_string());
       printer.append(&"]".to_string());
-      // TODO
+      //append_join(printer, self.array().values(), ",".to_string());
     }
   }
 
@@ -215,7 +320,12 @@ impl TileAssignment {
     if self.iota.is_some() {
       device < self.iota.as_ref().unwrap().num_elements()
     } else {
-      false // TODO
+      if self.array.is_some() {
+        for i in self.array.as_ref().unwrap().values() {
+          if device == *i { return true; }
+        }
+      }
+      return false;
     }
   }
 
@@ -226,18 +336,94 @@ impl TileAssignment {
 
   // Returns reference to the full array representation. If it holds iota
   // format, reference to a lazily materialized array is returned.
-  pub fn array(&self) -> &Array<i64> {
+  pub fn array(&self) -> &Array {
     self.array.as_ref().unwrap()
   }
 
-  // Similar to array() but returns the underlying shared_ptr to avoid deep
-  // copy.
-  pub fn shared_array(&self) -> &Array<i64> {
-    &self.shared_array
+  fn replicated_array() -> Array {
+    Array::new(vec![0])
   }
 
-  // Makes a deep copy of shared_array().
-  pub fn shared_array_clone(&self) -> &Array<i64> {
-    &self.shared_array
+  fn maybe_materializa_full_array(&mut self) {
+    if self.array.is_none() {
+      assert!(self.iota.is_some());
+      self.array = Some(self.iota.as_ref().unwrap().to_array());
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use  super::*;
+
+  fn to_vector_using_each(tile: &mut TileAssignment) -> Vec<i64> {
+    let mut result = vec![];
+    let mut func = |_index: &Vec<i64>, device: &mut i64| {
+      result.push(*device);
+    };
+    tile.each(&mut func);
+    result
+  }
+
+  #[test]
+  fn test_replicated() {
+    let tile = TileAssignment::default();
+    assert_eq!(tile.num_dimensions(), 1);
+    assert_eq!(tile.dim(0), 0);
+  }
+
+  #[test]
+  fn test_maximal() {
+    let mut tile = TileAssignment::new_from_device_id(5);
+    assert_eq!(tile.num_dimensions(), 1);
+    assert_eq!(tile.dim(0), 1);
+    assert_eq!(tile.value_at(&vec![0]), 5);
+    assert_eq!(tile.iota(), &None);
+    assert_eq!(tile.uses_device(5), true);
+    assert_eq!(tile.first(), 5);
+    assert_eq!(tile.uses_device(0), false);
+    assert_eq!(to_vector_using_each(&mut tile), vec![5]);
+  }
+
+  #[test]
+  fn test_trivial_iota_tile() {
+    let mut tile = TileAssignment::new_from_vec(&vec![4, 4, 2]);
+    assert_eq!(tile.to_string(), "devices=[4,4,2]<=[32]");
+
+    let tile2 = TileAssignment::new_from_vec(&vec![4, 4, 2]);
+    assert_eq!(&tile, &tile2);
+    assert_eq!(tile.num_dimensions(), 3);
+    assert_eq!(tile.dim(0), 4);
+    assert_eq!(tile.dim(1), 4);
+    assert_eq!(tile.dim(2), 2);
+    assert_eq!(tile.value_at(&vec![0, 0, 0]), 0);
+    assert_eq!(tile.value_at(&vec![3, 2, 1]), 29);
+    
+    assert_eq!(tile.uses_device(0), true);
+    assert_eq!(tile.uses_device(31), true);
+    assert_eq!(tile.uses_device(32), false);
+    assert_eq!(to_vector_using_each(&mut tile),
+      vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]);
+  }
+
+  #[test]
+  fn testreshape_trivial_iota_tile() {
+    let tile = TileAssignment::new_from_vec(&vec![4, 4, 2]);
+    let mut reshaped = tile.reshape(&vec![2, 8, 2]);
+    assert_ne!(tile, reshaped);
+    assert_eq!(reshaped, TileAssignment::new_from_vec(&vec![2, 8, 2]));
+    assert_eq!(reshaped.num_dimensions(), 3);
+    assert_eq!(reshaped.dim(0), 2);
+    assert_eq!(reshaped.dim(1), 8);
+    assert_eq!(reshaped.dim(2), 2);
+    assert_eq!(reshaped.value_at(&vec![0, 0, 0]), 0);
+    assert_eq!(reshaped.value_at(&vec![1, 3, 1]), 23);
+    assert_eq!(reshaped.uses_device(0), true);
+    assert_eq!(reshaped.uses_device(31), true);
+    assert_eq!(reshaped.uses_device(32), false);
+    assert_eq!(to_vector_using_each(&mut reshaped),
+      vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]);
   }
 }

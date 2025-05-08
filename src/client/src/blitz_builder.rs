@@ -600,7 +600,7 @@ impl BlitzBuilder {
   {
     let instr = self.lookup_mutable_instruction(op);
     let frontend_attrs = instr.mutable_frontend_attributes();
-    frontend_attrs.set_attribute(value);
+    frontend_attrs.set_attribute("".to_string(), value); // TODO
     Ok(())
   }
 

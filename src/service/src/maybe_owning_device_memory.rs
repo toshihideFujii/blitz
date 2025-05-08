@@ -3,7 +3,7 @@
 // MaybeOwningDeviceMemory represents either an owned or unowned device memory.
 // Like std::variant<se::OwningDeviceMemory, DeviceMemory>. When the object goes
 // output of scope, it will free the underlying memory if it owns it.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct MaybeOwningDeviceMemory {}
 
 impl MaybeOwningDeviceMemory {

@@ -2,7 +2,7 @@
 
 use std::{/*collections::HashMap,*/ hash::Hash};
 
-use crate::shape::Shape;
+use crate::{debug_options_flags::get_debug_options_from_flags, shape::Shape};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PrimitiveType {
@@ -165,7 +165,11 @@ impl FrontendAttributes {
     //&mut self.map
   //}
 
-  pub fn set_attribute(&mut self, _value: String) {
+  pub fn set_attribute(&mut self, _key: String, _value: String) {
+    unimplemented!()
+  }
+
+  pub fn has_attribute(&self, _key: String) -> bool {
     unimplemented!()
   }
 
@@ -457,6 +461,7 @@ impl PaddingConfig {
 
 // Describes the replica groups in a cross replica op (e.g., all-reduce and
 // all-to-all).
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReplicaGroup {
   // The ids of the replicas that belongs to the same group. The ordering of the
   // ids matters in some ops (e.g., all-to-all).
@@ -464,10 +469,16 @@ pub struct ReplicaGroup {
 }
 
 impl ReplicaGroup {
-  pub fn new() {}
+  pub fn new() -> Self {
+    ReplicaGroup { replica_ids: Vec::new() }
+  }
 
   pub fn replica_ids(&self) -> &Vec<i64> {
     &self.replica_ids
+  }
+
+  pub fn mutable_replica_ids(&mut self) -> &mut Vec<i64>{
+    &mut self.replica_ids
   }
 }
 
@@ -1927,17 +1938,15 @@ impl ExecutionProfile {
 
 // These settings control how Blitz compiles and/or runs code.  Not all settings
 // will have an effect on every platform.
-pub struct ExecutionOptions {
-  debug_options: Option<DebugOptions>
-}
+pub struct ExecutionOptions {}
 
 impl ExecutionOptions {
   pub fn new() -> Self {
-    ExecutionOptions { debug_options: None }
+    ExecutionOptions { }
   }
 
-  pub fn set_debug_options(&mut self, debug_options: DebugOptions) {
-    self.debug_options = Some(debug_options);
+  pub fn debug_options(&self) -> &'static DebugOptions {
+    get_debug_options_from_flags()
   }
 }
 

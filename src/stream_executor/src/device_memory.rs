@@ -12,7 +12,7 @@ use std::mem::size_of;
 // referenced directly, so use it with caution.
 //
 // Thread-compatible.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct DeviceMemoryBase {
   size: usize,
   payload: u64

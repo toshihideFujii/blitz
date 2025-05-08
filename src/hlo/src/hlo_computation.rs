@@ -160,7 +160,15 @@ impl HloComputation {
   pub fn deep_copy_instruction() {}
   pub fn deep_copy_instruction_with_custom_copier() {}
   pub fn compute_program_shape() {}
-  pub fn replace_with_new_instruction() {}
+
+  pub fn replace_with_new_instruction(
+    &self,
+    _old: &HloInstruction,
+    _new: &HloInstruction) -> Result<(), String>
+  {
+    unimplemented!()
+  }
+
   pub fn replace_with_entry_computation_parameter() {}
 
   pub fn replace_instruction(
@@ -189,7 +197,7 @@ impl HloComputation {
     unimplemented!()
   }
 
-  pub fn accept_rewrite_visitor(&self, _visitor: &dyn DfsHloRewriteVisitor) -> Result<(), String> {
+  pub fn accept_rewrite_visitor(&self, _visitor: &DfsHloRewriteVisitor) -> Result<(), String> {
     unimplemented!()
   }
 
