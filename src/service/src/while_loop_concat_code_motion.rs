@@ -68,7 +68,8 @@ impl WhileLoopConcatCodeMotion {
     execution_threads: &HashSet<String>) -> Result<bool, String>
   {
     let mut changed = false;
-    for comp in module.make_computation_post_order(execution_threads) {
+    for comp in
+      module.make_computation_post_order(execution_threads, false) {
       for hlo in comp.mutable_make_instruction_post_order() {
         if hlo.opcode() == HloOpcode::While {
           let loop_changed =

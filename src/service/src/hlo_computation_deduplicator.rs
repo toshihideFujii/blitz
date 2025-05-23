@@ -38,7 +38,8 @@ impl HloComputationDeduplicator {
     options.set_print_ids(false);
     options.set_canonicalize_computations(true);
 
-    for comp in module.make_computation_post_order(&execution_threads) {
+    for comp in
+      module.make_computation_post_order(&execution_threads, false) {
       if comp.is_entry_computation() || comp.instruction_count() > 128 ||
         self.contains_large_constants(comp) || comp.is_collective_called_computation()
       {

@@ -4,17 +4,16 @@ use std::collections::{HashMap, HashSet};
 
 use common::shape_tree::ShapeTree;
 use hlo::{hlo_instruction::HloInstruction, hlo_module::HloModule};
-
-use crate::call_graph::CallGraph;
+use service::call_graph::CallGraph;
 
 // Analysis which identifies all live {HloInstruction, shapeIndex} pairs in
 // an HLO module.
-pub struct HloLivenessAnalysis {
-  call_graph: CallGraph,
+pub struct HloLivenessAnalysis<'module> {
+  call_graph: CallGraph<'module>,
   live_index_map: HashMap<HloInstruction, ShapeTree<bool>>
 }
 
-impl HloLivenessAnalysis {
+impl<'module> HloLivenessAnalysis<'module> {
   pub fn new(module: &HloModule) -> Self {
     HloLivenessAnalysis {
       call_graph: CallGraph::build(module, &HashSet::new()),

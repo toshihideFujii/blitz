@@ -47,7 +47,7 @@ impl HloTrivialScheduler {
   {
     let mut schedule = HloSchedule::new();
     for computation in
-      module.make_computation_post_order(&execution_threads)
+      module.make_computation_post_order(&execution_threads, false)
     {
       if !computation.is_fusion_computation() {
         // TODO

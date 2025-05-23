@@ -11,16 +11,27 @@ use hlo::{
 };
 
 // analysis which allocates HloBuffers to HloValues.
-pub struct HloAliasAnalysis {
-  module: HloModule,
+pub struct HloAliasAnalysis<'module> {
+  module: &'module HloModule,
   live_out_buffers: HashSet<HloBuffer>,
-  dataflow_analysis: HloDataflowAnalysis,
+  dataflow_analysis: HloDataflowAnalysis<'module>,
   value_to_buffer: HashMap<HloValue, HloBuffer>,
   buffers: Vec<HloBuffer>,
 }
 
-impl HloAliasAnalysis {
-  pub fn new(_module: HloModule) {}
+impl<'module> HloAliasAnalysis<'module> {
+  pub fn new(_module: HloModule) -> Self {
+    /*
+    HloAliasAnalysis {
+      module: module,
+      live_out_buffers: HashSet::new(),
+      dataflow_analysis: HloDataflowAnalysis::new(module, false, false, HashSet::new()),
+      value_to_buffer: HashMap::new(),
+      buffers: Vec::new(),
+    }
+    */
+    unimplemented!()
+  }
 
   // The callgraph of the given HloModule must be flattened prior to running
   // the analysis.

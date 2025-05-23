@@ -207,7 +207,10 @@ impl HloModule {
   }
 
   pub fn make_computation_post_order(
-    &self, _execution_threads: &HashSet<String>) -> Vec<&mut HloComputation> {
+    &self,
+     _execution_threads: &HashSet<String>,
+     _dfs_post_order: bool) -> Vec<&mut HloComputation>
+  {
     unimplemented!()
   }
 

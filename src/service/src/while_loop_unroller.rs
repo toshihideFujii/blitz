@@ -87,7 +87,8 @@ impl WhileLoopUnroller {
 
     // Processing the while loops in the reverse of topological order. If the body
     // of while loop A calls while loop B, B comes before A.
-    for _comp in module.make_computation_post_order(execution_threads) {
+    for _comp in
+      module.make_computation_post_order(execution_threads, false) {
       // TODO
     }
 

@@ -180,21 +180,21 @@ impl ShapeUtil {
     printer.append(&"[".to_string());
     let print_one = |printer: &mut dyn Printer, i| {
       if shape.is_dynamic_dimension(i) {
-        if shape.dimensions(i) != Shape::UNBOUNDED_SIZE {
+        if shape.dimensions(i as usize) != Shape::UNBOUNDED_SIZE {
           let mut str = "<=".to_string();
-          str.push_str(&shape.dimensions(i).to_string());
+          str.push_str(&shape.dimensions(i as usize).to_string());
           printer.append(&str);
         } else {
           printer.append(&"?".to_string());
         }
       } else {
-        printer.append(&shape.dimensions(i).to_string())
+        printer.append(&shape.dimensions(i as usize).to_string())
       }
     };
     print_one(printer, 0);
     for i in 1..shape.dimensions_vec().len() {
       printer.append(&",".to_string());
-      print_one(printer, i);
+      print_one(printer, i as i64);
     }
     printer.append(&"]".to_string());
   }
@@ -577,7 +577,7 @@ impl ShapeUtil {
   pub fn copy_dynamic_dimensions(to: &mut Shape, from: &Shape) {
     assert_eq!(to.rank(), from.rank());
     for i in 0..from.rank() {
-      to.set_dynamic_dimension(i, from.is_dynamic_dimension(i));
+      to.set_dynamic_dimension(i, from.is_dynamic_dimension(i as i64));
     }
     let result = ShapeUtil::validate_shape(to);
     assert!(result.is_ok());

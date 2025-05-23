@@ -12,12 +12,12 @@ pub enum VisitState {
 }
 
 // Collection of utilities for handling HloModuleGroups.
-pub struct HloModuleGroupUtil {
-  metadata: HloModuleGroupMetadata
+pub struct HloModuleGroupUtil<'module> {
+  metadata: HloModuleGroupMetadata<'module>
 }
 
-impl HloModuleGroupUtil {
-  pub fn new(metadata: HloModuleGroupMetadata) -> Self {
+impl<'module> HloModuleGroupUtil<'module> {
+  pub fn new(metadata: HloModuleGroupMetadata<'module>) -> Self {
     HloModuleGroupUtil { metadata: metadata }
   }
 

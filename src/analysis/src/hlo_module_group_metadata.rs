@@ -49,7 +49,7 @@ pub struct Channel {
 
 // Class for bookkeeping the information on the given modules, in particular
 // on the interaction between computations.
-pub struct HloModuleGroupMetadata {
+pub struct HloModuleGroupMetadata<'module> {
   companion_sets: Vec<Vec<HloInstruction>>,
   companion_set_index: HashMap<HloInstruction, i64>,
   tracked_instructions: HashMap<HloComputation, TrackedInstruction>,
@@ -59,10 +59,10 @@ pub struct HloModuleGroupMetadata {
   all_reduce_map: HashMap<i64, Vec<HloInstruction>>,
   max_channel_id: i64,
   modules: Vec<HloModule>,
-  alias_analysis: HashMap<HloModule, HloAliasAnalysis>
+  alias_analysis: HashMap<HloModule, HloAliasAnalysis<'module>>
 }
 
-impl HloModuleGroupMetadata {
+impl<'module> HloModuleGroupMetadata<'module> {
   // Build and return the metadata for the given modules.
   pub fn build(_modules: Vec<HloModule>) {}
 

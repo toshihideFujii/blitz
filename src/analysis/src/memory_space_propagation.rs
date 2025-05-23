@@ -9,11 +9,11 @@ use crate::hlo_dataflow_analysis::HloDataflowAnalysis;
 
 // This is a legalization pass that propagates the memory space in the
 // layout to the fusion computations.
-pub struct MemorySpacePropagation {
-  dataflow_analysis: Option<HloDataflowAnalysis>
+pub struct MemorySpacePropagation<'module> {
+  dataflow_analysis: Option<HloDataflowAnalysis<'module>>
 }
 
-impl MemorySpacePropagation {
+impl<'module> MemorySpacePropagation<'module> {
   pub fn new() -> Self {
     MemorySpacePropagation {
       dataflow_analysis: None

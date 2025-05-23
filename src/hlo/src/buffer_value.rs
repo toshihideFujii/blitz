@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BufferValue {
   id: i64,
   is_array: bool,

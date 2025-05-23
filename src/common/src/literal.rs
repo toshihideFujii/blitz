@@ -824,7 +824,7 @@ impl<T> LiteralBase<T> where T: Clone + Default + PartialEq + 'static {
     let mut f = |subshape: &mut Shape, _index: &Vec<i64>| {
       if !subshape.is_array() { return; }
       for i in 0..subshape.rank() {
-        if !subshape.is_dynamic_dimension(i) { continue; }
+        if !subshape.is_dynamic_dimension(i as i64) { continue; }
         subshape.set_dynamic_dimension(i, false);
         //subshape.set_dimensions(i, 
           //self.get_dynamic_size(i, index));
@@ -856,7 +856,7 @@ impl<T> LiteralBase<T> where T: Clone + Default + PartialEq + 'static {
     let mut f = |subshape: &Shape, _index: &Vec<i64>| {
       if !subshape.is_array() { return; }
       for i in 0..subshape.rank() {
-        if bounded_shape.is_dynamic_dimension(i) {
+        if bounded_shape.is_dynamic_dimension(i as i64) {
           result.set_dynamic_size(
             i,
             &vec![],
@@ -988,7 +988,7 @@ impl<T> LiteralBase<T> where T: Clone + Default + PartialEq + 'static {
     let mut new_literal = Literal::new_from_shape(&permuted_shape);
     if self.shape().is_dynamic() {
       for i in 0..self.shape().rank() {
-        if self.shape().is_dynamic_dimension(i) {
+        if self.shape().is_dynamic_dimension(i as i64) {
           new_literal.set_dynamic_size(
             inverse_permutation[i] as usize,
             &vec![],
@@ -1049,7 +1049,7 @@ impl<T> LiteralBase<T> where T: Clone + Default + PartialEq + 'static {
     };
     result_literal.populate(f);
     for dnum in 0..src_literal.shape().rank() {
-      if src_literal.shape().is_dynamic_dimension(dnum) {
+      if src_literal.shape().is_dynamic_dimension(dnum as i64) {
         let mut dynamic_size =
           src_literal.get_dynamic_size(dnum, &vec![])
           - start_indices[dnum];
@@ -1883,7 +1883,7 @@ impl<T> Literal<T> where T: Clone + Default + PartialEq + 'static {
 
     for dim in 0..values.num_dimensions() {
       let mut shape_size = self.shape().dimensions(dim);
-      if self.shape().is_dynamic_dimension(dim) {
+      if self.shape().is_dynamic_dimension(dim as i64) {
         shape_size = self.get_dynamic_size(dim, &vec![]);
       }
       assert_eq!(values.dim(dim), shape_size as usize);
@@ -2001,7 +2001,7 @@ impl<T> Piece<T> where T: Clone + Default {
 
   pub fn get_dynamic_size(&self, dim_index: usize) -> i64 {
     assert!(LayoutUtil::is_dense_array(self.subshape()));
-    if !self.subshape.is_dynamic_dimension(dim_index) {
+    if !self.subshape.is_dynamic_dimension(dim_index as i64) {
       return self.subshape.dimensions(dim_index);
     }
     self.dynamic_size_buffer()[dim_index] as i64
@@ -2009,7 +2009,7 @@ impl<T> Piece<T> where T: Clone + Default {
 
   pub fn set_dynamic_size(&mut self, dim_index: usize, size: i64) {
     assert!(LayoutUtil::is_dense_array(self.subshape()));
-    assert!(self.subshape.is_dynamic_dimension(dim_index));
+    assert!(self.subshape.is_dynamic_dimension(dim_index as i64));
     self.mutable_dynamic_size_buffer()[dim_index] = size;
   }
 

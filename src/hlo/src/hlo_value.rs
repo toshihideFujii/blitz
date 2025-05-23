@@ -53,7 +53,7 @@ impl Ord for HloPosition {
 }
 
 // Defines a single use of an HLO value.
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloUse {
   pub instruction: HloInstruction,
   pub operand_number: i64,
@@ -61,13 +61,24 @@ pub struct HloUse {
 }
 
 impl HloUse {
-  pub fn new() {}
+  pub fn new(
+    instruction: HloInstruction,
+    operand_number: i64,
+    operand_index: Vec<i64>) -> Self
+  {
+    HloUse {
+      instruction: instruction,
+      operand_number: operand_number,
+      operand_index_vec: operand_index
+    }
+  }
+
   pub fn to_string(&self) -> String {
     unimplemented!()
   }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloValue {
   buffer_value: BufferValue,
   positions: Vec<HloPosition>,
@@ -77,7 +88,7 @@ pub struct HloValue {
 }
 
 impl HloValue {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     HloValue {
       buffer_value: BufferValue::new(),
       positions: Vec::new(),
@@ -85,6 +96,29 @@ impl HloValue {
       is_phi: false,
       live_out_of_module: false
     }
+  }
+
+  // Construct an HloValue defined by 'instruction' at shape index 'index'. If
+  // is_phi is true, then this value is a phi value, for example, at the
+  // parameter of a while body computation. Phi values are only used in the SSA
+  // dataflow analysis (HloDataflowAnalysis::ssa_form_ is true).
+  pub fn new(
+    _id: i64,
+    _instruction: &HloInstruction,
+    _index: &Vec<i64>,
+    _is_phi: bool) -> Self
+  {
+    /*
+    let instance =HloValue {
+      buffer_value: BufferValue::new(),
+      positions: Vec::new(),
+      uses: Vec::new(),
+      is_phi: is_phi,
+      live_out_of_module: false
+    };
+    instance
+    */
+    unimplemented!()
   }
 
   // Predicate comparing HloValues by increasing id, for std::sort.
@@ -212,7 +246,7 @@ impl Ord for HloValue {
 
 // A class representing the possible set of HloValues at a particular point
 // (shape index in the output of an instruction) in the Blitz graph.
-#[derive(Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct HloValueSet {
   values: Vec<HloValue>
 }
@@ -295,7 +329,7 @@ impl HloValueSet {
 // an HLO instruction.
 #[derive(Clone, PartialEq)]
 pub struct InstructionValueSet {
-  shape_tree: ShapeTree<HloValueSet>
+  pub shape_tree: ShapeTree<HloValueSet>
 }
 
 impl InstructionValueSet {
@@ -313,11 +347,11 @@ impl InstructionValueSet {
     }
     let mut changed = false;
     for pair in self.mutable_nodes() {
-      let index = pair.0;
+      let index = vec![pair.0 as i64];
       let value_set = &mut pair.1;
       let mut input_value_sets = Vec::new();
       for input in &inputs {
-        input_value_sets.push(input.element(index).clone());
+        input_value_sets.push(input.element(&index).clone());
       }
       changed |= value_set.assign_union_of(input_value_sets);
     }
@@ -337,12 +371,12 @@ impl InstructionValueSet {
     self.shape_tree.shape()
   }
 
-  pub fn element(&self, _index: usize) -> &HloValueSet {
+  pub fn element(&self, _index: &Vec<i64>) -> &HloValueSet {
     //self.shape_tree.element(index)
     unimplemented!()
   }
 
-  pub fn mutable_element(&mut self, _index: usize) -> &mut HloValueSet {
+  pub fn mutable_element(&mut self, _index: &Vec<i64>) -> &mut HloValueSet {
     //self.shape_tree.mutable_element(index)
     unimplemented!()
   }

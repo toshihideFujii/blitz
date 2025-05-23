@@ -82,7 +82,8 @@ impl HloDCE {
     println!("{:?}", module.to_string());
 
     // Run DCE on each computation.
-    for computation in module.make_computation_post_order(&execution_threads) {
+    for computation in
+      module.make_computation_post_order(&execution_threads, false) {
       changed |= self.run_on_computation(computation, self.remove_cross_partition_collective_ops)
     }
 
@@ -118,7 +119,8 @@ impl HloDCE {
 
     // Account for all threads' caller when counting a sub computation's live
     // call count.
-    for computation in module.make_computation_post_order(&execution_threads) {
+    for computation in
+      module.make_computation_post_order(&execution_threads,false) {
       for instruction in computation.instructions() {
         for subcomp in instruction.called_computations() {
           live_computation_call_count.insert(subcomp, count);
@@ -128,7 +130,8 @@ impl HloDCE {
     }
 
     // Find dead computations.
-    for computation in module.make_computation_post_order(&execution_threads) {
+    for computation in
+      module.make_computation_post_order(&execution_threads, false) {
       // Finds all 'top-level' dead computations not called by any instructions.
       // contains(comp) == true and live_computaiton_call_count[comp] = 0 also
       // inplies that computation is dead, but is nested in other dead computations.

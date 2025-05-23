@@ -13,6 +13,7 @@ edition = "2021"
 
 [workspace]
 members = [
+  "src/analysis",
   "src/client",
   "src/common",
   "src/ffi",
@@ -24,6 +25,7 @@ members = [
 ]
 
 [workspace.dependencies]
+analysis = { path = "src/analysis" }
 client = { path = "src/client" }
 common = { path = "src/common" }
 ffi = { path = "src/ffi" }

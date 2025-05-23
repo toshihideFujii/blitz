@@ -3,10 +3,13 @@
 use std::collections::HashMap;
 
 use hlo::{
-  hlo_computation::HloComputation, hlo_instruction::HloInstruction, hlo_module::HloModule, hlo_opcode::HloOpcode, hlo_reachability::HloReachabilityMap, hlo_schdule::{HloInstructionSequence, HloSchedule}, hlo_value::{HloUse, HloValue}
+  hlo_computation::HloComputation, hlo_instruction::HloInstruction, hlo_module::HloModule,
+  hlo_opcode::HloOpcode, hlo_reachability::HloReachabilityMap,
+  hlo_schdule::{HloInstructionSequence, HloSchedule}, hlo_value::{HloUse, HloValue}
 };
 
-use crate::{call_graph::CallGraph, hlo_dataflow_analysis::HloDataflowAnalysis};
+use service::call_graph::CallGraph;
+use crate::hlo_dataflow_analysis::HloDataflowAnalysis;
 
 #[derive(Clone, PartialEq)]
 pub enum ExecutionConstraint {
@@ -20,12 +23,12 @@ pub enum ExecutionConstraint {
 }
 
 // Base class for describing a partial ordering of HLO instructions.
-pub struct HloOrdering {
+pub struct HloOrdering<'module> {
   module: HloModule,
-  call_graph: CallGraph,
+  call_graph: CallGraph<'module>,
 }
 
-impl HloOrdering {
+impl<'module> HloOrdering<'module> {
   pub fn new() {}
 
   // Return the execution constraint between a and b.
@@ -399,12 +402,12 @@ impl HloOrdering {
 
 // Base class for partial orderings implemented by a map of predecessors for
 // each instruction.
-pub struct PredecessorHloOrdering {
-  ordering: HloOrdering,
+pub struct PredecessorHloOrdering<'module> {
+  ordering: HloOrdering<'module>,
   predecessors: HashMap<HloComputation, HloReachabilityMap>,
 }
 
-impl PredecessorHloOrdering {
+impl<'module> PredecessorHloOrdering<'module> {
   pub fn new(_module: HloModule) -> Self {
    // PredecessorHloOrdering { ordering: HloOrdering:: }
    unimplemented!()
@@ -433,23 +436,23 @@ impl PredecessorHloOrdering {
 }
 
 // An HLO ordering based on data dependencies in the HLO graph.
-pub struct DependencyHloOrdering {
-  ordering: PredecessorHloOrdering
+pub struct DependencyHloOrdering<'module> {
+  ordering: PredecessorHloOrdering<'module>
 }
 
-impl DependencyHloOrdering {
+impl<'module> DependencyHloOrdering<'module> {
   pub fn new() {}
   pub fn to_string() {}
 }
 
 // An HLO ordering based om a total order of instructions in each computation.
-pub struct SequentialHloOrdering {
-  ordering: HloOrdering,
+pub struct SequentialHloOrdering<'module> {
+  ordering: HloOrdering<'module>,
   schedule: HloSchedule,
   order_position: HashMap<HloInstruction, i64>,
 }
 
-impl SequentialHloOrdering {
+impl<'module> SequentialHloOrdering<'module> {
   pub fn new() {}
 
   pub fn sequential_order(

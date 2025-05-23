@@ -81,6 +81,7 @@ pub enum HloOpcode {
   PartitionId,
   PopulationCount,
   Power,
+  RaggedAllToAll,
   Real,
   Recv,
   RecvDone,
@@ -124,6 +125,7 @@ pub enum HloOpcode {
   Xor,
 }
 
+// Returns a string representation of the opcode.
 pub fn hlo_opcode_string(opcode: &HloOpcode) -> String {
   match opcode {
     HloOpcode::Abs => "abs".to_string(),
@@ -147,7 +149,7 @@ pub fn hlo_opcode_string(opcode: &HloOpcode) -> String {
     HloOpcode::BatchNormTraining => "batch-norm-training".to_string(),
     HloOpcode::Bitcast => "bitcast".to_string(),
     HloOpcode::BitcastConvert => "bitcast-convert".to_string(),
-    HloOpcode::Broadcast => "broadcsat".to_string(),
+    HloOpcode::Broadcast => "broadcast".to_string(),
     HloOpcode::Call => "call".to_string(),
     HloOpcode::Cbrt => "cbrt".to_string(),
     HloOpcode::Ceil => "ceil".to_string(),
@@ -205,6 +207,7 @@ pub fn hlo_opcode_string(opcode: &HloOpcode) -> String {
     HloOpcode::PartitionId => "partition-id".to_string(),
     HloOpcode::PopulationCount => "pocnt".to_string(),
     HloOpcode::Power => "power".to_string(),
+    HloOpcode::RaggedAllToAll => "ragged-all-to-all".to_string(),
     HloOpcode::Real => "real".to_string(),
     HloOpcode::Recv => "recv".to_string(),
     HloOpcode::RecvDone => "recv-done".to_string(),
@@ -249,7 +252,254 @@ pub fn hlo_opcode_string(opcode: &HloOpcode) -> String {
   }
 }
 
-pub fn string_to_hlo_opcode() {}
+// Retrieves the opcode enum by name if the opcode exists.
+pub fn string_to_hlo_opcode(name: &String) -> Result<HloOpcode, String> {
+  if name == "abs" {
+    return Ok(HloOpcode::Abs);
+  } else if name == "add" {
+    return Ok(HloOpcode::Add);
+  } else if name == "add-dependency" {
+    return Ok(HloOpcode::AddDependency);
+  } else if name == "after-all" {
+    return Ok(HloOpcode::AfterAll);
+  } else if name == "all-gather" {
+    return Ok(HloOpcode::AllGather);
+  } else if name == "all-gather-done" {
+    return Ok(HloOpcode::AllGatherDone);
+  } else if name == "all-gather-start" {
+    return Ok(HloOpcode::AllGatherStart);
+  } else if name == "all-reduce" {
+    return Ok(HloOpcode::AllReduce);
+  } else if name == "all-reduce-done" {
+    return Ok(HloOpcode::AllReduceDone);
+  } else if name == "all-reduce-start" {
+    return Ok(HloOpcode::AllReduceStart);
+  } else if name == "all-to-all" {
+    return Ok(HloOpcode::AllToAll);
+  } else if name == "and" {
+    return Ok(HloOpcode::And);
+  } else if name == "async-done" {
+    return Ok(HloOpcode::AsyncDone);
+  } else if name == "async-start" {
+    return Ok(HloOpcode::AsyncStart);
+  } else if name == "async-update" {
+    return Ok(HloOpcode::AsyncUpdate);
+  } else if name == "atan2" {
+    return Ok(HloOpcode::Atan2);
+  } else if name == "batch-norm-grad" {
+    return Ok(HloOpcode::BatchNormGrad);
+  } else if name == "batch-norm-inference" {
+    return Ok(HloOpcode::BatchNormInference);
+  } else if name == "batch-norm-training" {
+    return Ok(HloOpcode::BatchNormTraining);
+  } else if name == "bitcast" {
+    return Ok(HloOpcode::Bitcast);
+  } else if name == "bitcast-convert" {
+    return Ok(HloOpcode::BitcastConvert);
+  } else if name == "broadcast" {
+    return Ok(HloOpcode::Broadcast);
+  } else if name == "call" {
+    return Ok(HloOpcode::Call);
+  } else if name == "cbrt" {
+    return Ok(HloOpcode::Cbrt);
+  } else if name == "ceil" {
+    return Ok(HloOpcode::Ceil);
+  } else if name == "cholsky" {
+    return Ok(HloOpcode::Cholsky);
+  } else if name == "clamp" {
+    return Ok(HloOpcode::Clamp);
+  } else if name == "count-leading-zeros" {
+    return Ok(HloOpcode::Clz);
+  } else if name == "collective-permute" {
+    return Ok(HloOpcode::CollectivePermute);
+  } else if name == "collective-permute-done" {
+    return Ok(HloOpcode::CollectivePermuteDone);
+  } else if name == "collective-permute-start" {
+    return Ok(HloOpcode::CollectivePermuteStart);
+  } else if name == "compare" {
+    return Ok(HloOpcode::Compare);
+  } else if name == "complex" {
+    return Ok(HloOpcode::Complex);
+  } else if name == "concatenate" {
+    return Ok(HloOpcode::Concatenate);
+  } else if name == "conditional" {
+    return Ok(HloOpcode::Conditional);
+  } else if name == "constant" {
+    return Ok(HloOpcode::Constant);
+  } else if name == "convert" {
+    return Ok(HloOpcode::Convert);
+  } else if name == "convolution" {
+    return Ok(HloOpcode::Convolution);
+  } else if name == "copy" {
+    return Ok(HloOpcode::Copy);
+  } else if name == "copy-done" {
+    return Ok(HloOpcode::CopyDone);
+  } else if name == "copy-start" {
+    return Ok(HloOpcode::CopyStart);
+  } else if name == "cos" {
+    return Ok(HloOpcode::Cos);
+  } else if name == "custom-call" {
+    return Ok(HloOpcode::CustomCall);
+  } else if name == "divide" {
+    return Ok(HloOpcode::Divide);
+  } else if name == "domain" {
+    return Ok(HloOpcode::Domain);
+  } else if name == "dot" {
+    return Ok(HloOpcode::Dot);
+  } else if name == "dynamic-reshape" {
+    return Ok(HloOpcode::DynamicReshape);
+  } else if name == "dynamic-slice" {
+    return Ok(HloOpcode::DynamicSlice);
+  } else if name == "dynamic-update-slice" {
+    return Ok(HloOpcode::DynamicUpdateSlice);
+  } else if name == "erf" {
+    return Ok(HloOpcode::Erf);
+  } else if name == "exponential" {
+    return Ok(HloOpcode::Exp);
+  } else if name == "exponential-minus-one" {
+    return Ok(HloOpcode::Expm1);
+  } else if name == "fft" {
+    return Ok(HloOpcode::Fft);
+  } else if name == "floor" {
+    return Ok(HloOpcode::Floor);
+  } else if name == "fusion" {
+    return Ok(HloOpcode::Fusion);
+  } else if name == "gather" {
+    return Ok(HloOpcode::Gather);
+  } else if name == "get-dimension-size" {
+    return Ok(HloOpcode::GetDimensionSize);
+  } else if name == "get-tuple-element" {
+    return Ok(HloOpcode::GetTupleElement);
+  } else if name == "imag" {
+    return Ok(HloOpcode::Imag);
+  } else if name == "infeed" {
+    return Ok(HloOpcode::Infeed);
+  } else if name == "iota" {
+    return Ok(HloOpcode::Iota);
+  } else if name == "is-finite" {
+    return Ok(HloOpcode::IsFinite);
+  } else if name == "log" {
+    return Ok(HloOpcode::Log);
+  } else if name == "log-plus-one" {
+    return Ok(HloOpcode::Log1p);
+  } else if name == "logistic" {
+    return Ok(HloOpcode::Logistic);
+  } else if name == "map" {
+    return Ok(HloOpcode::Map);
+  } else if name == "maximum" {
+    return Ok(HloOpcode::Maximum);
+  } else if name == "minimum" {
+    return Ok(HloOpcode::Minimum);
+  } else if name == "multiply" {
+    return Ok(HloOpcode::Multiply);
+  } else if name == "negate" {
+    return Ok(HloOpcode::Negate);
+  } else if name == "not" {
+    return Ok(HloOpcode::Not);
+  } else if name == "opt-barrier" {
+    return Ok(HloOpcode::OptimizationBarrier);
+  } else if name == "or" {
+    return Ok(HloOpcode::Or);
+  } else if name == "outfeed" {
+    return Ok(HloOpcode::Outfeed);
+  } else if name == "pad" {
+    return Ok(HloOpcode::Pad);
+  } else if name == "parameter" {
+    return Ok(HloOpcode::Parameter);
+  } else if name == "partition-id" {
+    return Ok(HloOpcode::PartitionId);
+  } else if name == "pocnt" {
+    return Ok(HloOpcode::PopulationCount);
+  } else if name == "power" {
+    return Ok(HloOpcode::Power);
+  } else if name == "ragged-all-to-all" {
+    return Ok(HloOpcode::RaggedAllToAll);
+  } else if name == "real" {
+    return Ok(HloOpcode::Real);
+  } else if name == "recv" {
+    return Ok(HloOpcode::Recv);
+  } else if name == "recv-done" {
+    return Ok(HloOpcode::RecvDone);
+  } else if name == "reduce" {
+    return Ok(HloOpcode::Reduce);
+  } else if name == "reduce-precision" {
+    return Ok(HloOpcode::ReducePrecision);
+  } else if name == "reduce-scatter" {
+    return Ok(HloOpcode::ReduceScatter);
+  } else if name == "reduce-window" {
+    return Ok(HloOpcode::ReduceWindow);
+  } else if name == "remainder" {
+    return Ok(HloOpcode::Remainder);
+  } else if name == "replica-id" {
+    return Ok(HloOpcode::ReplicaId);
+  } else if name == "reshape" {
+    return Ok(HloOpcode::Reshape);
+  } else if name == "reverse" {
+    return Ok(HloOpcode::Reverse);
+  } else if name == "rng" {
+    return Ok(HloOpcode::Rng);
+  } else if name == "rng-bit-generator" {
+    return Ok(HloOpcode::RngBitGenerator);
+  } else if name == "rng-get-and-update-state" {
+    return Ok(HloOpcode::RngGetAndUpdateState);
+  } else if name == "round-nearest-afz" {
+    return Ok(HloOpcode::RoundNearestAfz);
+  } else if name == "round-nearest-even" {
+    return Ok(HloOpcode::RoundNearestEven);
+  } else if name == "rsqrt" {
+    return Ok(HloOpcode::Rsqrt);
+  } else if name == "scatter" {
+    return Ok(HloOpcode::Scatter);
+  } else if name == "select" {
+    return Ok(HloOpcode::Select);
+  } else if name == "select-and-scatter" {
+    return Ok(HloOpcode::SelectAndScatter);
+  } else if name == "send" {
+    return Ok(HloOpcode::Send);
+  } else if name == "send-done" {
+    return Ok(HloOpcode::SendDone);
+  } else if name == "set-dimension-size" {
+    return Ok(HloOpcode::SetDimensionSize);
+  } else if name == "shift-left" {
+    return Ok(HloOpcode::ShiftLeft);
+  } else if name == "shift-right-arithmetic" {
+    return Ok(HloOpcode::ShiftRightArithmetic);
+  } else if name == "shift-right-logical" {
+    return Ok(HloOpcode::ShiftRightLogical);
+  } else if name == "sign" {
+    return Ok(HloOpcode::Sign);
+  } else if name == "sin" {
+    return Ok(HloOpcode::Sin);
+  } else if name == "slice" {
+    return Ok(HloOpcode::Slice);
+  } else if name == "sort" {
+    return Ok(HloOpcode::Sort);
+  } else if name == "stochastic-convert" {
+    return Ok(HloOpcode::StochasticConvert);
+  } else if name == "subtract" {
+    return Ok(HloOpcode::Subtract);
+  } else if name == "tan" {
+    return Ok(HloOpcode::Tan);
+  } else if name == "tanh" {
+    return Ok(HloOpcode::Tanh);
+  } else if name == "topk" {
+    return Ok(HloOpcode::TopK);
+  } else if name == "transpose" {
+    return Ok(HloOpcode::Transpose);
+  } else if name == "triangular-solve" {
+    return Ok(HloOpcode::TriangularSolve);
+  } else if name == "tuple" {
+    return Ok(HloOpcode::Tuple);
+  } else if name == "while" {
+    return Ok(HloOpcode::While);
+  } else if name == "xor" {
+    return Ok(HloOpcode::Xor);
+  }
+
+  let mut err_msg = "Unknown opcocde: ".to_string();
+  err_msg.push_str(&name);
+  Err(err_msg)
+}
 
 pub fn hlo_opcode_is_comparison(opcode: &HloOpcode) -> bool {
   *opcode == HloOpcode::Compare
@@ -286,13 +536,19 @@ pub fn hlo_opcode_is_variadic(opcode: &HloOpcode) -> bool {
   }
 }
 
-pub fn hlo_opcode_arity() {}
+// Returns the arity of opcode or nullopt for variadic opcodes.
+pub fn hlo_opcode_arity(_opcode: &HloOpcode) -> Option<i8> {
+  unimplemented!()
+}
 
+// Returns true for kAsyncStart, kAsyncUpdate, kAsyncDone.
 pub fn hlo_opcode_is_async(opcode: &HloOpcode) -> bool {
-  *opcode == HloOpcode::AsyncStart || *opcode == HloOpcode::AsyncUpdate ||
+  *opcode == HloOpcode::AsyncStart ||
+  *opcode == HloOpcode::AsyncUpdate ||
   *opcode == HloOpcode::AsyncDone
 }
 
+// True if the op takes two arguments and order doesn't matter.
 pub fn hlo_opcode_is_binary_commutative(opcode: &HloOpcode) -> bool {
   match opcode {
     HloOpcode::Add => true,
@@ -305,6 +561,17 @@ pub fn hlo_opcode_is_binary_commutative(opcode: &HloOpcode) -> bool {
   }
 }
 
+// Returns the number of HloOpcode values.
 pub fn hlo_opcode_count() -> usize {
   118
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_example_usage() {
+    assert_eq!(hlo_opcode_string(&HloOpcode::Multiply), "multiply".to_string());
+  }
 }

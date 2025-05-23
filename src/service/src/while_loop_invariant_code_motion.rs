@@ -66,7 +66,8 @@ impl WhileLoopInvariantCodeMotion {
 
     let mut changed = false;
     let while_instrs: Vec<HloInstruction> = vec![];
-    for _comp in module.make_computation_post_order(execution_threads) {
+    for _comp in
+      module.make_computation_post_order(execution_threads, false) {
       // TODO
     }
     

@@ -1628,7 +1628,17 @@ impl HloInstruction {
   }
 
   pub fn reuse_operand_elements() {}
-  pub fn operand_indices() {}
+
+  pub fn operand_indices(&self, operand: &HloInstruction) -> Vec<i64> {
+    let mut result = vec![];
+    for i in 0..self.operand_count() {
+      if self.operand(i) == operand {
+        result.push(i as i64);
+      }
+    }
+    result
+  }
+
   pub fn reshape_merely_inserts_or_deletes_1_sized_dimensions() {}
 
   // Gets the string identifier for this instruction.
@@ -2025,6 +2035,14 @@ impl HloInstruction {
 
   pub fn set_custom_call_target() {}
 
+  // Gets a list of output/operand buffer pairs that alias each other, where the
+  // output buffer is represented as a ShapeIndex, and the operand buffer is
+  // represented as the operand index and the ShapeIndex. By default this list
+  // is empty.
+  pub fn output_to_operand_aliasing(&self) -> Vec<(Vec<i64>, (i64, Vec<i64>))> {
+    unimplemented!()
+  }
+
   pub fn padding_config(&self) -> &PaddingConfig {
     unimplemented!()
   }
@@ -2102,7 +2120,11 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn async_execution_thread() {}
+  // HloAsyncInstruction
+  pub fn async_execution_thread(&self) -> String {
+    unimplemented!()
+  }
+
   pub fn set_async_execution_thread() {}
   pub fn set_called_computations_execution_thread() {}
   pub fn cross_program_prefetch_index() {}

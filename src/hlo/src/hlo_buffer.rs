@@ -2,7 +2,48 @@
 
 use crate::hlo_value::{HloPosition, HloValue};
 
-// A container which can hold one or more HloValues.
+// A container which can hold one or more HloValues. An HLO buffer abstractly
+// represents the allocation which HLO instructions write into and read
+// from. Generally there is a one-to-one correspondence between HloBuffers and
+// HloValue where each HloValue in the module is held in a unique HloBuffer. An
+// exception is the while instruction which updates the loop state in-place. In
+// this case, we have a single HloBuffer for each HloPosition in the loop state,
+// but multiple HloValues. For example:
+//
+//   %init = ...
+//   %while = While(%init, body, condition)
+//
+//  body:
+//   %body_param = Param(0)
+//     ...
+//   %body_root = ...
+//
+//  condition:
+//   %cond_param = Param(0)
+//     ...
+//
+// For simplicity, assume that %while is array-shaped. In this case, we have a
+// single HloBuffer which holds the following HloValues: HloValue{%init},
+// HloValue{%while}, HloValue{%body_param}, HloValue{%body_root}, and
+// HloValue{%cond_param}.
+//
+// HloBuffers may appear at different HloPositions in the module mirroring the
+// same property of HloValues. For example:
+//
+//   %sub = Sub(...)
+//   %add = Add(...)
+//   %tuple = Tuple(%add, %sub)
+//   %gte = GetTupleElement(%tuple, 0)
+//
+// In this case, the HloBuffer containing %add appears at the following
+// positions: HloPosition{%add, {}}, HloPosition{%tuple, {0}}, and
+// HloPosition{%gte, {}}.
+//
+// Different HloPositions which share the same HloBuffer indicate mandatory
+// aliasing in the HLO module. These positions must share the same memory
+// allocation for correctness (the backends rely on this property). This differs
+// from incidental aliasing introduced by memory reuse in BufferAssignment where
+// different instructions may happen to get the same allocation.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct HloBuffer {
   id: i64,

@@ -150,14 +150,14 @@ impl Shape {
     self.dimensions[dimension] = Shape::UNBOUNDED_SIZE;
   }
 
-  pub fn is_bounded_dynamic_dimension(&self, dimension: usize) -> bool {
+  pub fn is_bounded_dynamic_dimension(&self, dimension: i64) -> bool {
     self.is_dynamic_dimension(dimension) &&
     !self.is_bounded_dynamic_dimension(dimension)
   }
 
   // Returns true if the given dimension is dynamically-sized.
-  pub fn is_dynamic_dimension(&self, dimension: usize) -> bool {
-    self.dynamic_dimensions[dimension]
+  pub fn is_dynamic_dimension(&self, dimension: i64) -> bool {
+    self.dynamic_dimensions[dimension as usize]
   }
 
   // Returns true if the given dimension is statically-sized.
@@ -427,7 +427,7 @@ impl ShapeEqual {
 
     if !self.ignore_dynamic_dimension {
       for i in 0..lhs.rank() {
-        if lhs.is_dynamic_dimension(i) != rhs.is_dynamic_dimension(i) {
+        if lhs.is_dynamic_dimension(i as i64) != rhs.is_dynamic_dimension(i as i64) {
           return false;
         }
       }
