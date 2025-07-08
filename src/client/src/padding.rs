@@ -2,6 +2,7 @@
 
 // Describes the padding applied for a windowed operation like
 // convolution, where a window is placed inside a base area.
+#[derive(Debug, Clone, PartialEq)]
 pub enum Padding {
   // Make the output have the same dimensions as the base area. For
   // example, for a 3x3 base area and a 2x2 window, the output will be
@@ -64,7 +65,7 @@ pub fn make_padding(
   input_dimensions: &Vec<i64>,
   window_dimensions: &Vec<i64>,
   window_strides: &Vec<i64>,
-  padding: Padding) -> Vec<(i64, i64)>
+  padding: &Padding) -> Vec<(i64, i64)>
 {
   let valid =
     validate_padding_values(input_dimensions, window_dimensions, window_strides);

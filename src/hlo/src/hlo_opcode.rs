@@ -30,6 +30,7 @@ pub enum HloOpcode {
   Cholsky,
   Clamp,
   Clz,
+  CollectiveBroadcast,
   CollectivePermute,
   CollectivePermuteDone,
   CollectivePermuteStart,
@@ -156,6 +157,7 @@ pub fn hlo_opcode_string(opcode: &HloOpcode) -> String {
     HloOpcode::Cholsky => "cholsky".to_string(),
     HloOpcode::Clamp => "clamp".to_string(),
     HloOpcode::Clz => "count-leading-zeros".to_string(),
+    HloOpcode::CollectiveBroadcast => "collective-broadcast".to_string(),
     HloOpcode::CollectivePermute => "collective-permute".to_string(),
     HloOpcode::CollectivePermuteDone => "collective-permute-done".to_string(),
     HloOpcode::CollectivePermuteStart => "collective-permute-start".to_string(),
@@ -310,6 +312,8 @@ pub fn string_to_hlo_opcode(name: &String) -> Result<HloOpcode, String> {
     return Ok(HloOpcode::Clamp);
   } else if name == "count-leading-zeros" {
     return Ok(HloOpcode::Clz);
+  } else if name == "collective-broadcast" {
+    return Ok(HloOpcode::CollectiveBroadcast);
   } else if name == "collective-permute" {
     return Ok(HloOpcode::CollectivePermute);
   } else if name == "collective-permute-done" {

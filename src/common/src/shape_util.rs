@@ -521,6 +521,7 @@ impl ShapeUtil {
     result
   }
 
+  // Appends a shape to the given tuple.
   pub fn append_shape_to_tuple(shape: Shape, tuple_shape: &mut Shape) {
     let err =
       ShapeUtil::validate_shape_with_optional_layout(&shape);
@@ -614,6 +615,12 @@ impl ShapeUtil {
     shape
   }
 
+  // Constructs a new shape with the given element type and sequence of
+  // potentially dynamic dimensions. The argument 'dynamic_dimensions' indicates
+  // with a true value that the respective dimension is dynamic. If the
+  // dimension is dynamic then the respective value in 'dimension' is an upper
+  // bound on the dimension size. 'dimensions' and 'dynamic_dimensions' must be
+  // the same size.
   pub fn make_shape_dynamic(
     elt_t: &PrimitiveType,
     dimensions: Vec<i64>,

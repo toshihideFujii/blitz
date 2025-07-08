@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use common::{
   blitz_data::{
-    Algorithm, ConvolutionDimensionNumbers, DotDimensionNumbers, FftType, FrontendAttributes, GatherDimensionNumbers, OpMetadata, PaddingConfig, ParameterReplication, Precision, PrecisionConfig, PrimitiveType, RandomAlgorithm, RandomDistribution, ScatterDimensionNummbers, SliceDimensions, SparsityDescriptor, Statisitic, StatisticsViz, TriangularSolveOptions, WhileLoopBackendConfig, Window
+    Algorithm, CholeskyOptions, ConvolutionDimensionNumbers, DotDimensionNumbers, FftType, FrontendAttributes, GatherDimensionNumbers, OpMetadata, PaddingConfig, PaddingType, ParameterReplication, Precision, PrecisionConfig, PrimitiveType, RandomAlgorithm, RandomDistribution, ReplicaGroup, ResultAccuracy, ScatterDimensionNummbers, SliceDimensions, SparsityDescriptor, Statisitic, StatisticsViz, TriangularSolveOptions, WhileLoopBackendConfig, Window
   },
   comparison_util::{ComparisonDirection, ComparisonType},
   literal::Literal,
@@ -381,11 +381,23 @@ pub enum FusionKind {
 
 pub const MAIN_EXECUTION_THREAD: &'static str = "main";
 
+// Rare is allocated lazily, only when any of its constituent fields are
+  // non-empty.  This reduces the memory footprint of HloInstruction objects.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Rare {
   called_computations: Vec<HloComputation>,
   control_predecessors: Vec<HloInstruction>,
   control_successors: Vec<HloInstruction>,
+  // Attributes passed from the frontend to give hints to the backend about
+  // how to compile this HLO.
+  // HLO -> HLO transforms are expected to preserve these attributes on a
+  // "best effort" basis only.
+  // For example:
+  //    x = const(10, frontend_attributes={x}
+  //    y = const(10, frontend_attributes={y}
+  //    z = add(x,y), frontend_attributes={y}
+  // Could be simplified to:
+  //    z' = const(20), frontend_attributes={?}
   frontend_attributes: FrontendAttributes,
   statistics_vis: StatisticsViz,
 }
@@ -455,6 +467,7 @@ const SCATTER_COMPUTATION_INDEX: usize = 1;
 const TRUE_COMPUTATION_INDEX: usize = 0;
 const FALSE_COMPUTATION_INDEX: usize = 1;
 
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloInstruction {
   unique_id: i64,
@@ -471,7 +484,7 @@ pub struct HloInstruction {
   shape: Shape,
   name: String,
   metadata: Option<OpMetadata>,
-  collective_instruction: Option<HloCollectiveInstruction>
+  collective_instruction: Option<HloCollectiveInstruction>,
 }
 
 impl HloInstruction {
@@ -926,6 +939,14 @@ impl HloInstruction {
     self.opcode.clone()
   }
 
+  pub fn set_opcode(&mut self, opcode: HloOpcode) {
+    self.opcode = opcode;
+  }
+
+  pub fn add_operand_ids(&mut self, _id: i64) {
+    unimplemented!()
+  }
+
   // Returns whether this instruciton is the root of its parent computation.
   pub fn is_root(&self) -> bool {
     if self.parent.is_some() {
@@ -1014,9 +1035,7 @@ impl HloInstruction {
     let mut unique = vec![];
     let mut seen = HashSet::new();
     for operand in self.operands() {
-      if seen.insert(operand) {
-        unique.push(operand.clone());
-      }
+      if seen.insert(operand) { unique.push(operand.clone()); }
     }
     unique
   }
@@ -1519,6 +1538,10 @@ impl HloInstruction {
   pub fn might_have_called_computations() {}
   pub fn replace_called_computations() {}
 
+  pub fn add_called_computation_ids(&mut self, _computation: i64) {
+    unimplemented!()
+  }
+
   // Clears out the called computations.
   pub fn clear_called_computations(&mut self) {
     if self.has_rare() {
@@ -1646,8 +1669,12 @@ impl HloInstruction {
     self.name.clone()
   }
 
-  pub fn set_name(&mut self, _name: String) {
-    unimplemented!()
+  pub fn set_name(&mut self, name: String) {
+    self.name = name;
+  }
+
+  pub fn set_id(&mut self, id: i64) {
+    self.unique_id = id;
   }
 
   // Sets the string identifier for this instruction. Name will be sanitized to
@@ -1693,7 +1720,7 @@ impl HloInstruction {
   }
 
   pub fn set_frontend_attributes(&mut self, frontend_attributes: FrontendAttributes) {
-    //if !self.has_rare() && frontend_attributes.map().is_empty() { return; }
+    if !self.has_rare() && frontend_attributes.map().is_empty() { return; }
     self.mutable_rare().frontend_attributes = frontend_attributes;
   }
 
@@ -1763,13 +1790,17 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn set_precision_config(&mut self, _config: PrecisionConfig) {
+    unimplemented!()
+  }
+
   pub fn mutable_precision_config() {}
 
   // Sets the debug metadata for this instruction, excluding cration_pass_id,
   // which should never be copied anywhere.
-  pub fn set_metadata(&mut self, metadata: &OpMetadata) {
+  pub fn set_metadata(&mut self, metadata: OpMetadata) {
     let creation_pass_id = metadata.creation_pass_id();
-    self.metadata = Some(metadata.clone());
+    self.metadata = Some(metadata);
     self.metadata.as_mut().unwrap().set_creation_pass_id(creation_pass_id);
   }
 
@@ -1842,13 +1873,29 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn set_feature_index(&mut self, _feature_index: i64) {
+    unimplemented!()
+  }
+
   pub fn epsilon() {}
+
+  pub fn set_epsilon(&mut self, _epsilon: f64) {
+    unimplemented!()
+  }
 
   pub fn fft_type(&self) -> FftType {
     unimplemented!()
   }
 
+  pub fn set_fft_type(&mut self, _fft_t: FftType) {
+    unimplemented!()
+  }
+
   pub fn fft_length(&self) -> &Vec<i64> {
+    unimplemented!()
+  }
+
+  pub fn add_fft_length(&mut self, _length: i64) {
     unimplemented!()
   }
 
@@ -1857,7 +1904,7 @@ impl HloInstruction {
     None
   }
 
-  pub fn set_channel_id(&mut self, _channel_id: Option<i64>) {}
+  pub fn set_channel_id(&mut self, _channel_id: i64) {}
 
   pub fn dimensions(&self) -> &Vec<i64> {
     unimplemented!()
@@ -1902,6 +1949,7 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  // ##### HloFusionInstruction : start #####
   pub fn literal<T>(&self) -> &Literal<T>
     where T: Clone + Default + PartialEq
   {
@@ -1992,7 +2040,6 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn set_tuple_index() {}
   pub fn exponent_bits() {}
 
   pub fn set_exponent_bits(&mut self, _exponent_bits: i64) {
@@ -2000,31 +2047,61 @@ impl HloInstruction {
   }
 
   pub fn infeed_config() {}
-  pub fn set_infeed_config() {}
+
+  pub fn set_infeed_config(&mut self, _infeed_config: String) {
+    unimplemented!()
+  }
+
   pub fn outfeed_config() {}
-  pub fn set_outfeed_cofig() {}
+  pub fn set_outfeed_cofig(&mut self, _outfeed_config: String) {
+    unimplemented!()
+  }
+
   pub fn outfeed_shape() {}
   pub fn mutable_outfeed_shape() {}
+
+  pub fn set_outfeed_shape(&mut self, _shape: Shape) {
+    unimplemented!()
+  }
+
   pub fn replica_groups() {}
+
+  pub fn add_replica_groups(&mut self, _group: ReplicaGroup) {
+    unimplemented!()
+  }
+
   pub fn source_target_pairs() {}
+
+  pub fn add_source_target_pairs(&mut self, _pair: (i64, i64)) {
+    unimplemented!()
+  }
 
   pub fn convolution_dimension_numberes(&self) -> &ConvolutionDimensionNumbers {
     unimplemented!()
   }
 
-  pub fn set_convolution_dimension_numberes() {}
+  pub fn set_convolution_dimension_numberes(
+    &mut self, _conv_dim_numbers: ConvolutionDimensionNumbers)
+  {
+    unimplemented!()
+  }
 
   pub fn feature_group_count(&self) -> i64 {
     unimplemented!()
   }
 
-  pub fn set_feature_group_count() {}
+  pub fn set_feature_group_count(&mut self, _count: i64) {
+    unimplemented!()
+  }
 
   pub fn batch_group_count(&self) -> i64 {
     unimplemented!()
   }
 
-  pub fn set_batch_group_count() {}
+  pub fn set_batch_group_count(&mut self, _count: i64) {
+    unimplemented!()
+  }
+
   pub fn select() {}
   pub fn scatter() {}
   pub fn set_select() {}
@@ -2033,7 +2110,9 @@ impl HloInstruction {
   // Delegates to HloCustomCallInstruction::custom_call_target.
   pub fn custom_call_target(&self)-> String { "".to_string() }
 
-  pub fn set_custom_call_target() {}
+  pub fn set_custom_call_target(&mut self, _name: String) {
+    unimplemented!()
+  }
 
   // Gets a list of output/operand buffer pairs that alias each other, where the
   // output buffer is represented as a ShapeIndex, and the operand buffer is
@@ -2054,6 +2133,11 @@ impl HloInstruction {
   }
 
   pub fn padding_type() {}
+
+  pub fn set_padding_type(&mut self, _t: PaddingType) {
+    unimplemented!()
+  }
+
   pub fn slice_sizes() {}
 
   pub fn dynamic_slice_sizes(&self) -> &Vec<i64> {
@@ -2093,6 +2177,14 @@ impl HloInstruction {
   }
 
   pub fn dot_dimension_numbers(&self) -> &DotDimensionNumbers {
+    unimplemented!()
+  }
+
+  pub fn set_dot_dimension_numbers(&mut self, _numbers: DotDimensionNumbers) {
+    unimplemented!()
+  }
+
+  pub fn add_dot_sparsity(&mut self, _descriptor: SparsityDescriptor) {
     unimplemented!()
   }
 
@@ -2144,7 +2236,20 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn cholsky_options() {}
+  pub fn set_triangular_solve_options(&mut self, _options: TriangularSolveOptions) {
+    unimplemented!()
+  }
+
+  pub fn cholesky_options() {}
+
+  pub fn mutable_cholesky_options(&mut self) -> &mut CholeskyOptions {
+    unimplemented!()
+  }
+
+  pub fn set_cholesky_options(&mut self, _options: CholeskyOptions) {
+    unimplemented!()
+  }
+
   pub fn output_operand_aliasing() {}
   pub fn append_operand() {}
 
@@ -2171,6 +2276,10 @@ impl HloInstruction {
     self.collective_instruction.as_ref().unwrap().constrain_layout()
   }
 
+  pub fn set_constrain_layout(&mut self, _constrain_layout: bool) {
+    unimplemented!()
+  }
+
   pub fn iota_dimension(&self) -> i64 {
     unimplemented!()
   }
@@ -2183,7 +2292,15 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn set_window(&mut self, _window: Window) {
+    unimplemented!()
+  }
+
   pub fn unique_indices(&self) -> bool {
+    unimplemented!()
+  }
+
+  pub fn set_unique_indices(&mut self, _unique_indices: bool) {
     unimplemented!()
   }
 
@@ -2195,11 +2312,22 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn set_scatter_dimension_numbers(
+    &mut self,
+    _dimension_numbers: ScatterDimensionNummbers)
+  {
+    unimplemented!()    
+  }
+
   pub fn scatter_updates(&self) -> &Vec<HloInstruction> {
     unimplemented!()
   }
 
   pub fn set_indices_are_sorted(&mut self, _indices_are_sorted: bool) {
+    unimplemented!()
+  }
+
+  pub fn set_is_composite(&mut self, _is_composite: bool) {
     unimplemented!()
   }
 
@@ -2210,7 +2338,40 @@ impl HloInstruction {
   pub fn k(&self) -> i64{
     unimplemented!()
   }
+
+  pub fn set_k(&mut self, _k: i64) {
+    unimplemented!()
+  }
   // HloTopKInstruction
+
+  // HloGetTupleElementInstruction
+  pub fn set_tuple_index(&self, _new_tuple_index: i64) {
+    unimplemented!()
+  }
+
+  pub fn set_use_global_device_ids(&mut self, _use_global_device_ids: bool) {
+    unimplemented!()
+  }
+
+  pub fn set_is_stable(&mut self, _is_stable: bool) {
+    unimplemented!()
+  }
+
+  pub fn set_largest(&mut self, _largest: bool) {
+    unimplemented!()
+  }
+
+  pub fn set_rng_algorithm(&mut self, _algorithm: RandomAlgorithm) {
+    unimplemented!()
+  }
+
+  pub fn set_is_host_transfer(&mut self, _is_host_transfer: bool) {
+    unimplemented!()
+  }
+
+  pub fn set_result_accuracy(&mut self, _result_accuracy: ResultAccuracy) {
+    unimplemented!()
+  }
 
   fn is_elementwise_impl(&self, _operand_idx: Option<i64>) -> bool {
     false

@@ -160,6 +160,10 @@ impl Shape {
     self.dynamic_dimensions[dimension as usize]
   }
 
+  pub fn clear_is_dynamic_dimension(&mut self) {
+    unimplemented!()
+  }
+
   // Returns true if the given dimension is statically-sized.
   pub fn is_static_dimension(&self, dimension: usize) -> bool {
     !self.dynamic_dimensions[dimension]

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{/*collections::HashMap,*/ hash::Hash};
+use std::{collections::HashMap, hash::Hash};
 
 use crate::{debug_options_flags::get_debug_options_from_flags, shape::Shape};
 
@@ -57,6 +57,7 @@ pub enum Algorithm {
   DotAnyF8anyF8F32,
 }
 
+#[derive(Debug, Clone)]
 pub struct PrecisionConfig {}
 
 impl PrecisionConfig {
@@ -99,6 +100,16 @@ struct ProfileInfo {
   compilation_event: CompilationEvent,
 }
 
+impl ProfileInfo {
+  pub fn new() -> Self {
+    ProfileInfo {
+      profile_type: Vec::new(),
+      profile_source: ProfileSource::Unknown,
+      compilation_event: CompilationEvent::Unknown,
+    }
+  }
+}
+
 // Symbolization metadata for HLO Instructions.
 //
 // This metadata is used for debugging Blitz code generation, as well as
@@ -121,7 +132,20 @@ pub struct OpMetadata {
 
 impl OpMetadata {
   pub fn new() -> Self {
-    unimplemented!()
+    OpMetadata {
+      op_type: "".to_string(),
+      op_name: "".to_string(),
+      source_file: "".to_string(),
+      source_line: 0,
+      profile_type: ProfileType::Invalid,
+      size_of_generated_code_in_bytes: 0,
+      size_of_memory_working_set_in_bytes: 0,
+      profile_info: ProfileInfo::new(),
+      deduplicated_name: "".to_string(),
+      preserve_layout: false,
+      stack_frame_id: 0,
+      scheduling_name: "".to_string()
+    }
   }
 
   pub fn creation_pass_id(&self) -> i64 { 0 }
@@ -145,6 +169,8 @@ impl OpMetadata {
   }
 }
 
+// Generic map of attributes used to pass hints / configuration options from
+// the Python frontend to the Blitz backend.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FrontendAttributes {
   //map: HashMap<String, String>
@@ -157,13 +183,15 @@ impl FrontendAttributes {
     }
   }
 
-  //pub fn map(&self) -> &HashMap<String, String> {
+  pub fn map(&self) -> &HashMap<String, String> {
     //&self.map
-  //}
+    unimplemented!()
+  }
 
-  //pub fn mutable_map(&mut self) -> &mut HashMap<String, String> {
+  pub fn mutable_map(&mut self) -> &mut HashMap<String, String> {
     //&mut self.map
-  //}
+    unimplemented!()
+  }
 
   pub fn set_attribute(&mut self, _key: String, _value: String) {
     unimplemented!()
@@ -222,6 +250,7 @@ impl StatisticsViz {
   }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum PaddingType {
   Invalid,
   // Only valid portion of the base are covered.
@@ -266,6 +295,10 @@ impl OpSharding {
     }
   }
 
+  pub fn type_(&self) -> OpShardingType {
+    self.t.clone()
+  }
+
   pub fn set_type(&mut self, t: OpShardingType) {
     self.t = t;
   }
@@ -283,6 +316,7 @@ impl OpSharding {
   }
 }
 
+#[derive(Debug, Clone)]
 pub struct DotDimensionNumbers {
   lhs_contracting_dimensions: i64,
   rhs_contracting_dimensions: i64,
@@ -291,8 +325,25 @@ pub struct DotDimensionNumbers {
 }
 
 impl DotDimensionNumbers {
+  pub fn default() -> Self {
+    DotDimensionNumbers {
+      lhs_contracting_dimensions: 0,
+      rhs_contracting_dimensions: 0,
+      lhs_batch_dimensions: 0,
+      rhs_batch_dimensions: 0
+    }
+  }
+
   pub fn lhs_contracting_dimensions(&self) -> i64 {
     self.lhs_contracting_dimensions
+  }
+
+  pub fn add_lhs_contracting_dimensions(&mut self, _dims: i64) {
+    unimplemented!()
+  }
+
+  pub fn add_rhs_contracting_dimensions(&mut self, _dims: i64) {
+    unimplemented!()
   }
 }
 
@@ -318,6 +369,7 @@ impl ParameterReplication {
   }
 }
 
+#[derive(Debug, Clone)]
 pub struct ConvolutionDimensionNumbers {
   input_batch_dimension: i64,
   input_feature_dimension: i64,
@@ -401,6 +453,10 @@ impl ConvolutionDimensionNumbers {
     self.input_spatial_dimensions[index]
   }
 
+  pub fn input_spatial_dimensions_vec(&self) -> &Vec<i64> {
+    &self.input_spatial_dimensions
+  }
+
   pub fn add_input_spatial_dimensions(&mut self, dimension: i64) {
     self.input_spatial_dimensions.push(dimension);
   }
@@ -411,6 +467,10 @@ impl ConvolutionDimensionNumbers {
 
   pub fn output_spatial_dimensions(&self, index: usize) -> i64 {
     self.output_spatial_dimensions[index]
+  }
+
+  pub fn output_spatial_dimensions_vec(&self) -> &Vec<i64> {
+    &self.output_spatial_dimensions
   }
 
   pub fn add_output_spatial_dimensions(&mut self, dimension: i64) {
@@ -425,6 +485,10 @@ impl ConvolutionDimensionNumbers {
     self.kernel_spatial_dimensions[index]
   }
 
+  pub fn kernel_spatial_dimensions_vec(&self) -> &Vec<i64> {
+    &self.kernel_spatial_dimensions
+  }
+
   pub fn add_kernel_spatial_dimensions(&mut self, dimension: i64) {
     self.kernel_spatial_dimensions.push(dimension);
   }
@@ -437,15 +501,29 @@ pub struct PaddingConfigDimension {
 }
 
 impl PaddingConfigDimension {
+  pub fn edge_padding_low(&self) -> i64 {
+    self.edge_padding_low
+  }
+
   pub fn set_edge_padding_low(&mut self, edge_padding_low: i64) {
     self.edge_padding_low = edge_padding_low;
+  }
+
+  pub fn edge_padding_high(&self) -> i64 {
+    self.edge_padding_high
   }
 
   pub fn set_edge_padding_high(&mut self, edge_padding_high: i64) {
     self.edge_padding_high = edge_padding_high;
   }
+
+  pub fn interior_padding(&self) -> i64 {
+    self.interior_padding
+  }
 }
 
+// Describes the padding configuration for Pad operation. The padding amount on
+// both edges as well as between the elements are specified for each dimension.
 #[derive(Debug, Clone)]
 pub struct PaddingConfig {}
 
@@ -454,7 +532,23 @@ impl PaddingConfig {
     PaddingConfig {  }
   }
 
+  pub fn dimensions_vec(&self) -> &Vec<PaddingConfigDimension> {
+    unimplemented!()
+  }
+
+  pub fn dimensions(&self, _dimno: i64) -> &PaddingConfigDimension {
+    unimplemented!()
+  }
+
   pub fn mutable_dimensions(&mut self, _dimno: i64) -> &mut PaddingConfigDimension {
+    unimplemented!()
+  }
+
+  pub fn dimensions_size(&self) -> usize {
+    unimplemented!()
+  }
+
+  pub fn short_debug_string(&self) -> String {
     unimplemented!()
   }
 }
@@ -500,6 +594,7 @@ pub fn random_distribution_name(dist: &RandomDistribution) -> String {
   }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum RandomAlgorithm {
   Default,
   ThreeFry,
@@ -1729,6 +1824,7 @@ impl DebugOptions {
   }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 enum Transpose {
   Invalid,
   NoTranspose,
@@ -1736,6 +1832,7 @@ enum Transpose {
   Adjoint,
 }
 
+#[derive(Debug, Clone)]
 pub struct TriangularSolveOptions {
   left_side: bool,
   lower: bool,
@@ -1744,8 +1841,20 @@ pub struct TriangularSolveOptions {
 }
 
 #[derive(Debug, Clone)]
+pub struct CholeskyOptions {
+  lower: bool
+}
+
+impl CholeskyOptions {
+  pub fn set_lower(&mut self, lower: bool) {
+    self.lower = lower;
+  }
+}
+
+#[derive(Debug, Clone)]
 pub struct GatherDimensionNumbers {}
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum SparsityType {
   Invalid,
   StructuredNM,  
@@ -1757,6 +1866,7 @@ pub enum SparsityType {
 // Restrictions:
 // - only one operand of the dot operation may be sparse;
 // - only the contracting dimension may be sparse.
+#[derive(Debug, Clone)]
 pub struct SparsityDescriptor {
   t: SparsityType,
   // Sparse operand index (0 or 1).
@@ -1768,8 +1878,10 @@ pub struct SparsityDescriptor {
   m: i64,
 }
 
+#[derive(Debug, Clone)]
 pub struct Window {}
 
+#[derive(Debug, Clone)]
 pub struct ScatterDimensionNummbers {
   update_window_dims: i64,
   inserted_window_dims: i64,
@@ -1891,6 +2003,7 @@ impl ExecutionHandle {
   }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum ChannelType {
   Invalid,
   DeviceToDevice,
@@ -1903,6 +2016,16 @@ pub enum ChannelType {
 // instructions will be blocked until the data is transferred.
 pub struct ChannelHandle {
   t: ChannelType
+}
+
+impl ChannelHandle {
+  pub fn handle(&self) -> i64 {
+    unimplemented!()
+  }
+
+  pub fn type_(&self) -> ChannelType {
+    self.t.clone()
+  }
 }
 
 // A backend-config for kWhile loops that stores the loop's trip count, if it is
@@ -2014,4 +2137,10 @@ impl SliceDimensions {
   pub fn set_stride(&mut self, stride: i64) {
     self.stride = stride;
   }
+}
+
+pub struct ResultAccuracy {}
+
+impl ResultAccuracy {
+    
 }

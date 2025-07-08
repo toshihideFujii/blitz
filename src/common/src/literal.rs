@@ -1613,8 +1613,14 @@ impl<T> Literal<T> where T: Clone + Default + PartialEq + 'static {
     self.base.is_known(shape_index)
   }
 
-  pub fn element_count(&self) -> usize {
-    unimplemented!()
+  // Returns the count of the elements in the array at the given shape index in
+  // this literal.
+  pub fn element_count(&self, index: &Vec<i64>) -> i64 {
+    if index.is_empty() {
+      // Common case, avoid GetSubshape().
+      return ShapeUtil::elements_in(self.shape());
+    }
+    ShapeUtil::elements_in(&ShapeUtil::get_subshape(self.shape(), index))
   }
 
   pub fn count_equal(&self, value: &T) -> usize {

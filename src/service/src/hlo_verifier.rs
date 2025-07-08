@@ -551,7 +551,7 @@ impl ShapeVerifier {
   fn check_variadic_shape(&self, instruction: &HloInstruction) -> Result<(), String> {
     self.check_shape_by_status(instruction,
       ShapeInference::infer_variadic_op_shape(
-        &instruction.opcode(), instruction.operands()))
+        instruction.opcode(), instruction.operands()))
   }
 
   fn check_is_token_operand(

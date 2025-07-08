@@ -30,12 +30,14 @@ impl HloTopKInstruction {
 }
 
 pub struct HloConstantInstruction<T> where T: Clone + Default + PartialEq + 'static {
+  pub base: HloInstruction,
   literal: Literal<T>
 }
 
 impl<T> HloConstantInstruction<T> where T: Clone + Default + PartialEq {
   pub fn new(literal: Literal<T>) -> Self {
     HloConstantInstruction {
+      base: HloInstruction::default(),
       literal: literal
     }
   }
@@ -46,6 +48,11 @@ impl<T> HloConstantInstruction<T> where T: Clone + Default + PartialEq {
   }
 
   pub fn mutable_lietral() {}
+
+  pub fn set_literal(&mut self, literal: Literal<T>) {
+    self.literal = literal;
+  }
+
   pub fn has_literal() {}
 }
 
