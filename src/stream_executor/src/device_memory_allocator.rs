@@ -21,8 +21,33 @@ pub struct ScopedDeviceMemory<T> {
 }
 
 impl<T> ScopedDeviceMemory<T> {
-    
+  // Construct a ScopedDeviceMemory from a custom allocator.
+  //
+  // Parameters:
+  //  mem: Already-allocated device memory value for this scoped mechanism to
+  //       deallocate. This memory must have been allocated by parent.
+  //  device_ordinal: Device on which the memory was allocated.
+  //  allocator: Allocator used to deallocate memory when this instance goes
+  //             out of scope.
+  pub fn new(
+    _mem: DeviceMemoryBase,
+    _device_ordinal: i64,
+    _allocator: DeviceMemoryAllocator) -> Self
+  {
+    //ScopedDeviceMemory {
+      //wrapped: DeviceMemory::default(t)
+    //}
+    unimplemented!()    
+  }
+
+  // Frees the existing memory, resets the wrapped memory to null.
+  pub fn free(&self) -> Result<(), String> {
+    unimplemented!()
+  }
 }
+
+// Type alias for compatibility with the previous managed memory implementation.
+pub type OwningDeviceMemory = ScopedDeviceMemory<u8>;
 
 // Memory allocator interface for the device.
 //

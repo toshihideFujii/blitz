@@ -5,7 +5,15 @@ pub struct DynamicPadderOptions {}
 pub struct DynamicPadder {}
 
 impl DynamicPadder {
-  pub fn new() {}
-  pub fn name() -> String { "dynamic-padder".to_string() }
-  pub fn run() {}
+  pub fn default() -> Self {
+    unimplemented!()
+  }
+
+  pub fn name() -> String {
+    "dynamic-padder".to_string()
+  }
+
+  pub fn run(&self) -> Result<bool, String> {
+    unimplemented!()
+  }
 }

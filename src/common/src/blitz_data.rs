@@ -1910,8 +1910,23 @@ impl ScatterDimensionNummbers {
 // Handle given to a user that represents a globally accessible allocation.
 // Contrast this against a ComputationDataHandle, which is not globally
 // accessible, since it only exists within a specific computation.
+#[derive(Debug, Clone)]
 pub struct GlobalDataHandle {
   handle: i64
+}
+
+impl GlobalDataHandle {
+  pub fn default() -> Self {
+    GlobalDataHandle { handle: 0 }    
+  }
+
+  pub fn handle(&self) -> i64 {
+    self.handle
+  }
+
+  pub fn set_handle(&mut self, handle: i64) {
+    self.handle = handle;
+  }
 }
 
 pub struct UnregisterRequest {}

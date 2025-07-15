@@ -63,6 +63,7 @@ pub mod despecializer;
 pub mod dot_decomposer;
 pub mod dot_dimension_merger;
 pub mod dot_merger;
+pub mod dynamic_dimension_inference;
 pub mod dynamic_dimension_simplifier;
 pub mod dynamic_index_splitter;
 pub mod dynamic_padder;

@@ -5,6 +5,7 @@ use stream_executor::device_memory::DeviceMemoryBase;
 
 // Class which encapsulates a buffer or set of buffers containing data of a
 // particular Blitz shape.
+#[derive(Debug, Clone)]
 pub struct ShapedBuffer {
   on_host_shape: Shape,
   on_device_shape: Shape,
@@ -53,12 +54,12 @@ impl ShapedBuffer {
 
   // Return the root buffer of the shape (shape index {}).
   pub fn root_buffer(&self) -> &DeviceMemoryBase {
-    self.buffer(0)
+    self.buffer(&vec![0])
   }
 
   // Returns the buffer at the given shape index where index is defined as in
   // ShapeUtil::GetSubshape.
-  pub fn buffer(&self, _index: usize) -> &DeviceMemoryBase {
+  pub fn buffer(&self, _index: &Vec<i64>) -> &DeviceMemoryBase {
     //self.buffers.element(index)
     unimplemented!()
   }
@@ -104,8 +105,44 @@ impl ShapedBuffer {
 
 // ScopedShapedBuffer takes allocated buffers as inputs, and deallocates on
 // destruction. This class represents an owning wrapper around `ShapedBuffer`.
-pub struct ScopedShapedBuffer {}
+pub struct ScopedShapedBuffer {
+  base: ShapedBuffer
+}
 
 impl ScopedShapedBuffer {
-  pub fn new() {}
+  pub fn new(
+    on_device_shape: Shape,
+    device_ordinal: i64,
+    physical_device_ordinal: i64) -> Self
+  {
+    let mut physical_device_ordinal_value = physical_device_ordinal;
+    if physical_device_ordinal_value == -1 {
+      physical_device_ordinal_value = device_ordinal;
+    }
+    ScopedShapedBuffer {
+      base: ShapedBuffer {
+        on_host_shape: ShapeUtil::device_shape_to_host_shape(on_device_shape.clone()),
+        on_device_shape: on_device_shape.clone(),
+        device_ordinal: device_ordinal,
+        physical_device_ordinal: physical_device_ordinal_value,
+        buffers: ShapeTree::new(&mut on_device_shape.clone()),
+      }
+    }
+  }
+
+  pub fn base(&self) -> &ShapedBuffer {
+    &self.base
+  }
+
+  pub fn on_device_shape(&self) -> &Shape {
+    self.base.on_device_shape()
+  }
+
+  pub fn device_ordinal(&self) -> i64 {
+    self.base.device_ordinal()
+  }
+
+  pub fn buffer(&self, index: &Vec<i64>) -> &DeviceMemoryBase {
+    self.base.buffer(index)
+  }
 }

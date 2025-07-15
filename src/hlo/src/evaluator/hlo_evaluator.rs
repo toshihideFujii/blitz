@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use common::literal::Literal;
 
-use crate::{hlo_computation::HloComputation, hlo_instruction::HloInstruction};
+use crate::{hlo_computation::HloComputation, hlo_instruction::HloInstruction, hlo_module::HloModule};
 
 // Responsible for evaluating HLO and obtain literal as the evaluation results.
 // This class is not thread-safe.
@@ -15,6 +15,14 @@ pub struct HloEvaluator<T> where T: Clone + Default + PartialEq + 'static {
 }
 
 impl<T> HloEvaluator<T> where T: Clone + Default + PartialEq + 'static {
+  pub fn default() -> Self {
+    HloEvaluator {
+      arg_literals: Vec::new(),
+      max_loop_iterations: 0,
+      seed: 0
+    }    
+  }
+
   // Only evaluate up to max_loop_iterations per while-loop execution if
   // specified.
   pub fn new(max_loop_iterations: i64) -> Self {
@@ -39,6 +47,10 @@ impl<T> HloEvaluator<T> where T: Clone + Default + PartialEq + 'static {
     _instruction: &HloInstruction,
     _recursively_evaluate_nonconstant_operands: bool) -> Result<Literal<T>, String>
   {
+    unimplemented!()
+  }
+
+  pub fn evaluate_module(&self, _module: &HloModule) -> Result<Literal<T>, String> {
     unimplemented!()
   }
 
@@ -88,6 +100,10 @@ impl<T> HloEvaluator<T> where T: Clone + Default + PartialEq + 'static {
   pub fn evaluate_elementwise_unary_op() {}
   pub fn evaluate_elementwise_ternary_op() {}
   pub fn evaluate_elementwise_compare_op() {}
+
+  pub fn set_dynamic_dimension_inference(&mut self) {
+      
+  }
   pub fn dynamic_dimension_inference() {}
   pub fn set_use_fast_path() {}
   pub fn set_cusstom_call_handler() {}

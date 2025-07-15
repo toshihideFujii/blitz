@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use common::blitz_data::Precision;
+use common::{blitz_data::Precision, shape::ProgramShape};
 
 #[derive(Clone, PartialEq)]
 pub enum FusionConfigCollection {
@@ -50,6 +50,10 @@ impl HloModuleConfig {
     unimplemented!()
   }
 
+  pub fn new(_program_shape: &ProgramShape) -> Self {
+    unimplemented!()
+  }
+
   pub fn to_proto() {}
   pub fn assign_proto_shardable_value_update_pairs() {}
   pub fn has_entry_computation_layout() {}
@@ -59,6 +63,10 @@ impl HloModuleConfig {
   // Returns a constant reference to the layout of the entry computation.
   // Assumes the layout was set.
   pub fn entry_computation_layout(&self) {}
+
+  pub fn mutable_entry_computation_layout(&mut self) {
+      
+  }
   pub fn clear_entry_computation_layout() {}
   pub fn hlo_profiling_enabled() {}
   pub fn cpu_traceme_enabled() {}

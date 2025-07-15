@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use stream_executor::{device_memory_allocator::StreamExecutorMemoryAllocator, platform::Platform, stream_executor::StreamExecutor};
+use stream_executor::{device_memory_allocator::{DeviceMemoryAllocator, StreamExecutorMemoryAllocator}, platform::Platform, stream_executor::StreamExecutor};
 
 use crate::{compiler::Compiler, computation_placer::ComputationPlacer, transfer_manager::TransferManager};
 
@@ -90,7 +90,10 @@ impl Backend {
     &self.compiler
   }
 
-  pub fn memory_allocator() {}
+  pub fn memory_allocator(&self) -> DeviceMemoryAllocator {
+    unimplemented!()
+  }
+  
   pub fn shared_memory_allocator() {}
 
   pub fn transfer_manager(&self) -> &TransferManager {
@@ -144,6 +147,7 @@ impl Backend {
   pub fn device_name() {}
   pub fn devices_equivalent() {}
   pub fn eigen_intra_op_thread_pool_device() {}
-  pub fn eigen_intra_op_thread_pool() {}
+
+  pub fn eigen_intra_op_thread_pool(&self) {}
   pub fn reset_devices() {}
 }

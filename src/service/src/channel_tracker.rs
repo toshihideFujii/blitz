@@ -8,7 +8,7 @@ use common::blitz_data::{ChannelHandle, ChannelType};
 pub struct ChannelTracker {}
 
 impl ChannelTracker {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     ChannelTracker {  }
   }
 

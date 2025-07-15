@@ -2,18 +2,29 @@
 
 use std::collections::HashSet;
 
-use common::{blitz_data::{
-  ChannelHandle, ChannelType,
-  ComputationGraphStatsRequest, ComputationStatsResponse, ComputeConstantGraphRequest,
-  ComputeConstantResponse, DeviceHandle, ExecuteGtaphParallelRequest,
-  ExecuteParallelResponse, ExecutionHandle, ExecutionOptions,
-  ExecutionProfile, GlobalDataHandle
-}, literal::Literal, shape::Shape};
+use common::{
+  blitz_data::{
+    ChannelHandle, ChannelType,
+    ComputationGraphStatsRequest, ComputationStatsResponse,
+    DeviceHandle, ExecuteGtaphParallelRequest,
+    ExecuteParallelResponse, ExecutionHandle, ExecutionOptions,
+    ExecutionProfile, GlobalDataHandle
+  },
+  layout::Layout, layout_util::LayoutUtil, literal::Literal,
+  shape::{ProgramShape, Shape}, shape_util::ShapeUtil
+};
 
+use hlo::{evaluator::hlo_evaluator::HloEvaluator, hlo_module::HloModule,
+  hlo_module_config::HloModuleConfig};
 use stream_executor::platform::Platform;
 
 use crate::{
-  allocation_tracker::AllocationTracker, backend::Backend, channel_tracker::ChannelTracker, compilation_cache::CompilationCache, execution_tracker::ExecutionTracker
+  allocation_tracker::AllocationTracker, backend::Backend,
+  blitz_computation::BlitzComputation,
+  channel_tracker::ChannelTracker, compilation_cache::CompilationCache,
+  compiler::AotCompilationOptions, dynamic_dimension_inference::DynamicDimensionInference,
+  dynamic_padder::DynamicPadder, execution_tracker::ExecutionTracker,
+  hlo_module_util::create_module_config
 };
 
 // Options to configure the service when it is created.
@@ -88,18 +99,29 @@ pub struct Service {
   allocation_tracker: AllocationTracker,
   execution_tracker: ExecutionTracker,
   // Backend to compile and execute computations on.
-  execute_backend: Backend,
+  execute_backend: Option<Backend>,
 }
 
 impl Service {
-  pub fn new() {}
+  pub fn new(_options: ServiceOptions, _execute_backend: Option<Backend>) -> Self {
+    /*
+    let service = Service {
+      options: options,
+      compilation_cache: CompilationCache::default(),
+      channel_tracker: ChannelTracker::default(), 
+      allocation_tracker: AllocationTracker::new(backend),
+      execution_tracker: (),
+      execute_backend: execute_backend
+    };
+    */
+    unimplemented!()
+  }
 
   // Unregisters a previously-allocated global handle.
-  //
   // If the handle given is not currently allocated, a NOT_FOUND status is
   // returned.
-  pub fn unregister(&self, _data: &GlobalDataHandle) -> Result<(), String> {
-    unimplemented!()
+  pub fn unregister(&mut self, data: &GlobalDataHandle) -> Result<(), String> {
+    self.allocation_tracker.unregister(data)
   }
 
   // Deconstructs a tuple. Returns a newly created GlobalDataHandle for each
@@ -211,12 +233,53 @@ impl Service {
     unimplemented!()
   }
 
-  pub fn compute_constant_graph(
+  pub fn compute_constant_graph<T>(
     &self,
-    _arg: &ComputeConstantGraphRequest,
-    _result: &ComputeConstantResponse) -> Result<(), String>
+    computation: &BlitzComputation,
+    output_layout: Option<&Layout>) -> Result<Literal<T>, String>
+    where T: Default + Clone + PartialEq
   {
-    unimplemented!()
+    if computation.has_host_program_shape() {
+      let err_msg = "program shape may not be empty".to_string();
+      return Err(err_msg);
+    }
+    if computation.host_program_shape().parameters_size() != 0 {
+      let err_msg =
+        "constant computation may not depend on any parameters".to_string();
+      return Err(err_msg);
+    }
+    let program_shape = computation.host_program_shape();
+    let result = ShapeUtil::validate_shape(program_shape.result());
+    check_error(&result);
+
+    if output_layout.is_some() {
+      let result = LayoutUtil::validate_layout_for_shape(
+        output_layout.as_ref().unwrap(), program_shape.result());
+      check_error(&result);
+    }
+
+    let config = HloModuleConfig::new(program_shape);
+    let module = HloModule::new(computation.name().clone(), config);
+    let dynamic_padder = DynamicPadder::default();
+    let result = dynamic_padder.run(); // TODO
+    check_error(&result);
+
+    let dynamic_dimension_inference =
+      DynamicDimensionInference::run(&module); // TODO
+    check_error(&dynamic_dimension_inference);
+
+    let mut evaluator: HloEvaluator<T> = HloEvaluator::default();
+    evaluator.set_dynamic_dimension_inference(); // TODO
+    let result_literal_wrapper =
+      evaluator.evaluate_module(&module);
+    check_error(&result_literal_wrapper);
+
+    let mut result_literal = result_literal_wrapper.unwrap();
+    if output_layout.is_some() {
+      result_literal = result_literal.base.relayout(
+        output_layout.unwrap(), &vec![]);
+    }
+    Ok(result_literal)
   }
 
   // Returns the shape (with layout) of an array associated with a given data
@@ -236,17 +299,53 @@ impl Service {
 
   // Creates a unique channel handle that can be used for Send/Recv
   // instructions.
-  pub fn create_channel_handle(&self, _t: ChannelType) -> Result<ChannelHandle, String> {
-    unimplemented!()
+  pub fn create_channel_handle(&self, t: ChannelType) -> Result<ChannelHandle, String> {
+    self.channel_tracker.new_channel(t.clone())
   }
 
   pub fn backend(&self) -> &Backend {
-    &self.execute_backend
+    &self.execute_backend.as_ref().unwrap()
   }
 
-  pub fn mutable_backend() {}
-  pub fn create_module_config() {}
-  pub fn validate_result_shape() {}
+  pub fn mutable_backend(&mut self) -> &mut Backend {
+    self.execute_backend.as_mut().unwrap()
+  }
+
+  // Create a Hlo module config for the given program shape and arguments.
+  // aot_options is optional; if not given a default is used.
+  pub fn create_module_config(
+    &self,
+    program_shape: &ProgramShape,
+    argument_shapes: &Vec<Shape>,
+    execution_options: &ExecutionOptions,
+    aot_options: &AotCompilationOptions) -> Result<HloModuleConfig, String>
+  {
+    let default_num_replicas = self.options.number_of_replicas();
+    let num_threads = 0;
+    if self.execute_backend.is_some() { // TODO
+      // TODO
+    }
+
+    create_module_config(program_shape, argument_shapes, execution_options,
+      default_num_replicas, Some(num_threads), aot_options)
+  }
+
+  // Convenience function which checks whether the given client_shape
+  // (presumably passed by the client to set the result layout) is valid for the
+  // given computation result shape.
+  pub fn validate_result_shape(
+    client_shape: &Shape, result_shape: &Shape) -> Result<(), String>
+  {
+    if !ShapeUtil::compatible(client_shape, result_shape) {
+      let mut err_msg =
+        "shape used to set computation result layout ".to_string();
+      err_msg.push_str(&ShapeUtil::human_string_with_layout(client_shape));
+      err_msg.push_str(" is not compatible with result shape ");
+      err_msg.push_str(&ShapeUtil::human_string(result_shape));
+      return Err(err_msg);
+    }
+    Ok(())
+  }
 }
 
 // A GlobalData object represents a globally-accessible allocation of
@@ -271,4 +370,11 @@ impl GlobalData {
 //   device is chosen by the service.
 pub struct BlitzComputationInstance {
   
+}
+
+fn check_error<T>(value: &Result<T, String>) {
+  if value.is_err() {
+    let err_msg = value.as_ref().err().unwrap();
+    assert!(false, "{:?}", err_msg);
+  }
 }

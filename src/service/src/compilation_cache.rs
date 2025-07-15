@@ -8,7 +8,7 @@ use crate::executable::Executable;
 pub struct CompilationCache {}
 
 impl CompilationCache {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     CompilationCache {  }
   }
 

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use common::shape::ProgramShape;
+use common::shape::{ProgramShape};
 use hlo::hlo_instruction::HloInstruction;
 use crate::hlo_proto::{HloModuleProto, HloSnapshot};
 
@@ -64,6 +64,14 @@ impl BlitzComputation {
   }
 
   pub fn add_instructions(&mut self, _instruction: HloInstruction) {
+    unimplemented!()
+  }
+
+  pub fn has_host_program_shape(&self) -> bool {
+    unimplemented!()
+  }
+
+  pub fn host_program_shape(&self) -> &ProgramShape {
     unimplemented!()
   }
 }

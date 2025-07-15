@@ -204,7 +204,7 @@ impl Client {
   }
 
   // Unregister the memory for the given GlobalData on the device.
-  pub fn unregister(&self, data: &GlobalData) -> Result<(), String> {
+  pub fn unregister(&mut self, data: &GlobalData) -> Result<(), String> {
     self.stub.unregister(data.handle())
   }
 

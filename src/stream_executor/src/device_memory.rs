@@ -35,7 +35,9 @@ impl DeviceMemoryBase {
 
   // Warning: note that the pointer returned is not necessarily directly to
   // device virtual address space, but is platform-dependent.
-  pub fn opaque() {}
+  pub fn opaque(&self) -> i64 {
+    unimplemented!()
+  }
 
   // Returns the payload of this memory region.
   pub fn payload(&self) -> u64 {
@@ -72,6 +74,10 @@ impl<T> DeviceMemory<T> {
   // Default constructor instantiates a null-pointed, zero-sized memory region.
   pub fn default(t: T) -> Self {
     DeviceMemory { type_: t, base: DeviceMemoryBase::new(0) }
+  }
+
+  pub fn new_from_base(_base: DeviceMemoryBase) -> Self {
+    unimplemented!()
   }
 
   // This is made protected because it accepts a byte-size instead of an element
