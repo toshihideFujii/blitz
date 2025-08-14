@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use common::shape::{ProgramShape};
-use hlo::hlo_instruction::HloInstruction;
+use hlo::{hlo_instruction::HloInstruction, hlo_module::HloModule};
 use crate::hlo_proto::{HloModuleProto, HloSnapshot};
 
 // The computation graph that the user builds up with the BlitzBuilder.
@@ -42,6 +42,10 @@ impl BlitzComputation {
 
   pub fn mutable_proto(&mut self) -> &mut HloModuleProto {
     &mut self.proto
+  }
+
+  pub fn module(&self) -> &HloModule {
+    unimplemented!()
   }
 
   // Requests that we snapshot the computation into a serializable protocol

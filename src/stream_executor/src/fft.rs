@@ -41,7 +41,7 @@ impl FftSupport {
   // output_distance: Indicates the distance between the first element of two
   //                  consecutive signals in a batch of the output data.
   pub fn create_batched_plan_with_scratch_allocator(
-    &self, _stream: &dyn Stream, _rank: i64, _elem_count: &Vec<usize>,
+    &self, _stream: &Stream, _rank: i64, _elem_count: &Vec<usize>,
     _input_embed: &Vec<u64>, _input_stride: u64, _input_distance: u64,
     _output_embed: &Vec<u64>, _output_stride: u64, _output_distance: u64,
     _in_place_fft: bool, _batch_count: i64) -> Plan
@@ -55,7 +55,7 @@ impl FftSupport {
   // by direction parameter.
   pub fn do_fft_ctoc(
     &self,
-    _stream: &dyn Stream,
+    _stream: &Stream,
     _plan: &Plan,
     _input: DeviceMemory<f64>,
     _output: DeviceMemory<f64>) -> bool
@@ -66,7 +66,7 @@ impl FftSupport {
   // Computes real-to-complex FFT in forward direction.
   pub fn do_fft_rtoc(
     &self,
-    _stream: &dyn Stream,
+    _stream: &Stream,
     _plan: &Plan,
     _input: DeviceMemory<f64>,
     _output: DeviceMemory<f64>) -> bool
@@ -77,7 +77,7 @@ impl FftSupport {
   // Computes complex-to-real FFT in inverse direction.
   pub fn do_fft_ctor(
     &self,
-    _stream: &dyn Stream,
+    _stream: &Stream,
     _plan: &Plan,
     _input: DeviceMemory<f64>,
     _output: DeviceMemory<f64>) -> bool

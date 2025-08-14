@@ -25,7 +25,7 @@ pub struct CommandBuffer {}
 
 impl CommandBuffer {
   // Creates a new empty command buffer on the given executor.
-  pub fn new(_executor: &dyn StreamExecutor, _mode: CommandBufferMode) -> Self {
+  pub fn new(_executor: &StreamExecutor, _mode: CommandBufferMode) -> Self {
     unimplemented!()
   }
 
@@ -40,7 +40,7 @@ impl CommandBuffer {
   // primary use case for traced command buffers is to be inserted into primary
   // command buffers constructed with explicit APIs.
   pub fn trace(
-    _executor: &dyn StreamExecutor,
+    _executor: &StreamExecutor,
     _func: Box<dyn Fn()>,
     _mode: CommandBufferMode) -> Self
   {
@@ -50,8 +50,8 @@ impl CommandBuffer {
   // Creates a new command buffer on the given executor by tracing `function`
   // invocation using a user provided stream that will be passed to `function`.
   pub fn trace_by_stream(
-    _executor: &dyn StreamExecutor,
-    _stream: &dyn Stream,
+    _executor: &StreamExecutor,
+    _stream: &Stream,
     _func: Box<dyn Fn()>,
     _mode: CommandBufferMode) -> Self
   {
@@ -65,7 +65,7 @@ impl CommandBuffer {
   // commands added after a barrier in the same execution scope.
   pub fn barrier(
     &self,
-    _executor: &dyn StreamExecutor,
+    _executor: &StreamExecutor,
     _execution_scope_id: u64) -> Result<(), String>
   {
     unimplemented!()
@@ -120,7 +120,7 @@ impl CommandBuffer {
   pub fn if_(
     &self,
     _execution_scope_id: u64,
-    _executor: &dyn StreamExecutor,
+    _executor: &StreamExecutor,
     //_pred: ,
     //_then_builder: 
     ) -> Result<(), String>
@@ -134,7 +134,7 @@ impl CommandBuffer {
   pub fn if_else(
     &self,
     _execution_scope_id: u64,
-    _executor: &dyn StreamExecutor
+    _executor: &StreamExecutor
     // TODO
     ) -> Result<(), String>
   {
@@ -147,7 +147,7 @@ impl CommandBuffer {
   pub fn case(
     &self,
     _execution_scope_id: u64,
-    _executor: &dyn StreamExecutor) -> Result<(), String>
+    _executor: &StreamExecutor) -> Result<(), String>
   {
     unimplemented!()
   }
@@ -159,7 +159,7 @@ impl CommandBuffer {
   pub fn for_(
     &self,
     _execution_scope_id: u64,
-    _executor: &dyn StreamExecutor,
+    _executor: &StreamExecutor,
     _num_iteration: i64) -> Result<(), String>
   {
     unimplemented!()
@@ -184,7 +184,7 @@ impl CommandBuffer {
   pub fn while_(
     &self,
     _execution_scope_id: u64,
-    _executor: &dyn StreamExecutor) -> Result<(), String>
+    _executor: &StreamExecutor) -> Result<(), String>
   {
     unimplemented!()
   }

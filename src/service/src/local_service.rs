@@ -2,15 +2,18 @@
 
 use common::{blitz_data::GlobalDataHandle, shape::Shape};
 
-use crate::{backend::Backend, blitz_computation::BlitzComputation, compiler::AotCompilationResult, executable::Executable, executable_build_options::ExecutableBuildOptions, service::{Service, ServiceOptions}, shaped_buffer::ShapedBuffer};
+use crate::{backend::Backend, blitz_computation::BlitzComputation,
+  compiler::AotCompilationResult, executable::Executable,
+  executable_build_options::ExecutableBuildOptions,
+  service::{Service, ServiceOptions}, shaped_buffer::ShapedBuffer};
 
 // Service implementation that extends the Blitz service to leverage running
 // in the same process as the client.
-pub struct LocalService {
-  service: Service,
+pub struct LocalService<'backend> {
+  service: Service<'backend>,
 }
 
-impl LocalService {
+impl<'backend> LocalService<'backend> {
   pub fn new(_options: ServiceOptions) -> Self {
     unimplemented!()
   }

@@ -1898,6 +1898,15 @@ impl<T> Literal<T> where T: Clone + Default + PartialEq + 'static {
     // TODO
   }
 
+  pub fn relayout(
+    &self, new_layout: &Layout, shape_index: &Vec<i64>) -> Literal<T> {
+    self.base.relayout(new_layout, shape_index)
+  }
+
+  pub fn relayout_with_shape(&self, shape: &Shape) -> Literal<T> {
+    self.base.relayout_with_shape(shape)
+  }
+
   pub fn to_string(&self) -> String {
     self.base.to_string()
   }

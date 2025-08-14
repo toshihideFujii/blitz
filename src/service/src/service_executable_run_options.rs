@@ -10,10 +10,14 @@ pub struct ServiceExecutableRunOptions {
 }
 
 impl ServiceExecutableRunOptions {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     ServiceExecutableRunOptions {
-      run_options: ExecutableRunOptions::new()
+      run_options: ExecutableRunOptions::default()
     }
+  }
+
+  pub fn new(run_options: ExecutableRunOptions) -> Self {
+    ServiceExecutableRunOptions { run_options: run_options }
   }
 
   // Returns reference or pointer to `ExecutableRunOptions` member.
@@ -25,7 +29,7 @@ impl ServiceExecutableRunOptions {
     &mut self.run_options
   }
 
-  pub fn stream(&self) -> &Option<Box<dyn Stream>> {
+  pub fn stream(&self) -> &Option<Stream> {
     self.run_options.stream()
   }
 
@@ -35,6 +39,10 @@ impl ServiceExecutableRunOptions {
 
   pub fn device_ordinal(&self) -> i64 {
     self.run_options.device_ordinal()
+  }
+
+  pub fn local_device_count(&self) -> i64 {
+    self.run_options.local_device_count()
   }
 
   pub fn borrow_stream() {}

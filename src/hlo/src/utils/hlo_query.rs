@@ -18,6 +18,12 @@ pub fn contains_layout_constrained_collective(_module: &HloModule, _op: HloOpcod
   unimplemented!()
 }
 
+// Returns whether the module contains all-reduce instructions with constrained
+// layout.
+pub fn contains_layout_constrained_all_reduce(_module: &HloModule) -> bool {
+  unimplemented!()
+}
+
 // Returns the next available channel id that can be used in the given module
 // (for HloChannelInstructions).
 pub fn next_channel_id(_module: &HloModule) -> i64 {

@@ -91,7 +91,7 @@ impl HloDomainMap {
         if result.is_err() { return result; }
       }
     }
-    if instruction == instruction.parent().root_instruction() {
+    if instruction == instruction.parent().unwrap().root_instruction() {
       let mut domain = Domain::new();
       domain.enter_domains.insert(instruction.clone());
       let result = self.insert_domain(domain);

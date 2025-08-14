@@ -51,7 +51,7 @@ pub struct ExecutionTracker {
 }
 
 impl ExecutionTracker {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     ExecutionTracker {
       next_handle: 1,
       handle_to_execution: Mutex::new(HashMap::new())
@@ -74,7 +74,7 @@ impl ExecutionTracker {
     self.next_handle += 1;
     handle_map.insert(self.next_handle, async_exec);
 
-    let mut exec_handle = ExecutionHandle::new();
+    let mut exec_handle = ExecutionHandle::default();
     exec_handle.set_handle(self.next_handle);
     exec_handle
   }

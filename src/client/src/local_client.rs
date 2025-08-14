@@ -7,7 +7,11 @@ use common::{
 };
 
 use service::{
-  backend::Backend, blitz_computation::BlitzComputation, compiler::AotCompilationResult, executable::Executable, executable_build_options::ExecutableBuildOptions, hlo_proto::HloSnapshot, local_service::LocalService, service_executable_run_options::ServiceExecutableRunOptions, shaped_buffer::{ScopedShapedBuffer, ShapedBuffer}, stream_pool::StreamPool
+  backend::Backend, blitz_computation::BlitzComputation, compiler::AotCompilationResult,
+  executable::Executable, executable_build_options::ExecutableBuildOptions,
+  hlo_proto::HloSnapshot, local_service::LocalService,
+  service_executable_run_options::ServiceExecutableRunOptions,
+  shaped_buffer::{ScopedShapedBuffer, ShapedBuffer}, stream_pool::StreamPool
 };
 
 use stream_executor::{
@@ -47,7 +51,7 @@ impl LocalExecutable {
   // return the result.
   pub fn run(
     &self,
-    arguments: &Vec<&ShapedBuffer>,
+    arguments: &Vec<ShapedBuffer>,
     _run_options: &ExecutableRunOptions) -> Result<ScopedShapedBuffer, String>
   {
     let mut argument_shapes = vec![];
@@ -69,7 +73,7 @@ impl LocalExecutable {
   // to complete before returning.
   pub fn run_async(
     &self,
-    arguments: &Vec<&ShapedBuffer>,
+    arguments: &Vec<ShapedBuffer>,
     run_options: &ExecutableRunOptions) -> Result<ScopedShapedBuffer, String>
   {
     let mut argument_shapes = vec![];
@@ -88,7 +92,7 @@ impl LocalExecutable {
       snapshot = Some(dump_arguments(
         self.backend.as_ref().unwrap(),
         &self.executable, arguments,
-        stream.as_ref().unwrap().as_ref()));
+        stream.as_ref().unwrap()));
     }
 
     let outputs =
@@ -104,7 +108,7 @@ impl LocalExecutable {
         self.backend.as_ref().unwrap(),
         outputs.as_ref().unwrap(),
         snapshot.as_ref().unwrap(),
-        stream.as_ref().unwrap().as_ref());
+        stream.as_ref().unwrap());
     }
     outputs
   }
@@ -164,11 +168,11 @@ impl LocalExecutable {
 
 // An Blitz Client specialization for use when the client and service run in
 // the same process.
-pub struct LocalClient {
-  local_service: LocalService,
+pub struct LocalClient<'backend> {
+  local_service: LocalService<'backend>,
 }
 
-impl LocalClient {
+impl<'backend> LocalClient<'backend> {
   pub fn new() {}
 
   // Build and return LocalExecutable objects (one per partition, as specified
@@ -278,7 +282,7 @@ impl LocalClient {
       return Err("Executor is not exist.".to_string());
     }
     self.backend().transfer_manager().transfer_literal_to_infeed(
-      executor.unwrap().as_ref(), literal)
+      executor.unwrap(), literal)
   }
 
   // Transfer and return a value from the outfeed of the given device. The
@@ -294,7 +298,7 @@ impl LocalClient {
     }
 
     self.backend().transfer_manager().transfer_literal_from_outfeed(
-      executor.unwrap().as_ref(), literal)
+      executor.unwrap(), literal)
   }
 
   // Returns the device ordinal that corresponds to the given replica number.
@@ -354,8 +358,8 @@ pub fn update_build_options(
 pub fn dump_arguments(
   _backend: &Backend,
   _executable: &Executable,
-  _arguments: &Vec<&ShapedBuffer>,
-  _stream: &dyn Stream) -> HloSnapshot
+  _arguments: &Vec<ShapedBuffer>,
+  _stream: &Stream) -> HloSnapshot
 {
   unimplemented!()    
 }
@@ -364,7 +368,7 @@ pub fn dump_outputs_and_save_snapshot(
   _backend: &Backend,
   _outputs: &ScopedShapedBuffer, // check
   _snapshot: &HloSnapshot,
-  _stream: &dyn Stream)
+  _stream: &Stream)
 {
     
 }

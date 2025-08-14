@@ -55,14 +55,14 @@ impl<'module> HloOrdering<'module> {
   // given ordering.
   pub fn is_defined_before(&self, a: &HloValue, b: &HloValue) -> bool {
     // Entry parameter shoould always be defined before other instructions.
-    let module = b.defining_instruction().get_module().as_ref().unwrap();
-    if b.defining_instruction().parent() == module.entry_computation().unwrap() &&
+    let module = b.defining_instruction().get_module().unwrap();
+    if b.defining_instruction().parent().unwrap() == module.entry_computation().unwrap() &&
        b.defining_instruction().opcode() == HloOpcode::Parameter
     {
       return false;
     }
 
-    if a.defining_instruction().parent() == module.entry_computation().unwrap() &&
+    if a.defining_instruction().parent().unwrap() == module.entry_computation().unwrap() &&
        a.defining_instruction().opcode() == HloOpcode::Parameter
     {
       return true;
@@ -75,13 +75,13 @@ impl<'module> HloOrdering<'module> {
     if is_body_or_condition_phi(a) &&
       !is_body_or_condition_phi(b) &&
        self.call_graph.instruction_is_nested_in(
-        b.defining_instruction(), a.defining_instruction().parent())
+        b.defining_instruction(), a.defining_instruction().parent().unwrap())
     {
       return true;
     }
     if is_body_or_condition_phi(b) &&
        self.call_graph.instruction_is_nested_in(
-        a.defining_instruction(), b.defining_instruction().parent())
+        a.defining_instruction(), b.defining_instruction().parent().unwrap())
     {
       return false;
     }
@@ -269,7 +269,9 @@ impl<'module> HloOrdering<'module> {
             {
               for value_use in value.get_uses() {
                 println!("def have use: {:?}.", value_use.to_string());
-                if &value_use.instruction == value_use.instruction.parent().root_instruction() {
+                if &value_use.instruction ==
+                  value_use.instruction.parent().unwrap().root_instruction()
+                {
                   println!("def use is conditional root.");
                   has_escaped_use_in_conditional = true;
                   break;
@@ -324,7 +326,7 @@ impl<'module> HloOrdering<'module> {
   {
     println!("live_range_strictly_before(a={:?}. b={:?})",
       a.to_short_string(), b.to_short_string());
-    println!("Parent: {:?}", a.instruction().parent().to_string());
+    println!("Parent: {:?}", a.instruction().parent().unwrap().to_string());
 
     if !self.is_defined_before(a, b) {
       println!("{:?} not defined before {:?}.", a.to_short_string(), b.to_short_string());
@@ -341,9 +343,9 @@ impl<'module> HloOrdering<'module> {
     // until the end of the computation and can never be strictly before another
     // buffer nested in the same computation.
     for pos in a.positions() {
-      if pos.instruction.parent().root_instruction() == &pos.instruction &&
+      if pos.instruction.parent().unwrap().root_instruction() == &pos.instruction &&
         self.call_graph().instruction_is_nested_in(
-          b.instruction(), pos.instruction.parent())
+          b.instruction(), pos.instruction.parent().unwrap())
       {
         return false;
       }
@@ -367,7 +369,7 @@ impl<'module> HloOrdering<'module> {
       return false;
     }
 
-    if a.is_root_of(b.instruction().parent()) {
+    if a.is_root_of(b.instruction().parent().unwrap()) {
       println!("{:?} is live out of computation and defined before {:?} which is
         in same computation", a.to_short_string(), b.to_short_string());
       return false;
@@ -431,7 +433,7 @@ impl<'module> PredecessorHloOrdering<'module> {
   {
     // 'a' executes before 'b' if 'a' is in the strict predecessor set of 'b'.
     debug_assert!(a.parent() == b.parent());
-    a != b && self.predecessors.get(a.parent()).unwrap().is_reachable(a, b)
+    a != b && self.predecessors.get(a.parent().unwrap()).unwrap().is_reachable(a, b)
   }
 }
 
@@ -480,7 +482,7 @@ impl<'module> SequentialHloOrdering<'module> {
     }
     // 'a' is the root instruction of the computation, which lives out. So
     // 'a' cannot execute before 'b'.
-    if a.parent().root_instruction() == a {
+    if a.parent().unwrap().root_instruction() == a {
       return false;
     }
     self.order_position.get(a) < self.order_position.get(b)

@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use common::blitz_data::OpMetadata;
+
 use crate::{
   dfs_hlo_visitor_with_default::{DfsHloRewriteVisitor, FunctionVisitor},
   hlo_clone_context::HloCloneContext,
@@ -35,8 +37,10 @@ impl HloComputation {
 
   // Add an instruction to the computation.
   // The computation takes ownership of the instruction.
-  pub fn add_instruction(&
-    mut self, mut instruction: HloInstruction, name: String) -> &mut HloInstruction
+  pub fn add_instruction(
+    &mut self,
+    mut instruction: HloInstruction,
+    name: String) -> &mut HloInstruction
   {
     assert!(instruction.opcode() != HloOpcode::Parameter,
       "Parameter insstructions cannot be added to a computation after it has been built.");
@@ -45,6 +49,15 @@ impl HloComputation {
 
     // TODO
     unimplemented!()
+  }
+
+  pub fn add_instruction_by_metadata(
+    &mut self,
+    mut instruction: HloInstruction,
+    metadata: OpMetadata) -> &mut HloInstruction
+  {
+    instruction.set_metadata(metadata);
+    self.add_instruction(instruction, "".to_string())
   }
 
   fn add_instruction_internal(&mut self, _instruction: HloInstruction) {}
@@ -76,7 +89,11 @@ impl HloComputation {
 
   pub fn force_remove_instruction() {}
 
-  pub fn remove_instruction_and_unused_operands(&mut self, _instruction: &HloInstruction) {}
+  pub fn remove_instruction_and_unused_operands(
+    &mut self, _instruction: &HloInstruction) -> Result<(), String>
+  {
+    unimplemented!()
+  }
 
   // Set the root of the computation to the given instruction. The instruction
   // must have already been added to the computation.
@@ -185,11 +202,11 @@ impl HloComputation {
   pub fn replace_instruction_with_defferent_shape() {}
   pub fn set_parent() {}
 
-  pub fn parent(&self) -> &Option<HloModule> {
+  pub fn parent(&self) -> Option<&HloModule> {
     unimplemented!()
   }
 
-  pub fn mutable_parent(&mut self) -> &mut Option<HloModule> {
+  pub fn mutable_parent(&mut self) -> Option<&mut HloModule> {
     unimplemented!()
   }
 
@@ -331,7 +348,7 @@ impl HloComputation {
   }
 
   // Returns true if a given instruction is marked dead in this computation.
-  pub fn is_marked_as_dead(_inst: &HloInstruction) -> bool {
+  pub fn is_marked_as_dead(&self, _inst: &HloInstruction) -> bool {
     false
   }
 
@@ -360,5 +377,32 @@ impl HloComputation {
     _new_root: Option<HloInstruction>) -> HloComputation
   {
     unimplemented!()    
+  }
+}
+
+pub struct HloComputationBuilder {
+  name: String,
+  instructions: Vec<HloInstruction>
+}
+
+impl HloComputationBuilder {
+  pub fn new(name: String) -> Self {
+    HloComputationBuilder { name: name, instructions: Vec::new() }
+  }
+
+  // Build and return an HloComputation. The parameter root_instruction
+  // specifies the already-added instruction to use as the root. If
+  // root_instruction is nullptr then use the last added instruction as the
+  // root.
+  pub fn build(&self, _root_instruction: Option<&HloInstruction>) -> HloComputation {
+    unimplemented!()
+  }
+
+  // Add the instruction to be part of this computation.
+  // If the new instruction is derived from another one, you probably want to do
+  // `original_inst->AddInstruction(new_inst)` instead.
+  pub fn add_instruction(&mut self, instruction: HloInstruction) -> &HloInstruction {
+    self.instructions.push(instruction);
+    self.instructions.last().unwrap()
   }
 }

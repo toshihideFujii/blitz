@@ -1,10 +1,15 @@
 #![allow(dead_code)]
 
 use std::collections::HashSet;
-
-use stream_executor::{device_memory_allocator::{DeviceMemoryAllocator, StreamExecutorMemoryAllocator}, platform::Platform, stream_executor::StreamExecutor};
-
-use crate::{compiler::Compiler, computation_placer::ComputationPlacer, transfer_manager::TransferManager};
+use stream_executor::{
+  device_memory_allocator::{DeviceMemoryAllocator,
+  StreamExecutorMemoryAllocator}, platform::{Platform, StreamPriority},
+  stream::Stream, stream_executor::StreamExecutor
+};
+use crate::{
+  compiler::Compiler, computation_placer::ComputationPlacer,
+  transfer_manager::TransferManager
+};
 
 // Options to configure the backend when it is created.
 pub struct BackendOptions {
@@ -67,7 +72,7 @@ pub struct Backend {
   compiler: Compiler,
   transfer_manager: TransferManager,
   computation_placer: ComputationPlacer,
-  stream_executors: Vec<Box<dyn StreamExecutor>>,
+  stream_executors: Vec<StreamExecutor>,
   memory_allocator: StreamExecutorMemoryAllocator,
 }
 
@@ -90,7 +95,7 @@ impl Backend {
     &self.compiler
   }
 
-  pub fn memory_allocator(&self) -> DeviceMemoryAllocator {
+  pub fn memory_allocator(&self) -> &DeviceMemoryAllocator {
     unimplemented!()
   }
   
@@ -117,24 +122,43 @@ impl Backend {
 
   // Returns stream executors of all supported devices for this backend. The
   // executors are ordered by the device ordinal.
-  pub fn stream_executors(&self) -> &Vec<Box<dyn StreamExecutor>> {
+  pub fn stream_executors(&self) -> &Vec<StreamExecutor> {
     &self.stream_executors
   }
 
   // Returns the stream executor for the given device ordinal.
-  pub fn stream_executor(&self, device_ordinal: i64) -> Option<&Box<dyn StreamExecutor>> {
+  pub fn stream_executor(&self, device_ordinal: i64) -> Option<&StreamExecutor> {
     self.stream_executors.get(device_ordinal as usize)
   }
 
   // Returns the stream executor for the default device ordinal. This stream
   // executor can only be used when the number of computations is 1 (replication
   // can be > 1).
-  pub fn default_stream_executor(&self) -> &Box<dyn StreamExecutor> {
+  pub fn default_stream_executor(&self) -> &StreamExecutor {
     assert!(!self.stream_executors.is_empty());
     &self.stream_executors[0]
   }
 
-  pub fn borrow_stream() {}
+  // Borrows a stream for use by the caller with a given priority, either by
+  // grabbing it from an internal pool, or by constructing/initializating it,
+  // and returns the result to the caller.
+  pub fn borrow_stream(
+    &self,
+    device_ordinal: i64,
+    priority: StreamPriority) -> Result<Stream, String>
+  {
+    let executor = StreamExecutor::new(device_ordinal);
+    self.borrow_stream_by_executor(&executor, priority)
+  }
+
+  pub fn borrow_stream_by_executor(
+    &self,
+    _executor: &StreamExecutor,
+    _priority: StreamPriority) -> Result<Stream, String>
+  {
+    unimplemented!()
+  }
+
   pub fn stream_borrower_with_priority() {}
 
   // Returns whether the given device ordinal of the backend is supported.
@@ -149,5 +173,8 @@ impl Backend {
   pub fn eigen_intra_op_thread_pool_device() {}
 
   pub fn eigen_intra_op_thread_pool(&self) {}
-  pub fn reset_devices() {}
+
+  pub fn reset_devices(&self) -> Result<(), String> {
+    self.transfer_manager().reset_devices(&self.stream_executors)
+  }
 }

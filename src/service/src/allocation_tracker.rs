@@ -26,20 +26,20 @@ pub type AllocationMap = HashMap<i64, Allocation>;
 
 // Tracks allocations for the Blitz service; allocations can be registered
 // with shape/device/tag and resolved from a handle for later use.
-pub struct AllocationTracker {
+pub struct AllocationTracker<'backend> {
   // Backend to use with this tracker. The backend supplies the memory allocator
   // to use when deallocating memory.
-  backend: Backend,
+  backend: &'backend Backend,
   next_handle: i64,
   opaque_to_allocation_map: HashMap<i64, AllocationMap>,
   handle_to_shaped_buffers: HashMap<i64, Vec<ShapedBuffer>> // TODO: lock 
 }
 
-impl AllocationTracker {
+impl<'backend> AllocationTracker<'backend> {
   // The allocator is used for deallocating memory when allocations are
   // deregistered. All registered allocations must have the same platform as the
   // allocator.
-  pub fn new(backend: Backend) -> Self {
+  pub fn new(backend: &'backend Backend) -> Self {
     AllocationTracker {
       backend: backend,
       next_handle: 1,
@@ -119,10 +119,12 @@ impl AllocationTracker {
     let allocation_map = allocation_map_wrapper.unwrap();
     let target = allocation_map.get_mut(&device_memory.opaque());
     if target.is_none() {
+      /*
       let memory = OwningDeviceMemory::new(
         device_memory.clone(), device_ordinal, self.backend.memory_allocator());
       let allocation = Allocation::new(memory, 1);
       allocation_map.insert(device_memory.opaque(), allocation);
+      */
     } else {
       target.unwrap().ref_count += 1;   
     }
@@ -159,10 +161,10 @@ impl AllocationTracker {
   pub fn register_replicated_buffers(
     &mut self,
     replicated_buffers: Vec<ScopedShapedBuffer>,
-    tag: String) -> Result<GlobalDataHandle, String>
+    tag: &String) -> Result<GlobalDataHandle, String>
   {
     println!("register_replicated_buffers");
-    self.register_internal(replicated_buffers, tag)
+    self.register_internal(replicated_buffers, tag.to_string())
   }
 
   // Unregister the allocation for the given data handle.
@@ -172,7 +174,7 @@ impl AllocationTracker {
     println!("handle: {:?}", data.handle());
 
     let replicated_buffers_wrapper =
-      self.resolve_internal(data.clone());
+      self.resolve_internal(data);
     check_error(&replicated_buffers_wrapper);
 
     let replicated_buffers = replicated_buffers_wrapper.unwrap();
@@ -219,7 +221,7 @@ impl AllocationTracker {
   // were not found (or found, but found deallocated).
   pub fn resolve(
     &self,
-    data: GlobalDataHandle) -> Result<Vec<ShapedBuffer>, String>
+    data: &GlobalDataHandle) -> Result<Vec<ShapedBuffer>, String>
   {
     // TODO: lock
     self.resolve_internal(data)
@@ -230,7 +232,7 @@ impl AllocationTracker {
   // found deallocated).
   pub fn resolve_for_replica(
     &self,
-    data: GlobalDataHandle,
+    data: &GlobalDataHandle,
     replica_id: i64) -> Result<ShapedBuffer, String>
   {
     // TODO: lock
@@ -252,7 +254,7 @@ impl AllocationTracker {
 
   fn resolve_internal(
     &self,
-    data: GlobalDataHandle) -> Result<Vec<ShapedBuffer>, String>
+    data: &GlobalDataHandle) -> Result<Vec<ShapedBuffer>, String>
   {
     println!("resolve: {:?}", data.handle());
     let target =

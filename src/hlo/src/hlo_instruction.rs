@@ -13,10 +13,7 @@ use common::{
 };
 
 use crate::{
-  dfs_hlo_visitor_with_default::DfsHloVisitor,
-  hlo_computation::HloComputation,
-  hlo_domain_metadata::DomainMetadata,
-  hlo_instructions::{
+  collective_device_list::CollectiveDeviceList, dfs_hlo_visitor_with_default::DfsHloVisitor, hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata, hlo_instructions::{
     HloAsyncInstruction,
     HloAsyncStartInstruction,
     HloBatchNormGradInstruction,
@@ -27,11 +24,11 @@ use crate::{
     HloCollectiveInstruction,
     HloCompareInstruction,
     //HloConcatenateInstruction,
-    HloConstantInstruction,
+    //HloConstantInstruction,
     HloCopyStartInstruction,
     HloDynamicReshapeInstruction,
     HloDynamicSliceInstruction,
-    HloDynamicUpdateSliceInstruction,
+    //HloDynamicUpdateSliceInstruction,
     //HloGetTupleElementInstruction,
     HloInfeedInstruction,
     HloIotaInstruction,
@@ -521,10 +518,11 @@ impl HloInstruction {
   }
 
   // Creates a literal constant instruction.
-  pub fn create_constant<T>(literal: Literal<T>) -> HloConstantInstruction<T>
+  pub fn create_constant<T>(_literal: Literal<T>) -> HloInstruction
     where T: Clone + Default + PartialEq
   {
-    HloConstantInstruction::new(literal)
+    //HloConstantInstruction::new(literal)
+    unimplemented!()
   }
 
   // Creates an iota instruction.
@@ -569,12 +567,26 @@ impl HloInstruction {
   pub fn create_rng_get_and_update_state() {}
 
   // Creates a unary instruction (one operand).
+  // Precondition: opcode must be a legitimate unary operation.
   pub fn create_unary(
     _shape: &Shape,
     _opcode: HloOpcode,
-    _operand: &HloInstruction) {}
+    _operand: &HloInstruction) -> HloInstruction
+  {
+    unimplemented!()
+  }
 
-  pub fn create_binary() {}
+  // Creates a binary instruction (two operands).
+  // Precondition: opcode must be a legitimate binary operation.
+  pub fn create_binary(
+    _shape: &Shape,
+    _opcode: HloOpcode,
+    _lhs: &HloInstruction,
+    _rhs: &HloInstruction) -> HloInstruction
+  {
+    unimplemented!()
+  }
+
   pub fn create_ternary() {}
 
   pub fn create_variadic(
@@ -662,7 +674,32 @@ impl HloInstruction {
 
   pub fn create_all_gather() {}
   pub fn create_all_gather_start() {}
-  pub fn create_all_reduce() {}
+
+  // Creates a cross replica reduction op.
+  //
+  // `reduction_computation`: the reduction function.
+  //
+  // `replica_groups`: each ReplicaGroup contains a list of replica id. If
+  // empty, all replicas belong to one group in the order of 0 - (n-1).
+  // Allreduce will be applied within subgroups.
+  // For example, we have 4 replicas, then replica_groups={{0,2},{1,3}} means,
+  // replica 0 and 2 are in subgroup 0, replica 1 and 3 are in subgroup 1.
+  //
+  // `channel_id`: for Allreduce nodes from different modules, if
+  // they have the same channel_id, they will be 'Allreduce'd. If
+  // empty, Allreduce will not be applied cross modules.
+  pub fn create_all_reduce(
+    _shape: &Shape,
+    _operands: &Vec<HloInstruction>,
+    _reduce_computation: &HloComputation,
+    _device_list: &CollectiveDeviceList,
+    _constraint_layout: bool,
+    _channel_id: Option<i64>,
+    _use_global_device_ids: bool) -> HloInstruction
+  {
+    unimplemented!()
+  }
+
   pub fn create_reduce_scatter() {}
   pub fn create_all_reduce_start() {}
   pub fn create_all_to_all() {}
@@ -675,7 +712,15 @@ impl HloInstruction {
   // Creates an instruction that returns a u32 partition ID.
   pub fn create_partition_id(_shape: &Shape) {}
 
-  pub fn create_convert() {}
+  // Creates a conversion instruction, where operand is the data to convert and
+  // shape is the target shape for the conversion.
+  pub fn create_convert(shape: Shape, operand: HloInstruction) -> HloInstruction {
+    let mut instruction = HloInstruction::default();
+    instruction.set_opcode(HloOpcode::Convert);
+    instruction.set_shape(shape);
+    instruction.append_operand(operand);
+    instruction
+  }
 
   // Creates a bitcast instruction, where operand is the data to convert
   // and shape is the target shape for the conversion.
@@ -768,12 +813,13 @@ impl HloInstruction {
   }
 
   pub fn create_dynamic_update_slice(
-    shape: &Shape,
-    operand: HloInstruction,
-    update: HloInstruction,
-    start_indices: Vec<HloInstruction>) -> HloDynamicUpdateSliceInstruction
+    _shape: &Shape,
+    _operand: &HloInstruction,
+    _update: &HloInstruction,
+    _start_indices: Vec<HloInstruction>) -> HloInstruction
   {
-    HloDynamicUpdateSliceInstruction::new(shape, operand, update, start_indices)
+    //HloDynamicUpdateSliceInstruction::new(shape, operand, update, start_indices)
+    unimplemented!()
   }
 
   pub fn create_concatenate(
@@ -1255,8 +1301,8 @@ impl HloInstruction {
     if new_producer_is_user {
       self.add_user(new_producer.clone());
     }
-    if self.parent.is_some() && self.parent().root_instruction() == self {
-      self.mutable_parent().set_root_instruction(
+    if self.parent.is_some() && self.parent().unwrap().root_instruction() == self {
+      self.mutable_parent().as_mut().unwrap().set_root_instruction(
         new_producer.clone(), true);
     }
 
@@ -1851,20 +1897,33 @@ impl HloInstruction {
     self.parent = Some(Box::new(parent));
   }
 
-  pub fn parent(&self) -> &HloComputation {
-    self.parent.as_ref().unwrap()
+  pub fn parent(&self) -> Option<&HloComputation> {
+    if self.parent.is_none() {
+      return None;
+    }
+    Some(self.parent.as_ref().unwrap())
   }
 
-  pub fn mutable_parent(&mut self) -> &mut HloComputation {
-    self.parent.as_mut().unwrap()
+  pub fn mutable_parent(&mut self) -> Option<&mut HloComputation> {
+    if self.parent.is_none() {
+      return None;
+    }
+    Some(self.parent.as_mut().unwrap())
   }
 
   // Returns the module for this instruction.
-  pub fn get_module(&self) -> &Option<HloModule> {
+  pub fn get_module(&self) -> Option<&HloModule> {
     if self.parent.is_some() {
       return self.parent.as_ref().unwrap().parent();
     }
-    &None
+    None
+  }
+
+  pub fn get_mutable_module(&mut self) -> Option<&mut HloModule> {
+    if self.parent.is_some() {
+      return self.parent.as_mut().unwrap().mutable_parent();
+    }
+    None
   }
 
   pub fn sort_instruction_user_and_control_lists() {}
@@ -2064,7 +2123,9 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn replica_groups() {}
+  pub fn replica_groups(&self) -> &Vec<ReplicaGroup> {
+    unimplemented!()
+  }
 
   pub fn add_replica_groups(&mut self, _group: ReplicaGroup) {
     unimplemented!()
@@ -2251,7 +2312,17 @@ impl HloInstruction {
   }
 
   pub fn output_operand_aliasing() {}
-  pub fn append_operand() {}
+
+  // Appends operand(s) to the list of operands and adds this instruction as a
+  // user of the operand.
+  pub fn append_operand(&mut self, mut operand: HloInstruction) {
+    if operand.parent().is_some() {
+      debug_assert!(!operand.parent().as_ref().unwrap().is_marked_as_dead(&operand),
+        "Operand is already marked dead");
+    }
+    operand.add_user(self.clone());
+    self.operands.push(operand);
+  }
 
   // HloReducePrecisionInstruction
   pub fn operand_bits(&self) -> i64 {
@@ -2349,6 +2420,10 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn use_global_device_ids(&self) -> bool {
+    unimplemented!()
+  }
+
   pub fn set_use_global_device_ids(&mut self, _use_global_device_ids: bool) {
     unimplemented!()
   }
@@ -2370,6 +2445,14 @@ impl HloInstruction {
   }
 
   pub fn set_result_accuracy(&mut self, _result_accuracy: ResultAccuracy) {
+    unimplemented!()
+  }
+
+  pub fn all_gather_dimension(&self) -> i64 {
+    unimplemented!()
+  }
+
+  pub fn device_list(&self) -> &CollectiveDeviceList {
     unimplemented!()
   }
 

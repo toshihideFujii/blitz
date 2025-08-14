@@ -395,7 +395,7 @@ impl DfsHloRewriteVisitor {
     new: &HloInstruction) -> Result<(), String>
   {
     let status =
-      old.parent().replace_with_new_instruction(old, new);
+      old.parent().unwrap().replace_with_new_instruction(old, new);
     if status.is_ok() {
       self.changed = true;
     }
@@ -411,8 +411,10 @@ impl DfsHloRewriteVisitor {
     new: &HloInstruction,
     preserve_sharding: bool) -> Result<bool, String>
   {
-    let changed_or = old.parent().replace_instruction(
-      old, new, preserve_sharding, true, false);
+    let changed_or =
+      old.parent().unwrap().replace_instruction(
+        old, new, preserve_sharding, true,
+        false);
     if changed_or.is_ok() {
       self.changed |= changed_or.as_ref().unwrap();
     }

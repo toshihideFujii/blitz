@@ -190,7 +190,9 @@ impl HloValue {
   // computation.
   pub fn is_root_of(&self, computation: &HloComputation) -> bool {
     for pos in &self.positions {
-      if pos.instruction.is_root() && pos.instruction.parent() == computation {
+      if pos.instruction.is_root() &&
+        pos.instruction.parent().unwrap() == computation
+      {
         return true;
       }
     }

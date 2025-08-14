@@ -59,7 +59,7 @@ impl PlatformUtil {
   // If the platform has no visible devices, a not-found error is returned.
   pub fn get_stream_executors(
     _platform: &dyn Platform,
-    _allowed_devices: Option<HashSet<i64>>) -> Result<Vec<Box<dyn StreamExecutor>>, String>
+    _allowed_devices: Option<HashSet<i64>>) -> Result<Vec<StreamExecutor>, String>
   {
     unimplemented!()    
   }

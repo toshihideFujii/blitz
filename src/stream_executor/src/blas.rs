@@ -198,7 +198,7 @@ pub trait BlasSupport {
   // Computes the product of a vector by a scalar: x <- a*x.
   fn do_blas_scal(
     &self,
-    _stream: &dyn Stream,
+    _stream: &Stream,
     _elem_count: usize,
     _alpha: f64,
     _x: &DeviceMemory<f64>,
@@ -217,7 +217,7 @@ pub trait BlasSupport {
   // y is a vector with m(trans==kNoTranspose)/n(otherwise) elements.
   fn do_blas_gemv(
     &self,
-    _stream: &dyn Stream,
+    _stream: &Stream,
     _trans: Transpose,
     _m: u64, _n: u64,
     _alpha: f64,
@@ -243,7 +243,7 @@ pub trait BlasSupport {
   // case the expected alpha/beta type is `float`.
   fn do_blas_gemm(
     &self,
-    _stream: &dyn Stream,
+    _stream: &Stream,
     _transa: Transpose, _transb: Transpose,
     _m: u64, _n: u64, _k: u64,
     _dtype: DataType,
@@ -255,7 +255,7 @@ pub trait BlasSupport {
   // Gets a list of supported algorithms for DoBlasGemmWithAlgorithm.
   fn get_blas_gemm_algorithms(
     &self,
-    _stream: &dyn Stream,
+    _stream: &Stream,
     _alpha: f64, _beta: f64,
     _out_algorithm: &Vec<AlgorithmType>) -> Result<(), String>;
 
@@ -272,7 +272,7 @@ pub trait BlasSupport {
   // creating a new Stream for each attempt.
   fn do_blas_gemm_with_algorithm(
     &self,
-    _stream: &dyn Stream,
+    _stream: &Stream,
     _transa: Transpose, _transb: Transpose,
     _m: u64, _n: u64, _k: u64, _alpha: f64,
     _a: &DeviceMemoryBase, _type_a: DataType, _lda: i64,
@@ -290,7 +290,7 @@ pub trait BlasSupport {
   // and c, which contain batch_count DeviceMemory objects.
   fn do_blas_gemm_batched(
     &self,
-    _stream: &dyn Stream,
+    _stream: &Stream,
     _transa: Transpose, _transb: Transpose,
     _m: u64, _n: u64, _k: u64, _alpha: f64,
     _lda: i64, _ldb: i64, _beta: f64, _ldc: i64,
@@ -310,7 +310,7 @@ pub trait BlasSupport {
   // or op(a) = conj(a').
   fn do_blas_trsm(
     &self,
-    _stream: &dyn Stream,
+    _stream: &Stream,
     _side: Side, _uplo: UpperLower, _transa: Transpose, _diag: Diagonal,
     _m: u64, _n: u64,
     _alpha: f64, _a: &DeviceMemory<f64>,
@@ -320,7 +320,7 @@ pub trait BlasSupport {
   // `as` and `bs` must have the same length.
   fn do_blas_trsm_batched(
     &self,
-    _stream: &dyn Stream,
+    _stream: &Stream,
     _side: Side, _uplo: UpperLower, _transa: Transpose, _diag: Diagonal,
     _m: u64, _n: u64, _alpha: f64, _as: &DeviceMemory<f64>, _lda: i64,
     _bs: &DeviceMemory<f64>, _ldb: i64, _batch_count: usize) -> bool;

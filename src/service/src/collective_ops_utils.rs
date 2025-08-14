@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 
+use common::{blitz_data::PrimitiveType, literal::Literal};
 use hlo::{hlo_computation::HloComputation, hlo_instruction::HloInstruction};
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum ReductionKind {
   Sum,
   Product,
@@ -16,12 +18,20 @@ pub fn match_reduction_instruction(_hlo: &HloInstruction) -> Option<ReductionKin
 }
 
 // Attempts to match computation to one of the possible cases in ReductionKind.
-pub fn match_reduction_computation(_computation: &HloComputation) -> Option<ReductionKind>
+pub fn match_reduction_computation(
+  _computation: &HloComputation) -> Option<ReductionKind>
 {
   unimplemented!()
 }
 
-pub fn get_reduction_identity() {}
+// Returns the reduction identity value for a certain ReductionKind and
+// PrimitiveType.
+pub fn get_reduction_identity<T>(
+  _kind: &ReductionKind, _t: &PrimitiveType) -> Option<Literal<T>>
+  where  T: Default + Clone + PartialEq
+{
+  unimplemented!()
+}
 
 pub enum CollectiveOpGroupMode {
   CrossReplica,
@@ -34,7 +44,14 @@ pub fn get_participating_ids() {}
 
 pub fn collective_op_group_mode_to_string() {}
 
-pub fn get_collective_op_group_mode() {}
+// Returns the group formation mode implied by (a) whether the operation has
+// channel_id and (b) if it has use_global_device_ids and if yes, its value.
+pub fn get_collective_op_group_mode(
+  _has_channel_id: bool,
+  _use_global_device_ids: Option<bool>) -> Result<CollectiveOpGroupMode, String>
+{
+  unimplemented!()
+}
 
 pub fn get_participating_device_groups() {}
 

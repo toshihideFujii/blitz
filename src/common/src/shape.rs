@@ -503,7 +503,7 @@ pub struct ProgramShape {
 }
 
 impl ProgramShape {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     ProgramShape {
       parameters: Vec::new(),
       parameter_names: Vec::new(),

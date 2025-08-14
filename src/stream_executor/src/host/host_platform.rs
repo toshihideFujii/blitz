@@ -73,11 +73,11 @@ impl Platform for HostPlatform {
     HostExecutor::create_device_description_by_ordinal(ordinal)
   }
 
-  fn find_existing(&self, _ordinal: i64) -> Result<Box<dyn StreamExecutor>, String> {
+  fn find_existing(&self, _ordinal: i64) -> Result<StreamExecutor, String> {
     unimplemented!()
   }
 
-  fn executor_for_device(&self, _ordinal: i64) -> Result<Box<dyn StreamExecutor>, String> {
+  fn executor_for_device(&self, _ordinal: i64) -> Result<StreamExecutor, String> {
     let _factory =
       |ordinal: i64| -> Result<HostExecutor, String>
     {

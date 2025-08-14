@@ -6,7 +6,9 @@ use crate::{
   stream_executor::StreamExecutor
 };
 
-// An enum to represent defferent levels of stream prioritues.
+// An enum to represent different levels of stream priorities.
+// This is to avoid platform-specific representations in abstractions.
+#[derive(Debug, Clone, PartialEq)]
 pub enum StreamPriority {
   Default,
   Lowest,
@@ -58,7 +60,7 @@ pub trait Platform {
   // Returns a StreamExecutor for the given ordinal if one has already been
   // created, or an error is returned if none exists.  Does not create a new
   // context with the device.
-  fn find_existing(&self, _ordinal: i64) -> Result<Box<dyn StreamExecutor>, String>;
+  fn find_existing(&self, _ordinal: i64) -> Result<StreamExecutor, String>;
 
   // Returns a device with the given ordinal on this platform with a default
   // plugin configuration or, if none can be found with the given ordinal or
@@ -67,5 +69,5 @@ pub trait Platform {
   //
   // Ownership of the executor is NOT transferred to the caller --
   // the Platform owns the executors in a singleton-like fashion.
-  fn executor_for_device(&self, _ordinall: i64) -> Result<Box<dyn StreamExecutor>, String>;
+  fn executor_for_device(&self, _ordinall: i64) -> Result<StreamExecutor, String>;
 }

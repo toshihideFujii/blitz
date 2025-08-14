@@ -65,7 +65,7 @@ impl Alias {
 
 // This class specifies the alias map from output index to parameter number and
 // parameter index in the entry computation.
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct HloInputOutputAliasConfig {
   alias: ShapeTree<Alias>
 }
@@ -147,7 +147,7 @@ impl HloInputOutputAliasConfig {
   }
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct HloBufferDonorConfig {}
 
 impl HloBufferDonorConfig {

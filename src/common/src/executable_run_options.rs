@@ -41,30 +41,30 @@ impl RunId {
 // callback to complete; instead the callback is scheduled by the runtime.
 // This functionality must be provided by the caller, and hence is provided in
 // callback form.
-type ThenExecutionDunction = dyn Fn(&dyn Stream, &dyn Fn());
+type ThenExecutionDunction = dyn Fn(&Stream, &dyn Fn());
 
 // Callback for sending device buffer to a channel. Returned event will be
 // recorded on a `stream` once the send operation is completed and data was
 // copied from the `src` memory. `frontend_attrs` contains frontend specific
 // attributes for the send.
-type SendDeviceMemoryFunction = dyn Fn(i64, &dyn Stream, &Shape);
+type SendDeviceMemoryFunction = dyn Fn(i64, &Stream, &Shape);
 
 // Callback for receiving device buffer from a channel. Returned event will be
 // recorded on a `stream` once the recv operation is completed and data was
 // copied into the `dst` memory. `frontend_attrs` contains frontend specific
 // attributes for the receive.
 type RecvDeviceMemoryFunction =
-  dyn Fn(i64, &dyn Stream, &Shape, &DeviceMemoryBase, &HashMap<String, String>);
+  dyn Fn(i64, &Stream, &Shape, &DeviceMemoryBase, &HashMap<String, String>);
 
 // Class containing options for running a LocalExecutable.
 pub struct ExecutableRunOptions {
   allocator: Option<DeviceMemoryAllocator>,
   device_ordinal: i64,
-  stream: Option<Box<dyn Stream>>,
+  stream: Option<Stream>,
   rng_seed: i64,
   launch_id: i64,
-  device_to_host_stream: Option<Box<dyn Stream>>,
-  host_to_device_stream: Option<Box<dyn Stream>>,
+  device_to_host_stream: Option<Stream>,
+  host_to_device_stream: Option<Stream>,
   run_id: RunId,
   execution_profile: ExecutionProfile,
   then_execute_function: Option<Box<ThenExecutionDunction>>,
@@ -74,7 +74,7 @@ pub struct ExecutableRunOptions {
 }
 
 impl ExecutableRunOptions {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     ExecutableRunOptions {
       allocator: None,
       device_ordinal: 0,
@@ -119,12 +119,12 @@ impl ExecutableRunOptions {
   // If set, this is the stream to run the computation on. The platform of the
   // stream must match the platform the executable was built for.  A value of
   // nullptr indicates the option has not been set.
-  pub fn set_stream(&mut self, stream: Box<dyn Stream>) -> &mut Self {
+  pub fn set_stream(&mut self, stream: Stream) -> &mut Self {
     self.stream = Some(stream);
     self
   }
 
-  pub fn stream(&self) -> &Option<Box<dyn Stream>> {
+  pub fn stream(&self) -> &Option<Stream> {
     &self.stream
   }
 
@@ -132,24 +132,24 @@ impl ExecutableRunOptions {
   // pre-computation transfers). The platform of the stream must match the
   // platform the executable was built for. A value of nullptr indicates the
   // option has not been set.
-  pub fn set_host_to_device_stream(&mut self, stream: Box<dyn Stream>) -> &mut Self {
+  pub fn set_host_to_device_stream(&mut self, stream: Stream) -> &mut Self {
     self.host_to_device_stream = Some(stream);
     self
   }
 
-  pub fn host_to_device_stream(&self) -> &Option<Box<dyn Stream>> {
+  pub fn host_to_device_stream(&self) -> &Option<Stream> {
     &self.host_to_device_stream
   }
 
   // If set, this is the stream to perform device to host transfers on.
   // The platform of the stream must match the platform the executable was
   // built for. A value of nullptr indicates the option has not been set.
-  pub fn set_device_to_host_stream(&mut self, stream: Box<dyn Stream>) -> &mut Self {
+  pub fn set_device_to_host_stream(&mut self, stream: Stream) -> &mut Self {
     self.device_to_host_stream = Some(stream);
     self
   }
 
-  pub fn device_to_host_stream(&self) -> &Option<Box<dyn Stream>> {
+  pub fn device_to_host_stream(&self) -> &Option<Stream> {
     &self.device_to_host_stream
   }
 
@@ -174,7 +174,7 @@ impl ExecutableRunOptions {
     &self.execution_profile
   }
 
-  pub fn set_device_assignment() {}
+  pub fn set_device_assignment(&mut self) {}
   pub fn device_assignment() {}
 
   pub fn set_rng_seed(&mut self, rng_seed: i64) -> &mut ExecutableRunOptions {
@@ -251,7 +251,7 @@ impl ExecutableRunOptions {
     self
   }
 
-  pub fn local_device_counnt(&self) -> i64 {
+  pub fn local_device_count(&self) -> i64 {
     self.local_device_count
   }
 }

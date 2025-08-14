@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use common::{shape::ShapeEqual, shape_util::ShapeUtil};
+use common::{shape::ShapeEqual, shape::Shape, shape_util::ShapeUtil};
 use hlo::{
   hlo_instruction::HloInstruction,
   hlo_module::HloModule,
@@ -265,7 +265,11 @@ impl<'module> HloDataflowAnalysis<'module> {
     out.push_str("\n");
 
     out.push_str("  Instruction value sets:\n");
-    for comp in self.module.computations() {
+    let func =
+      |_module: &HloModule| -> Result<(Vec<Shape>, Shape), String> {
+        unimplemented!()
+    };
+    for comp in self.module.computations(&func) {
       if HloInstruction::is_thread_included(
         comp.execution_thread(), &self.execution_threads)
       {
@@ -635,7 +639,12 @@ impl<'module> HloDataflowAnalysis<'module> {
     }
     // For each value in each value set, verify that the value set's position
     // appears in the value's positions().
-    for comp in self.module.computations() {
+    let func =
+      |_module: &HloModule| -> Result<(Vec<Shape>, Shape), String>
+    {
+      unimplemented!()
+    };
+    for comp in self.module.computations(&func) {
       if HloInstruction::is_thread_included(
         comp.execution_thread(), &self.execution_threads)
       {
@@ -702,7 +711,12 @@ impl<'module> HloDataflowAnalysis<'module> {
     println!("After phi graph optimization");
     println!("{:?}", self.phi_graph.to_string());
 
-    for comp in self.module.computations() {
+    let func =
+      |_module: &HloModule| -> Result<(Vec<Shape>, Shape), String>
+    {
+      unimplemented!()
+    };
+    for comp in self.module.computations(&func) {
       if !HloInstruction::is_thread_included(
         comp.execution_thread(), &self.execution_threads)
       {

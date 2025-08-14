@@ -12,13 +12,15 @@ use service::{blitz_computation::BlitzComputation, hlo_proto::HloSnapshot, servi
 
 // Blitz service's client object -- wraps the service with convenience and
 // lifetime-oriented methods.
-pub struct Client {
-  stub: Service
+pub struct Client<'backend> {
+  stub: Service<'backend>
 }
 
-impl Client {
-  pub fn new(stub: Service) -> Self {
-    Client { stub: stub }
+impl<'backend> Client<'backend> {
+  pub fn new(stub: Service<'backend>) -> Self {
+    Client {
+      stub: stub
+    }
   }
 
   // Compile the computation with the given argument shapes and returns the
@@ -34,16 +36,16 @@ impl Client {
   // * If execution_options.device_handles should be empty. If you need
   //   non-empty device handles, call 'Execute' instead.
   pub fn compile(
-    &self,
-    _computation: &BlitzComputation,
+    &mut self,
+    computation: &BlitzComputation,
     argument_shapes: &Vec<Shape>,
     execution_options: Option<ExecutionOptions>) -> Result<ExecutionHandle, String>
   {
     if execution_options.is_none() {
-      self.stub.compile(argument_shapes,
+      self.stub.compile(computation, argument_shapes,
         create_default_execution_options())
     } else {
-      self.stub.compile(argument_shapes,
+      self.stub.compile(computation, argument_shapes,
         execution_options.unwrap())
     }
   }
@@ -53,7 +55,7 @@ impl Client {
   // * If execution_profile is not nullptr then the pointed-to ExecutionProfile
   //   will be filled with profile data from the execution.
   pub fn execute(
-    &self,
+    &mut self,
     handle: &ExecutionHandle,
     arguments: &Vec<GlobalData>,
     execution_profile: Option<ExecutionProfile>) -> Result<GlobalData, String>
@@ -122,9 +124,9 @@ impl Client {
   // device (and its replicas if replication is enabled). Otherwise, data is
   // transferred to the default device (and its replicas).
   pub fn transfer_to_server<T>(
-    &self,
+    &mut self,
     literal: &Literal<T>,
-    device_handle: Option<DeviceHandle>) -> Result<GlobalData, String>
+    device_handle: Option<&DeviceHandle>) -> Result<GlobalData, String>
     where T: Clone + Default + PartialEq
   {
     self.stub.transfer_to_server(literal, device_handle)
@@ -139,7 +141,7 @@ impl Client {
     &self,
     literal: &Literal<T>,
     replica_id: i64,
-    device_handle: Option<DeviceHandle>) -> Result<(), String>
+    device_handle: Option<&DeviceHandle>) -> Result<(), String>
     where T: Clone + Default + PartialEq
   {
     self.stub.transfer_to_infeed(literal, replica_id, device_handle)
@@ -154,7 +156,7 @@ impl Client {
     &self,
     shape_with_layout: &Shape,
     replica_id: i64,
-    device_handle: Option<DeviceHandle>) -> Result<Literal<T>, String>
+    device_handle: Option<&DeviceHandle>) -> Result<Literal<T>, String>
     where T: Clone + Default + PartialEq
   {
     self.stub.transfer_from_outfeed(shape_with_layout, replica_id, device_handle)
@@ -215,7 +217,7 @@ impl Client {
   
   // Returns the Shape of the given array specified by 'data'. The shape
   // includes the Layout of the array as it is stored on the service.
-  pub fn get_shape(&self, data: &GlobalData) -> Result<Shape, String> {
+  pub fn get_shape(&self, data: &GlobalData) -> Result<&Shape, String> {
     self.stub.get_shape(data)
   }
 

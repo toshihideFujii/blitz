@@ -202,7 +202,7 @@ impl CallGraphNode {
 
   // Adds a callsite which calls this computation.
   fn add_caller_call_site(&mut self, caller_callsite: CallSite) {
-    let caller = caller_callsite.instruction().parent();
+    let caller = caller_callsite.instruction().parent().unwrap();
     if !self.callee_set.contains(caller) {
       self.callers.push(caller.clone());
       self.caller_set.insert(caller.clone());
@@ -217,7 +217,7 @@ impl CallGraphNode {
     instruction: &HloInstruction,
     execution_threads: &HashSet<String>)
   {
-    debug_assert_eq!(instruction.parent(), self.computation());
+    debug_assert_eq!(instruction.parent().unwrap(), self.computation());
     let context = get_instruction_call_context(&instruction.opcode());
     if !instruction.called_computations().is_empty() {
       debug_assert!(context == CallContext::ControlFlow ||
@@ -364,7 +364,7 @@ impl<'module> CallGraph<'module> {
   pub fn instruction_is_nested_in(
     &self, instruction: &HloInstruction, computation: &HloComputation) -> bool
   {
-    self.dominates(computation, instruction.parent())
+    self.dominates(computation, instruction.parent().unwrap())
   }
 
   // Returns the nearest call graph ancestors of instructions 'a' and 'b' for
@@ -404,9 +404,9 @@ impl<'module> CallGraph<'module> {
       |instruction: Option<&HloInstruction>| -> Option<&HloInstruction>
     {
       let node =
-        self.get_node(instruction.unwrap().parent());
+        self.get_node(instruction.unwrap().parent().unwrap());
       if node.caller_callsites().len() != 1 {
-        if instruction.unwrap().parent().is_async_computation() {
+        if instruction.unwrap().parent().unwrap().is_async_computation() {
           return Some(node.caller_callsites()[0].instruction());
         }
         return None;
@@ -418,8 +418,8 @@ impl<'module> CallGraph<'module> {
     // element.
     let mut a_ancestor  = Some(a);
     let mut b_ancestor = Some(b);
-    let a_depth = self.get_node(a.parent()).depth();
-    let b_depth = self.get_node(b.parent()).depth();
+    let a_depth = self.get_node(a.parent().unwrap()).depth();
+    let b_depth = self.get_node(b.parent().unwrap()).depth();
 
     // Advance a_ancestor (b_ancestor) up the call chain until the call depth of
     // a_ancestor or b_ancestor are the same. Necessarily each call to next_caller

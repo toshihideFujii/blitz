@@ -20,13 +20,20 @@ use crate::{
 // !ok(), it will never be ok().
 //
 // Thread-safe post-initialization.
-pub trait Stream {
+#[derive(Debug, Clone)]
+pub struct Stream {}
 
-  fn platform_specific_handle(&self) -> &PlatformSpecificHandle;
+impl Stream {
+
+  pub fn platform_specific_handle(&self) -> &PlatformSpecificHandle {
+    unimplemented!()
+  }
 
   // Returns whether any errors have occurred while entraining work for this
   // stream.
-  fn ok(&self) -> bool;
+  pub fn ok(&self) -> bool {
+    unimplemented!()
+  }
 
   // Retrieves execution status back into the stream from the underlying
   // implementation without blocking the stream.
@@ -37,20 +44,28 @@ pub trait Stream {
   // devices should also override AllowsSyncOnCompletion to return false.) For
   // these devices, this method can be used after work is finished to retrieve
   // execution status.
-  fn refresh_status(&self) -> Result<(), String>;
+  pub fn refresh_status(&self) -> Result<(), String> {
+    unimplemented!()
+  }
 
   // Initialize the stream. This must be performed before entraining any other
   // operations.
-  fn initialize(&self) -> Result<(), String>;
+  pub fn initialize(&self) -> Result<(), String> {
+    unimplemented!()
+  }
 
   // Get or create a sub-stream from this stream. If there is any sub-stream in
   // the pool that can be reused then just return this sub-stream.  Otherwise
   // create a new sub-stream.
-  fn get_or_create_sub_stream(&self) -> Result<Box<dyn Stream>, String>;
+  pub fn get_or_create_sub_stream(&self) -> Result<Stream, String> {
+    unimplemented!()
+  }
 
   // Return the sub-stream back to the host stream so that it can be reused
   // later. Sub-streams that are !ok() will not be reused.
-  fn return_sub_stream(&self, _sub_stream: &dyn Stream);
+  pub fn return_sub_stream(&self, _sub_stream: &Stream) {
+    unimplemented!()
+  }
 
   // Entrains onto the stream of operations: a kernel launch with the given
   // (variadic) parameters for the invocation. These arguments can be things
@@ -70,10 +85,13 @@ pub trait Stream {
   // perfect forwarding support without rvalue references. It also attempts to
   // spit out helpful static_assert error traces with information as to the
   // argument number and types that were mismatched.
-  fn then_launch(
+  pub fn then_launch(
     &self,
     _thread_dims: &ThreadDim,
-    _block_dims: &BlockDim) -> Result<(), String>;
+    _block_dims: &BlockDim) -> Result<(), String>
+  {
+    unimplemented!()
+  }
 
   // Create a dependency for this stream's next work on the other stream
   // completing. Does not take ownership of other, and other must not be
@@ -82,40 +100,60 @@ pub trait Stream {
   // Checks that a stream does not wait for itself, and it is up to the
   // user to guarantee that a stream does not come to wait on itself in a
   // cyclic manner; in that case, behavior is undefined.
-  fn wait_for(&self, _other: &dyn Stream) -> Result<(), String>;
+  pub fn wait_for(&self, _other: &Stream) -> Result<(), String> {
+    unimplemented!()
+  }
 
-  fn wait_for_event(&self, _event: &dyn Event) -> Result<(), String>;
+  pub fn wait_for_event(&self, _event: &dyn Event) -> Result<(), String> {
+    unimplemented!()
+  }
 
   // Inserts the specified event into the end of this stream. Once the stream
   // has processed all events prior to the insertion point, the event will be
   // marked as completed.
   // The stream does not take ownership of event - meaning that event's lifetime
   // must extend past the point at which it is marked complete!
-  fn record_event(&self, _event: &dyn Event) -> Result<(), String>;
+  pub fn record_event(&self, _event: &dyn Event) -> Result<(), String> {
+    unimplemented!()
+  }
 
   // Entrain onto the stream: a memcpy to a host destination from a GPU source
   // of the given target size. host_dst must be a pointer to host memory
   // allocated by StreamExecutor::HostMemoryAllocate.
-  fn memcpy(&self);
+  pub fn memcpy(&self) {
+    unimplemented!()
+  }
 
   // Entrain onto the stream: a memset of zero at a device location of size
   // bytes. The location must not be null.
-  fn mem_zero(&self);
+  pub fn mem_zero(&self) {
+    unimplemented!()
+  }
 
   // Returns the StreamExecutor (parent object) associated with this stream.
-  fn parent(&self) -> &dyn StreamExecutor;
+  pub fn parent(&self) -> &StreamExecutor {
+    unimplemented!()
+  }
 
   //fn get_cuda_compute_capability(&self) {}
 
   //fn get_rotm_compute_capability(&self) {}
 
   // Gets priority for a stream.
-  fn priority(&self) -> StreamPriority;
+  pub fn priority(&self) -> StreamPriority {
+    unimplemented!()
+  }
 
   // Launches a data parallel kernel with the given thread/block
   // dimensionality and already-packed args/sizes to pass to the underlying
   // platform driver.
-  fn launch(&self);
+  pub fn launch(&self) {
+    unimplemented!()
+  }
+
+  pub fn block_host_until_done(&self) -> Result<(), String> {
+    unimplemented!()
+  }
 }
 
 // Platform specific handle to the underlying resources behind a stream

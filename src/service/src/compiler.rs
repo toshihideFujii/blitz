@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 
-use common::blitz_data::{DebugOptions, Precision};
-use hlo::hlo_module::HloModule;
+use common::{blitz_data::{DebugOptions, Precision}, shape::Shape};
+use hlo::{hlo_instruction::HloInstruction, hlo_module::HloModule, hlo_module_group::HloModuleGroup};
 use stream_executor::{device_memory_allocator::DeviceMemoryAllocator, platform::Platform, stream_executor::StreamExecutor};
 
-use crate::{computation_placer::DeviceAssignment, executable::Executable};
+use crate::{computation_placer::DeviceAssignment, executable::Executable, metrics_hook_interface::MetricsHookInterface};
 
 // Abstract superclass describing the result of an ahead-of-time compilation.
 pub struct AotCompilationResult {}
@@ -19,7 +19,7 @@ impl AotCompilationResult {
   pub fn load_executable(
     &self,
     _compiler: &Compiler,
-    _executor: &dyn StreamExecutor) -> Result<Executable, String>
+    _executor: &StreamExecutor) -> Result<Executable, String>
   {
     unimplemented!()
   }
@@ -46,7 +46,19 @@ impl AotCompilationMetadata {
 
 pub struct TargetConfig {}
 
-struct CompileOptions {}
+pub struct CompileOptions {
+  pub device_allocator: Option<DeviceMemoryAllocator>,
+  is_autotuning_compilation: bool,
+}
+
+impl CompileOptions {
+  pub fn default() -> Self {
+    CompileOptions {
+      device_allocator: None,
+      is_autotuning_compilation: false
+    }
+  }
+}
 
 // Abstract compiler interface that is subclassed for compilation on a
 // particular platform.
@@ -70,16 +82,107 @@ impl Compiler {
     unimplemented!()
   }
 
-  pub fn run_hlo_passes() {}
+  // Runs Hlo passes to optimize the given Hlo module, returns the optimized
+  // module.
+  pub fn run_hlo_passes(
+    &self,
+    _module: &HloModule,
+    _executor: &StreamExecutor) -> Result<HloModule, String>
+  {
+    unimplemented!()
+  }
+
   pub fn assign_buffers() {}
-  pub fn run_backend() {}
+
+  // Compiles the HLO module for execution on a device given by the executor,
+  // and returns an executable object or an error status. No HLO passes are
+  // applied to module. Generally a module should be passed through RunHloPasses
+  // prior to calling this method because some HLO passes are required for
+  // correctness. Takes ownership of the HLO module.
+  //
+  // The compiler may optionally specialize to the individual device
+  // (not just type of device) indicated by the executor.
+  pub fn run_backend(
+    &self,
+    _module: &HloModule,
+    _executor: &StreamExecutor,
+    _options: &CompileOptions) -> Result<Executable, String>
+  {
+    unimplemented!()
+  }
+
   pub fn run_backend_with_buffer_assignment() {}
-  pub fn load_compilation_result() {}
-  pub fn compile() {}
-  pub fn compute_backend_configs() {}
-  pub fn compute_default_backend_config() {}
-  pub fn compile_ahead_of_time() {}
-  pub fn register_compiler_factory() {}
+
+  // Returns a (deserialized) AotCompilationResult from a serialized
+  // AotCompilationResult.
+  pub fn load_aot_compilation_result(
+    &self,
+    _serialized_aot_result: String) -> Result<AotCompilationResult, String>
+  {
+    unimplemented!()
+  }
+
+  // Compiles a set of HLO modules that can run in parallel, potentially
+  // communicating data between the modules, and returns a corresponding
+  // sequence of executable objects.
+  pub fn compile(
+    &self,
+    _module_group: &HloModuleGroup,
+    _stream_exec: &Vec<Vec<StreamExecutor>>,
+    _options: &CompileOptions) -> Result<Vec<Executable>, String>
+  {
+    unimplemented!()
+  }
+
+  // Returns the backend configurations that the backend will consider for the
+  // given HLO. Returns no configurations if the backend does not support
+  // configurations for the given HLO.
+  //
+  // The stream executor is passed in to provide information about the hardware
+  // that the backend configurations would be targeting.
+  pub fn compute_backend_configs(
+    &self,
+    _hlo: &HloInstruction,
+    _executor: &StreamExecutor)
+  {
+    unimplemented!()
+  }
+
+  // Returns the backend configuration that the backend chooses by default for
+  // the given HLO. Returns no configuration if the backend does not support
+  // configurations for the given HLO.
+  //
+  // The stream executor is passed in to provide information about the hardware
+  // that the backend configurations would be targeting.
+  pub fn compute_default_backend_config(
+    &self,
+    _hlo: &HloInstruction,
+    executor: Option<&StreamExecutor>) -> Option<String>
+  {
+    debug_assert!(executor.is_some());
+    None
+  }
+
+  // Compiles the HLO module group for ahead-of-time execution.  This is
+  // intended for use in static compilation.
+  pub fn compile_ahead_of_time(
+    &self,
+    _module_group: &HloModuleGroup,
+    _options: &AotCompilationOptions) -> Result<Vec<AotCompilationResult>, String>
+  {
+    unimplemented!()
+  }
+
+  // Registers the compiler singleton for the platform. This is assumed to
+  // be a singleton, so no ownership is transferred.
+  //
+  // Precondition: a platform kind must not be registered more than once.
+  pub fn register_compiler_factory<F>(
+    _platform_id: i64,
+    _compiler_factory: F) where F: Fn()->Result<Compiler, String>
+  {
+    unimplemented!()
+  }
 
   // Returns the compiler singleton pointer if it is available for the given
   // platform, or an error status if it is not.
@@ -88,11 +191,42 @@ impl Compiler {
     unimplemented!()
   }
 
-  pub fn shape_size_bytes_function() {}
-  pub fn buffer_size_bytes_function() {}
-  pub fn default_device_shape_representation() {}
-  pub fn export() {}
-  pub fn create_metrics_hook() {}
+  // Returns a function that computes the size in bytes of the logical
+  // buffer that contains a shape.
+  pub fn shape_size_bytes_function(&self) {
+    unimplemented!()
+  }
+
+  // Returns a function that computes the size in bytes of a given
+  // logical buffer.
+  pub fn buffer_size_bytes_function(&self) {
+    unimplemented!()
+  }
+
+  pub fn default_device_shape_representation(
+    &self,
+    _shape: &Shape) -> Shape
+  {
+    unimplemented!()
+  }
+
+  // Returns an AotCompilationResult of the executable for serialization.
+  pub fn export(
+    &self,
+    _executable: &Executable) -> Result<AotCompilationResult, String>
+  {
+    unimplemented!()
+  }
+
+  // Returns a MetricsHookInterface object used to instrument Compiler's
+  // compilation stages.
+  pub fn create_metrics_hook(
+    &self,
+    _filename_prefix: String,
+    _hlo_module_name: String) -> Option<MetricsHookInterface>
+  {
+    None
+  }
 
   // Map from platform kind to compiler factory.
   fn get_platform_compiler_factories() -> HashMap<i64, Self> {
@@ -113,7 +247,7 @@ pub struct AotCompilationOptions {
   debug_options: DebugOptions,
   static_device_assignment: Option<DeviceAssignment>,
   fusion_config: Vec<Vec<bool>>,
-  executor: Option<Box<dyn StreamExecutor>>,
+  executor: Option<StreamExecutor>,
   profile_version: i64,
   cache_key: String,
   run_backend_only: bool,
@@ -123,7 +257,22 @@ pub struct AotCompilationOptions {
 }
 
 impl AotCompilationOptions {
-  pub fn new() {}
+  pub fn new(platform_id: i64) -> Self {
+    AotCompilationOptions {
+      plaatform_id: platform_id,
+      device_allocator: None,
+      debug_options: DebugOptions::default(),
+      static_device_assignment: None,
+      fusion_config: Vec::new(),
+      executor: None,
+      profile_version: 0,
+      cache_key: "".to_string(),
+      run_backend_only: false,
+      sanitize_dataflow: false,
+      sanitize_abilists_dataflow: Vec::new(),
+      target_config: None
+    }
+  }
 
   // Returns the ID of the platform to which these options apply.
   pub fn platform_id(&self) -> i64 {
@@ -190,11 +339,11 @@ impl AotCompilationOptions {
     self.fusion_config = fusion_config;
   }
 
-  pub fn executor(&self) -> &Option<Box<dyn StreamExecutor>> {
+  pub fn executor(&self) -> &Option<StreamExecutor> {
     &self.executor
   }
 
-  pub fn set_executor(&mut self, executor: Box<dyn StreamExecutor>) {
+  pub fn set_executor(&mut self, executor: StreamExecutor) {
     self.executor = Some(executor);
   }
 

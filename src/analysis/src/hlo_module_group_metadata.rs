@@ -133,11 +133,12 @@ impl<'module> HloModuleGroupMetadata<'module> {
     &self, instruction: &HloInstruction) -> Vec<&TrackedInstruction>
   {
     let mut path = vec![];
-    let mut parent = instruction.parent();
+    let mut parent = instruction.parent().unwrap();
     let mut companion =
       self.get_tracked_instruction(parent);
     while companion.is_some() {
-      parent = companion.as_ref().unwrap().instruction().as_ref().unwrap().parent();
+      parent = companion.as_ref().unwrap().instruction()
+        .as_ref().unwrap().parent().unwrap();
       path.push(companion.unwrap());
       companion = self.get_tracked_instruction(parent);
     }
@@ -234,7 +235,7 @@ impl<'module> HloModuleGroupMetadata<'module> {
   fn check_communicating_instruction(
     &self, instruction: &HloInstruction) -> Result<(), String>
   {
-    let computation = instruction.parent();
+    let computation = instruction.parent().unwrap();
     let module = computation.parent();
     if module.is_some() &&
        module.as_ref().unwrap().entry_computation() == Some(computation) ||

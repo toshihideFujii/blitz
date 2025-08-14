@@ -97,7 +97,7 @@ impl DeviceMemoryAllocator {
   // allocated by this allocator. It is not necessary to use the returned stream
   // though, as clients may have additional information letting them safely use
   // a different stream.
-  pub fn get_stream(&self) -> Result<Box<dyn Stream>, String> {
+  pub fn get_stream(&self) -> Result<Stream, String> {
     unimplemented!()
   }
 }
@@ -105,13 +105,13 @@ impl DeviceMemoryAllocator {
 // Default memory allocator for a platform which uses
 // StreamExecutor::allocate/deallocate.
 pub struct StreamExecutorMemoryAllocator {
-  stram_executors: Vec<Box<dyn StreamExecutor>>
+  stram_executors: Vec<StreamExecutor>
 }
 
 impl StreamExecutorMemoryAllocator {
   // Create an allocator supporting a single device, corresponding to the passed
   // executor.
-  pub fn new(_executor: &dyn StreamExecutor) -> Self {
+  pub fn new(_executor: &StreamExecutor) -> Self {
     unimplemented!()
   }
 
@@ -136,12 +136,12 @@ impl StreamExecutorMemoryAllocator {
   
   // Gets-or-creates a stream for a given `device_ordinal` from an appropriate
   // stream executor.
-  pub fn get_stream(&self, _device_ordinal: i64) -> Result<Box<dyn Stream>, String> {
+  pub fn get_stream(&self, _device_ordinal: i64) -> Result<Stream, String> {
     unimplemented!()
   }
 
   // Gets the stream executor for given device ordinal.
-  pub fn get_stream_executor(&self, _device_ordinal: i64) -> Result<Box<dyn StreamExecutor>, String>
+  pub fn get_stream_executor(&self, _device_ordinal: i64) -> Result<StreamExecutor, String>
   {
     unimplemented!()
   }

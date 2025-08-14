@@ -1,4 +1,5 @@
 pub mod analysis;
+pub mod computation_layout;
 pub mod evaluator;
 pub mod utils;
 pub mod buffer_value;

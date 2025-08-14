@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use common::shape::ProgramShape;
+use common::{literal::Literal, shape::ProgramShape};
 
 // Serialization of HloModule.
 #[derive(Debug, Clone)]
@@ -59,7 +59,7 @@ pub struct HloProto {
 pub struct HloSnapshot {}
 
 impl HloSnapshot {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     HloSnapshot {  }
   }
 
@@ -69,6 +69,24 @@ impl HloSnapshot {
 
   pub fn has_hlo(&self) -> bool {
     unimplemented!()
+  }
+
+  pub fn set_hlo(&mut self) {
+  }
+
+  pub fn set_execution_platform(&mut self, _name: &String) {
+  }
+
+  pub fn clear_arguments(&mut self) {
+  }
+
+  pub fn add_arguments<T>(&mut self, _argument: Literal<T>)
+    where T: Default + Clone + PartialEq
+  {
+    unimplemented!()
+  }
+
+  pub fn clear_result(&mut self) {      
   }
 }
 

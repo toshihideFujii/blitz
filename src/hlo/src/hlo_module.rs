@@ -34,14 +34,14 @@ impl StackFrame {
   pub fn empty() -> bool { false }
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct CrossProgramPrefetchInfo {
   parameter: i64,
   index: usize,
   alt_memory_offset: Option<i64>
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct HloModule {
   name: String,
   entry_computation: Option<HloComputation>,
@@ -159,11 +159,20 @@ impl HloModule {
     self.use_auto_spmd_partition
   }
 
-  pub fn set_layout_canonicalization_callback() {}
+  // Based on module's entry_computation sharded shapes,
+  // layout_canonicalization_callback_ computes and
+  // returns <argument_layouts, result_layout> for module's entry computation.
+  // argument_layouts is std::vector<Shape> and results_layout is Shape.
+  // layout_canonicalization_callback_ is used only when
+  // use_auto_spmd_partitioning_ = true.
+  pub fn set_layout_canonicalization_callback(&self) {}
+
   pub fn layout_canonicalization_callback() {}
   pub fn absl_hash_value() {}
 
-  pub fn computations(&self) -> &Vec<HloComputation> {
+  pub fn computations<F>(&self, _callback: F) -> &Vec<HloComputation>
+    where F: Fn(&HloModule) -> Result<(Vec<Shape>, Shape), String>
+  {
     unimplemented!()
   }
 
@@ -227,7 +236,7 @@ impl HloModule {
     unimplemented!()
   }
 
-  pub fn make_mutable_nonfusion_computations(
+  pub fn mutable_make_nonfusion_computations(
     &mut self, _execution_threads: &HashSet<String>) -> &mut Vec<HloComputation>
   {
     unimplemented!()

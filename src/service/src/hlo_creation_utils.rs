@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use common::{
-  blitz_data::{FrontendAttributes, OpMetadata, PrimitiveType},
-  comparison_util::ComparisonDirection, shape::Shape
+  blitz_data::{FrontendAttributes, OpMetadata, PrimitiveType}, comparison_util::ComparisonDirection,
+  primitive_util::{bit_width, is_sub_byte_non_pred_type}, shape::Shape, shape_util::ShapeUtil
 };
 use hlo::{
   hlo_computation::HloComputation,
@@ -70,7 +70,33 @@ pub fn make_bget_tuple_element_hlo() {}
 
 pub fn make_concat_hlo() {}
 
-pub fn make_convert_hlo() {}
+// Creates a Convert HLO instruction that converts the given instruction to have
+// the given primitive type.
+pub fn make_convert_to_hlo(
+  hlo: &mut HloInstruction,
+  t: &PrimitiveType,
+  metadata: Option<OpMetadata>) -> HloInstruction
+{
+  if hlo.shape().element_type() == *t {
+    return hlo.clone();
+  }
+  let mut shape = ShapeUtil::change_element_type(hlo.shape()  , t);
+  let elt_t = shape.element_type();
+  if is_sub_byte_non_pred_type(&elt_t) {
+    shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(
+      bit_width(&elt_t));
+  } else {
+    shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(0);
+  }
+  
+  let hlo_clone = hlo.clone();
+  let result =
+    hlo.mutable_parent().unwrap().add_instruction_by_metadata(
+      HloInstruction::create_convert(shape, hlo_clone),
+      metadata.unwrap());
+  debug_assert_eq!(result.shape().element_type(), *t);
+  result.clone()
+}
 
 pub fn make_bitcast_hlo() {}
 

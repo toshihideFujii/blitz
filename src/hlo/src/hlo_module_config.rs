@@ -2,7 +2,9 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use common::{blitz_data::Precision, shape::ProgramShape};
+use common::{blitz_data::{DebugOptions, Precision}, shape::ProgramShape};
+
+use crate::computation_layout::ComputationLayout;
 
 #[derive(Clone, PartialEq)]
 pub enum FusionConfigCollection {
@@ -11,7 +13,7 @@ pub enum FusionConfigCollection {
   PerNode,
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct HloModuleConfig {
   seed: u64,
   launch_id: i32,
@@ -37,6 +39,7 @@ pub struct HloModuleConfig {
   matrix_unit_operand_precision: Precision,
   fdo_profile: String,
   device_memory_size: i64,
+  //static_device_assignment: Option<DeviceAssignment>
 }
 
 impl HloModuleConfig {
@@ -62,7 +65,9 @@ impl HloModuleConfig {
 
   // Returns a constant reference to the layout of the entry computation.
   // Assumes the layout was set.
-  pub fn entry_computation_layout(&self) {}
+  pub fn entry_computation_layout(&self) -> &ComputationLayout {
+    unimplemented!()
+  }
 
   pub fn mutable_entry_computation_layout(&mut self) {
       
@@ -160,7 +165,11 @@ impl HloModuleConfig {
   }
 
   pub fn compilation_cache_key() {}
-  pub fn debug_options() {}
+
+  pub fn debug_options(&self) -> &DebugOptions {
+    unimplemented!()
+  }
+
   pub fn set_debug_options() {}
 
   pub fn set_intra_op_parallelism_threads(&mut self, intra_op_parallelism_threads: i64) {
@@ -171,8 +180,14 @@ impl HloModuleConfig {
     self.intra_op_parallelism_threads
   }
 
-  pub fn has_static_device_assignment() {}
-  pub fn static_device_assignment() {}
+  pub fn has_static_device_assignment(&self) -> bool {
+    unimplemented!()
+  }
+
+  pub fn static_device_assignment(&self) {
+    unimplemented!()
+  }
+  
   pub fn set_static_device_assignment() {}
 
   pub fn allow_separate_sharding_programs(&self) -> bool {

@@ -5,6 +5,7 @@ use crate::{layout::Layout, layout_util::LayoutUtil, printer::Printer, shape::{S
 // A shapeLayout object encapsulates the layout of a particular shape
 // (including tuples). This differs from the Layout proto which describes
 // the layout of a single array.
+#[derive(Debug)]
 pub struct ShapeLayout {
   shape: Shape
 }

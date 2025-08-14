@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::{hlo_computation::HloComputation, hlo_instruction::HloInstruction, hlo_module::HloModule};
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct HloInstructionSequence {
   instruction_sequence: Vec<HloInstruction>,
   id_sequence: Vec<i64>
@@ -97,7 +97,7 @@ impl HloInstructionSequence {
 }
 
 // A class representing a sequential schedule of instructionns for an HLO module.
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct HloSchedule {
   //module: Box<HloModule>,
   sequences: HashMap<i64, HloInstructionSequence>,
@@ -129,7 +129,7 @@ impl HloSchedule {
   {
     if !self.sequences.contains_key(&computation.unique_id()) {
       // No sequence found for computation. Create and return an empty one.
-      debug_assert!(computation.parent().as_ref().unwrap() == module);
+      debug_assert!(computation.parent().unwrap() == module);
       self.execution_threads.insert(computation.unique_id(), computation.execution_thread());
       let sequence = HloInstructionSequence::new();
       self.sequences.insert(computation.unique_id(), sequence);
@@ -145,7 +145,7 @@ impl HloSchedule {
   {
     if !self.sequences.contains_key(&computation.unique_id()) {
       // No sequence found for computation. Create and return an empty one.
-      debug_assert!(computation.parent().as_ref().unwrap() == module);
+      debug_assert!(computation.parent().unwrap() == module);
       self.execution_threads.insert(computation.unique_id(), computation.execution_thread());
       let sequence = HloInstructionSequence::new();
       self.sequences.insert(computation.unique_id(), sequence);

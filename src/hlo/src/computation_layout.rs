@@ -8,6 +8,7 @@ use common::{
 
 // Class which contains the layouts of the parameters and results of a
 // computation.
+#[derive(Debug)]
 pub struct ComputationLayout {
   parameter_layouts: Vec<ShapeLayout>,
   result_layout: ShapeLayout

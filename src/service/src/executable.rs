@@ -2,9 +2,9 @@
 
 use std::collections::HashSet;
 
-use common::{shape::Shape, shape_tree::ShapeTree};
+use common::{blitz_data::ExecutionProfile, shape::Shape, shape_tree::ShapeTree};
 use hlo::{hlo_module::HloModule, hlo_module_config::HloModuleConfig};
-use stream_executor::device_memory_allocator::ScopedDeviceMemory;
+use stream_executor::{device_memory_allocator::ScopedDeviceMemory, stream::Stream};
 
 use crate::{
   hlo_profile_printer_data::HloProfilePrinterData, hlo_proto::HloProto, maybe_owning_device_memory::MaybeOwningDeviceMemory, service_executable_run_options::ServiceExecutableRunOptions, shaped_buffer::{ScopedShapedBuffer, ShapedBuffer}
@@ -165,17 +165,78 @@ pub struct Executable {
 impl Executable {
   pub fn new() {}
   pub fn execute_on_stream() {}
-  pub fn execute_async_on_stream() {}
+
+  // Same as ExecuteOnStream(), but runs this executable on multiple
+  // streams. arguments[i] contains the arguments to the execution on
+  // run_options[i]->stream() and the returned value is at index i of the
+  // returned vector.
+  pub fn execute_on_streams(
+    &self,
+    run_options: &Vec<ServiceExecutableRunOptions>,
+    arguments: &Vec<Vec<ShapedBuffer>>) -> Result<Vec<ScopedShapedBuffer>, String>
+  {
+    debug_assert!(run_options.len() == arguments.len());
+    let mut return_values: Vec<ScopedShapedBuffer> = vec![];
+    if run_options.len() == 1 {
+
+    }
+    for i in 0..run_options.len() {
+      let rv =
+        self.execute_async_on_stream(&run_options[i], &arguments[i]);
+      check_error(&rv);
+      return_values.push(rv.unwrap());
+    }
+    for options in run_options {
+      debug_assert!(options.stream().is_some());
+      let result =
+        options.stream().as_ref().unwrap().block_host_until_done();
+      check_error(&result);
+    }
+    Ok(return_values)
+  }
+
+  pub fn execute_on_stream_wrapper(
+    &self,
+    run_options: &ServiceExecutableRunOptions,
+    arguments: &Vec<ShapedBuffer>) -> Result<ScopedShapedBuffer, String>
+  {
+    let result =
+      self.execute_async_on_stream_wrapper(run_options, arguments);
+    check_error(&result);
+    let block_status =
+      run_options.stream().as_ref().unwrap().block_host_until_done();
+    check_error(&block_status);
+    result
+  }
+
+  pub fn execute_async_on_stream(
+    &self,
+    _run_options: &ServiceExecutableRunOptions,
+    _arguments: &Vec<ShapedBuffer>) -> Result<ScopedShapedBuffer, String>
+  {
+    unimplemented!()
+  }
 
   // Convenience wrapper for calling Executable::ExecuteOnStream. Sets up a
   // timer for the execution, sets up HLO profiling if enabled, and fills in the
   // given ExecutionProfile if non-null.
   pub fn execute_async_on_stream_wrapper(
     &self,
-    _run_options: &ServiceExecutableRunOptions,
-    _arguments: &Vec<&ShapedBuffer>) -> Result<ScopedShapedBuffer, String>
+    run_options: &ServiceExecutableRunOptions,
+    arguments: &Vec<ShapedBuffer>) -> Result<ScopedShapedBuffer, String>
   {
-    unimplemented!()
+    let mut state =
+      execute_wrapper_before_execution(self, run_options);
+    let return_value =
+      self.execute_async_on_stream(run_options, arguments);
+    
+    let result = execute_wrapper_after_execution(
+      self, &mut state,
+      &return_value,
+      run_options.stream().as_ref().unwrap());
+    check_error(&result);
+
+    return_value
   }
 
   // Returns whether this executable was compiled with HLO profilings support
@@ -207,8 +268,8 @@ impl Executable {
       
   }
 
-  pub fn size_of_generated_code_in_bytes() {
-      
+  pub fn size_of_generated_code_in_bytes(&self) -> i64 {
+    -1
   }
 
   // Dumping helpers.
@@ -217,7 +278,11 @@ impl Executable {
   }
 
   pub fn dumping_snapshot(&self) -> bool {
-    unimplemented!()
+    if self.has_module() {
+      self.module_config().debug_options().blitz_dump_hlo_snapshots()
+    } else {
+      false   
+    }
   }
 
   pub fn debug_info(&self) -> &String {
@@ -226,5 +291,70 @@ impl Executable {
 
   pub fn set_debug_info(&mut self, debug_info: String) {
     self.debug_info = debug_info;
+  }
+}
+
+struct ExecuteAsyncOnStreamWrapperState {
+  profile: Option<ExecutionProfile>
+}
+
+impl ExecuteAsyncOnStreamWrapperState {
+  fn new(profile: ExecutionProfile) -> Self {
+    ExecuteAsyncOnStreamWrapperState { profile: Some(profile) }
+  }
+}
+
+fn execute_wrapper_before_execution(
+  _executable: &Executable,
+  run_options: &ServiceExecutableRunOptions) -> ExecuteAsyncOnStreamWrapperState
+{
+  let profile =
+    run_options.run_options().execution_profile().clone();
+  let state =
+    ExecuteAsyncOnStreamWrapperState::new(profile);
+  println!("enqueueing executable on stream...");
+  state
+}
+
+fn execute_wrapper_after_execution(
+  executable: &Executable,
+  state: &mut ExecuteAsyncOnStreamWrapperState,
+  return_status: &Result<ScopedShapedBuffer, String>,
+  stream: &Stream) -> Result<(), String>
+{
+  if return_status.is_err() {
+    if state.profile.is_some() {
+      let status = stream.block_host_until_done();
+      if status.is_err() {
+        panic!("Failed to block_host_until_done: {:?}", status.err().unwrap());
+      }
+    }
+    return Err("".to_string());
+  }
+
+  if state.profile.is_some() {
+    // We block instead of using an async callback because reading the timer
+    // value may call back into the driver on GPU, which is not allowed.
+    let result = stream.block_host_until_done();
+    check_error(&result);
+
+    let executable_size_in_bytes = executable.size_of_generated_code_in_bytes();
+    if state.profile.as_ref().unwrap().compute_time_ns() == 0 {
+      let value = state.profile.as_ref().unwrap().compute_and_transfer_time_ns();
+      state.profile.as_mut().unwrap().set_compute_time_ns(value);
+    }
+    if executable_size_in_bytes != 0 {
+      state.profile.as_mut().unwrap().
+        set_executable_size_in_bytes(executable_size_in_bytes);
+    }
+  }
+
+  Ok(())
+}
+
+fn check_error<T>(value: &Result<T, String>) {
+  if value.is_err() {
+    let err_msg = value.as_ref().err().unwrap();
+    assert!(false, "{:?}", err_msg);
   }
 }

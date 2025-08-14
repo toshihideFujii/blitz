@@ -1,11 +1,19 @@
 #![allow(dead_code)]
 
 use common::{blitz_data::ExecutionOptions, shape::{ProgramShape, Shape}};
-use hlo::{hlo_module_config::HloModuleConfig};
-
+use hlo::{hlo_module::HloModule, hlo_module_config::HloModuleConfig};
 use crate::compiler::AotCompilationOptions;
 
-pub fn update_entry_computation_layout() {}
+// Update entry computation's computation layout by translating each shape
+// with shape_representation_fn(shape). It can be used for example to add
+// tiling info for each shape.
+pub fn update_entry_computation_layout<F>(
+  _module: &HloModule,
+  _shape_representation_fn: &F,
+  _empty_tiles_only: bool) where F: Fn(&Shape) -> Shape
+{
+  unimplemented!()
+}
 
 // Creates an HloModuleConfig for a given program shape and arguments.
 // If execution_options does not set num_replicas, default_num_replicas is used.
@@ -17,7 +25,7 @@ pub fn create_module_config(
   _execution_options: &ExecutionOptions,
   _default_num_replicas: i64,
   _num_threads: Option<i64>,
-  _aot_options: &AotCompilationOptions) -> Result<HloModuleConfig, String>
+  _aot_options: Option<&AotCompilationOptions>) -> Result<HloModuleConfig, String>
 {
   let _config = HloModuleConfig::new(program_shape);
   //let computation_layout = config

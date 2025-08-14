@@ -598,7 +598,7 @@ impl BlitzBuilder {
       return Err(root.err().unwrap());
     }
 
-    let mut program_shape = ProgramShape::new();
+    let mut program_shape = ProgramShape::default();
     program_shape.set_result(root.ok().unwrap().shape().clone());
 
     // Check that the parameter numbers are continuous from 0, and add parameter

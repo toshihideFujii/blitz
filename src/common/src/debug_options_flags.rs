@@ -10,7 +10,7 @@ use crate::{blitz_data::{
 
 // Gets a DebugOptions proto that reflects the defaults as if no flags were set.
 pub fn default_debug_options_ignoring_flags() -> DebugOptions {
-  let mut opts = DebugOptions::new();
+  let mut opts = DebugOptions::default();
 
   opts.set_blitz_llvm_enable_alias_scope_metadata(true);
   opts.set_blitz_llvm_enable_noalias_metadata(true);

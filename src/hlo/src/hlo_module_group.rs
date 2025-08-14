@@ -10,7 +10,13 @@ pub struct HloModuleGroup {
 }
 
 impl HloModuleGroup {
-  pub fn new() {}
+  pub fn new(name: String) -> Self {
+    HloModuleGroup {
+      name: name,
+      modules: Vec::new(),
+      cache_key: "".to_string()
+    }
+  }
 
   pub fn modules(&self) -> &Vec<HloModule> {
     &self.modules
@@ -25,7 +31,10 @@ impl HloModuleGroup {
   }
   
   pub fn replace_module() {}
-  pub fn consume_modules() {}
+
+  pub fn consume_modules(&self) -> &Vec<HloModule> {
+    unimplemented!()
+  }
 
   pub fn name(&self) -> String {
     self.name.clone()

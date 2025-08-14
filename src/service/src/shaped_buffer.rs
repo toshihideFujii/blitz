@@ -101,6 +101,10 @@ impl ShapedBuffer {
   pub fn to_string(&self) -> String {
     unimplemented!()
   }
+
+  pub fn physical_device_ordinal(&self) -> i64 {
+    self.physical_device_ordinal
+  }
 }
 
 // ScopedShapedBuffer takes allocated buffers as inputs, and deallocates on

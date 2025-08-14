@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use std::{collections::HashMap, hash::Hash};
-
 use crate::{debug_options_flags::get_debug_options_from_flags, shape::Shape};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -27,6 +26,7 @@ pub enum PrimitiveType {
   F8E4M3B11FNUZ,
   F8E5M2FNUZ,
   F8E4M3FNUZ,
+  F8E8M0FNU,
   C64,
   C128,
   Tuple,
@@ -959,7 +959,7 @@ pub struct DebugOptions {
 }
 
 impl DebugOptions {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     DebugOptions {
       cpu_enable_concurrency_optimized_scheduler: false,
       cpu_enable_fast_math: false,
@@ -1820,7 +1820,11 @@ impl DebugOptions {
   }
 
   pub fn blitz_flags_reset(&self) -> bool {
-    false
+    unimplemented!()
+  }
+
+  pub fn blitz_dump_hlo_snapshots(&self) -> bool {
+    unimplemented!()
   }
 }
 
@@ -2005,7 +2009,7 @@ pub struct ExecutionHandle {
 }
 
 impl ExecutionHandle {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     ExecutionHandle { handle: 0 }
   }
 
@@ -2066,11 +2070,28 @@ impl WhileLoopBackendConfig {
 }
 
 // Profile data from the execution of a computation.
+#[derive(Debug, Clone)]
 pub struct ExecutionProfile {}
 
 impl ExecutionProfile {
   pub fn new() -> Self {
     ExecutionProfile {  }
+  }
+
+  pub fn compute_time_ns(&self) -> i64 {
+    unimplemented!()
+  }
+
+  pub fn set_compute_time_ns(&mut self, _time: f64) {
+    unimplemented!()
+  }
+
+  pub fn compute_and_transfer_time_ns(&self) -> f64 {
+    unimplemented!()
+  }
+
+  pub fn set_executable_size_in_bytes(&mut self, _bytes: i64) {
+    unimplemented!()
   }
 }
 
@@ -2085,6 +2106,14 @@ impl ExecutionOptions {
 
   pub fn debug_options(&self) -> &'static DebugOptions {
     get_debug_options_from_flags()
+  }
+
+  pub fn device_handles(&self) -> &Vec<DeviceHandle> {
+    unimplemented!()
+  }
+
+  pub fn device_handles_size(&self) -> usize {
+    unimplemented!()
   }
 }
 
@@ -2111,6 +2140,20 @@ pub enum DataType {
 pub struct DeviceHandle {
   handle: i64,
   device_count: i64
+}
+
+impl DeviceHandle {
+  pub fn default() -> Self {
+    DeviceHandle { handle: 0, device_count: 0 }
+  }
+
+  pub fn set_handle(&mut self, handle: i64) {
+    self.handle = handle;
+  }
+
+  pub fn set_device_count(&mut self, device_count: i64) {
+    self.device_count = device_count;
+  }
 }
 
 pub enum CustomCallSchedule {

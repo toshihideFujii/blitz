@@ -52,13 +52,25 @@ pub fn underflow_exponent(_t: &PrimitiveType) -> i64 {
   0 // TODO
 }
 
-pub fn overflow_exponent() {}
+pub fn overflow_exponent(_t: &PrimitiveType) -> i64 {
+  unimplemented!()
+}
 
 pub fn exponent_bias(t: &PrimitiveType) -> i64 {
   (1 - underflow_exponent(t)) + 1
 }
 
-pub fn has_infinity() {}
+pub fn has_infinity(_t: &PrimitiveType) -> bool {
+  unimplemented!()
+}
+
+pub fn has_nan(_t: &PrimitiveType) -> bool {
+  unimplemented!()
+}
+
+pub fn has_negative_zero(_t: &PrimitiveType) -> bool {
+  unimplemented!()
+}
 
 // Declarations of specializations for each native type which correspond to a
 // Blitz primitive type.
@@ -238,7 +250,7 @@ pub fn signed_integral_type_for_bit_width(src_bitwidth: i64) -> PrimitiveType {
   }
 }
 
-pub fn complex_component_type(complex_type: PrimitiveType) -> PrimitiveType {
+pub fn complex_component_type(complex_type: &PrimitiveType) -> PrimitiveType {
   match complex_type {
     PrimitiveType::C64 => PrimitiveType::F32,
     PrimitiveType::C128 => PrimitiveType::F64,
@@ -259,8 +271,92 @@ pub fn higher_precision_type(a: &PrimitiveType, _b: &PrimitiveType) -> Primitive
   a.clone() // TODO
 }
 
-pub fn cast_preserves_values() {
-    
+// Returns true if a conversion from from_type to to_type loses no precision.
+pub fn cast_preserves_values(
+  from_t: &PrimitiveType,
+  to_t: &PrimitiveType) -> bool
+{
+  // * -> *
+  if from_t == to_t {
+    return true;
+  }
+  // * -> F8E8M0FNU is not possible because zero cannot be represented.
+  if to_t == &PrimitiveType::F8E8M0FNU {
+    return false;
+  }
+  // PRED -> *
+  if from_t == &PrimitiveType::Pred {
+    return true;
+  }
+  // ~PRED -> PRED is not safe because it drops almost all numbers.
+  if to_t == &PrimitiveType::Pred {
+    return false;
+  }
+  // * -> C is safe if the components of * and C can be safely converted.
+  if is_complex_type(to_t) {
+    let mut from_component_t = from_t.clone();
+    if is_complex_type(from_t) {
+      from_component_t = complex_component_type(to_t);
+    }
+    let to_component_t =
+      complex_component_type(to_t);
+    return cast_preserves_values(&from_component_t, &to_component_t);
+  }
+  // ~C -> C is not safe because it drops imaginary components.
+  if is_complex_type(from_t) {
+    return false;
+  }
+  // F -> F is safe if the exponent/significand are preserved and `to_type`
+  // preserves infinities/nans/unsigned zero in `from_type`.
+  if is_floating_point_type(from_t) && is_floating_point_type(to_t) {
+    // Target mantissa should be large enough.
+    return significand_width(from_t) <= significand_width(to_t) &&
+      // Target exponent should be large enough.
+      exponent_width(from_t) <= exponent_width(to_t) &&
+      // HasInfinity check.
+      (!has_infinity(from_t) || has_infinity(to_t)) &&
+      // HasNaN check.
+      (!has_nan(from_t) || has_nan(to_t)) &&
+      // HasNegativeZero check.
+      (!has_negative_zero(from_t) || has_negative_zero(to_t)) &&
+      // Minimum denormal should be representable by target type.
+      (underflow_exponent(from_t) - significand_width(from_t)) >=
+        (underflow_exponent(to_t) - significand_width(to_t)) &&
+      // Maximum exponent may be larger with custom bias (e.g. F8E4M3B11FNUZ).
+      overflow_exponent(from_t) <= overflow_exponent(to_t);
+  }
+  // F -> I is not safe because it drops fractional numbers.
+  if !is_integral_type(from_t) {
+    return false;
+  }
+  // An n-bit unsigned integer takes on values from [0, 2^n - 1].
+  // An n-bit signed integer takes on values from [-2^(n-1), 2^(n-1) - 1].
+  // from_bits/to_bits considers the number of non-sign bits.
+  let mut from_bits = bit_width(from_t);
+  if is_signed_integral_type(from_t) {
+    from_bits = bit_width(from_t) - 1;
+  }
+  let mut to_bits = bit_width(to_t);
+  if is_signed_integral_type(to_t) {
+    to_bits = bit_width(to_t) - 1;
+  }
+  // I -> F is safe if the integer can be represented exactly.
+  if is_floating_point_type(to_t) {
+    // In both cases, we need to handle an exponent of n-1.
+    // However, the significand needed to represent signed two's complement
+    // numbers is smaller by one bit because it will only have a non-zero
+    // trailing significand field when the exponent is smaller than n-1.
+    return from_bits <= significand_width(to_t) &&
+      bit_width(from_t) - 1 < overflow_exponent(to_t);
+  }
+  // S -> U is not safe because it drops negative numbers.
+  if is_signed_integral_type(from_t) && is_unsigned_integral_type(to_t) {
+    return false;
+  }
+  // I -> I is safe if the integer can be represented exactly; we've already
+  // ensured that signed to unsigned conversions won't happen here.
+  debug_assert!(is_integral_type(to_t));
+  from_bits <= to_bits
 }
 
 // Returns the PrimitiveType matching the given name. The given name is expected
@@ -294,6 +390,7 @@ pub fn primitive_type_name(t: &PrimitiveType) -> String {
     PrimitiveType::F8E4M3B11FNUZ => "F8E4M3B11FNUZ".to_string(),
     PrimitiveType::F8E5M2 => "F8E5M2".to_string(),
     PrimitiveType::F8E5M2FNUZ => "F8E5M2FNUZ".to_string(),
+    PrimitiveType::F8E8M0FNU => "F8E8M0FNU".to_string(),
     PrimitiveType::Tuple => "TUPLE".to_string(),
     PrimitiveType::Token => "TOKEN".to_string(),
     PrimitiveType::OpaqueType => "OPAQUETYPE".to_string(),
@@ -317,6 +414,11 @@ pub fn is_canonical_representation() {
 
 pub fn fits_in_integral_type() {
     
+}
+
+// Returns true if `type` is smaller than 8 bits and is not PRED.
+pub fn is_sub_byte_non_pred_type(t: &PrimitiveType) -> bool {
+  is_array_type(t) && *t != PrimitiveType::Pred && bit_width(t) < 8
 }
 
 struct PrimitiveTypeNameGenerator {

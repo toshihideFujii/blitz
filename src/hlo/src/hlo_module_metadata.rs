@@ -1,7 +1,7 @@
 
 #![allow(dead_code)]
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct HloModuleMetadata {
   next_pass_id: i64
 }
