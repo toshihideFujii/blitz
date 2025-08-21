@@ -9,16 +9,10 @@ use common::{
 };
 
 use crate::{
-  hlo_computation::HloComputation,
-  hlo_input_output_alias_config::{
+  compilation_environments::CompilationEnvironments, hlo_computation::HloComputation, hlo_input_output_alias_config::{
     HloBufferDonorConfig,
     HloInputOutputAliasConfig
-  },
-  hlo_instruction::HloPrintOptions,
-  hlo_module_config::HloModuleConfig,
-  hlo_module_metadata::HloModuleMetadata,
-  hlo_schdule::HloSchedule,
-  hlo_sharding::HloSharding
+  }, hlo_instruction::HloPrintOptions, hlo_module_config::HloModuleConfig, hlo_module_metadata::HloModuleMetadata, hlo_proto::HloModuleProto, hlo_schdule::HloSchedule, hlo_sharding::HloSharding
 };
 
 pub struct StackFrame {
@@ -68,6 +62,16 @@ pub struct HloModule {
 impl HloModule {
   pub fn new(_name: String, _config: HloModuleConfig) -> Self {
     unimplemented!()
+  }
+
+  // Convert an HloModule to or from a proto.
+  pub fn create_from_proto(
+    _proto: &HloModuleProto,
+    _module_config: &HloModuleConfig,
+    _prohibit_empty_literal: bool,
+    _comp_env: Option<&CompilationEnvironments>) -> HloModule
+  {
+     unimplemented!() 
   }
 
   pub fn add_entry_computation() {}

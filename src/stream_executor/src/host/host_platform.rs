@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 
 use crate::{
-  device_description::DeviceDescription,
-  executor_cache::ExecutorCache, platform::Platform, stream_executor::StreamExecutor,
+  executor_cache::ExecutorCache,
   //stream_executor::StreamExecutor
 };
 
@@ -40,6 +39,7 @@ impl HostPlatform {
   }
 }
 
+/*
 impl Platform for HostPlatform {
   fn id(&self) -> i64 {
     unimplemented!()
@@ -88,3 +88,4 @@ impl Platform for HostPlatform {
     unimplemented!()
   }
 }
+  */

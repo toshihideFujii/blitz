@@ -1,4 +1,5 @@
 pub mod analysis;
+pub mod compilation_environments;
 pub mod computation_layout;
 pub mod evaluator;
 pub mod utils;
@@ -19,6 +20,7 @@ pub mod hlo_module_metadata;
 pub mod hlo_module;
 pub mod hlo_op_metadata;
 pub mod hlo_opcode;
+pub mod hlo_proto;
 pub mod hlo_reachability;
 pub mod hlo_schdule;
 pub mod hlo_sharding;

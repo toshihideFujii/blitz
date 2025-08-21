@@ -2,6 +2,8 @@
 
 use common::{literal::Literal, shape::ProgramShape};
 
+use crate::hlo_instruction::HloInstruction;
+
 // Serialization of HloModule.
 #[derive(Debug, Clone)]
 pub struct HloModuleProto {
@@ -39,6 +41,10 @@ impl HloModuleProto {
     unimplemented!()
   }
 
+  pub fn has_host_program_shape(&self) -> bool {
+    unimplemented!()
+  }
+  
   pub fn set_host_program_shape(&mut self, _program_shape: ProgramShape) {
     unimplemented!()
   }
@@ -56,22 +62,27 @@ pub struct HloProto {
 // Encapsulates HloProto together with the arguments, result, and
 // execution_platform. This message is used for purposes such as
 // analysis/replay/file-storage.
-pub struct HloSnapshot {}
+pub struct HloSnapshot {
+  hlo: Option<HloInstruction>
+}
 
 impl HloSnapshot {
   pub fn default() -> Self {
-    HloSnapshot {  }
+    HloSnapshot {
+      hlo: Some(HloInstruction::default())
+    }
   }
 
-  pub fn hlo(&self) {
-    unimplemented!()
+  pub fn hlo(&self) -> &HloInstruction {
+    self.hlo.as_ref().unwrap()
   }
 
   pub fn has_hlo(&self) -> bool {
-    unimplemented!()
+    self.hlo.is_some()
   }
 
-  pub fn set_hlo(&mut self) {
+  pub fn set_hlo(&mut self, hlo: HloInstruction) {
+    self.hlo = Some(hlo);
   }
 
   pub fn set_execution_platform(&mut self, _name: &String) {

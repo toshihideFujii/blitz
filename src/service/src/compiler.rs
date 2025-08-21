@@ -74,6 +74,7 @@ impl CompileOptions {
 // Thread-safety: subclasses of Compiler must be thread-safe, as multiple
 // Blitz clients may be requesting compilation concurrently for a given
 // platform.
+#[derive(Debug, Clone)]
 pub struct Compiler {}
 
 impl Compiler {
@@ -173,6 +174,17 @@ impl Compiler {
     unimplemented!()
   }
 
+  // Similar to CompileAheadOfTime above but AotCompilationMetadata
+  // has an argument that can be populated during compilation.
+  pub fn compile_ahead_of_time_by_metadata(
+    &self,
+    _module_group: &HloModuleGroup,
+    _options: &AotCompilationOptions,
+    _metadata: &AotCompilationMetadata) -> Result<Vec<AotCompilationResult>, String>
+  {
+    unimplemented!()
+  }
+
   // Registers the compiler singleton for the platform. This is assumed to
   // be a singleton, so no ownership is transferred.
   //
@@ -186,7 +198,7 @@ impl Compiler {
 
   // Returns the compiler singleton pointer if it is available for the given
   // platform, or an error status if it is not.
-  pub fn get_for_platform(_platform: &dyn Platform) -> Result<&Self, String>
+  pub fn get_for_platform(_platform: &Platform) -> Result<&Self, String>
   {
     unimplemented!()
   }
@@ -395,5 +407,13 @@ impl AotCompilationOptions {
 
   pub fn set_target_config(&mut self, target_config: TargetConfig) {
     self.target_config = Some(target_config);
+  }
+
+  pub fn use_shardy_partitioner(&self) -> bool {
+    unimplemented!()
+  }
+
+  pub fn deduplicate_hlo(&self) -> bool {
+    unimplemented!()
   }
 }

@@ -601,6 +601,7 @@ pub enum RandomAlgorithm {
   Philox,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum StepMarkerLocation {
   AtEntry,
   AtTopLevelWhileLoop,
@@ -608,6 +609,7 @@ pub enum StepMarkerLocation {
   None,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum CollectiveOpType {
   NoOp,
   AllReduce,
@@ -704,6 +706,7 @@ pub enum XnnGraphFusionMode {
 // 2. Backend-specific options: `blitz_$backend_$flag_name` - must be in the
 //    corresponding backend section, and sorted alphabetically by the flag name.
 //
+#[derive(Debug, Clone)]
 pub struct DebugOptions {
   cpu_enable_concurrency_optimized_scheduler: bool,
   cpu_enable_fast_math: bool,
@@ -2097,15 +2100,35 @@ impl ExecutionProfile {
 
 // These settings control how Blitz compiles and/or runs code.  Not all settings
 // will have an effect on every platform.
-pub struct ExecutionOptions {}
+pub struct ExecutionOptions {
+  debug_options: DebugOptions,
+  num_replicas: i64,
+  num_partitions: i64,
+  use_spmd_partitioning: bool,
+  use_shardy_partitioner: bool,
+  use_auto_spmd_partitioning: bool,
+  deduplicate_hlo: bool,
+}
 
 impl ExecutionOptions {
-  pub fn new() -> Self {
-    ExecutionOptions { }
+  pub fn default() -> Self {
+    ExecutionOptions {
+      debug_options: DebugOptions::default(),
+      num_replicas: 0,
+      num_partitions: 0,
+      use_spmd_partitioning: false,
+      use_shardy_partitioner: false,
+      use_auto_spmd_partitioning: false,
+      deduplicate_hlo: false,
+    }
   }
 
   pub fn debug_options(&self) -> &'static DebugOptions {
     get_debug_options_from_flags()
+  }
+
+  pub fn set_debug_options(&mut self, debug_options: DebugOptions) {
+    self.debug_options = debug_options;
   }
 
   pub fn device_handles(&self) -> &Vec<DeviceHandle> {
@@ -2113,6 +2136,38 @@ impl ExecutionOptions {
   }
 
   pub fn device_handles_size(&self) -> usize {
+    unimplemented!()
+  }
+
+  pub fn set_num_replicas(&mut self, num_replicas: i64) {
+    self.num_replicas = num_replicas;
+  }
+
+  pub fn set_num_partitions(&mut self, num_partitions: i64) {
+    self.num_partitions = num_partitions;
+  }
+
+  pub fn set_use_spmd_partitioning(&mut self, use_spmd_partitioning: bool) {
+    self.use_spmd_partitioning = use_spmd_partitioning;
+  }
+
+  pub fn set_use_shardy_partitioner(&mut self, use_shardy_partitioner: bool) {
+    self.use_shardy_partitioner = use_shardy_partitioner;
+  }
+
+  pub fn set_use_auto_spmd_partitioning(&mut self, use_auto_spmd_partitioning: bool) {
+    self.use_auto_spmd_partitioning = use_auto_spmd_partitioning;
+  }
+
+  pub fn mutable_auto_spmd_partitioning_mesh_shape(&mut self) {
+    unimplemented!()
+  }
+
+  pub fn set_deduplicate_hlo(&mut self, deduplicate_hlo: bool) {
+    self.deduplicate_hlo = deduplicate_hlo;
+  }
+
+  pub fn has_shape_with_output_layout(&self) -> bool {
     unimplemented!()
   }
 }

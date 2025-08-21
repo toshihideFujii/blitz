@@ -6,6 +6,7 @@ pub mod constraints;
 pub mod diagnostics;
 pub mod executable;
 pub mod execution_engine;
+pub mod execution_graph;
 pub mod jit_executable;
 pub mod runtime;
 pub mod state;

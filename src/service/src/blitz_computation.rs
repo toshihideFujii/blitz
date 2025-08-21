@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
 use common::shape::{ProgramShape};
-use hlo::{hlo_instruction::HloInstruction, hlo_module::HloModule};
-use crate::hlo_proto::{HloModuleProto, HloSnapshot};
+use hlo::{hlo_instruction::HloInstruction, hlo_module::HloModule,
+  hlo_proto::{HloModuleProto, HloSnapshot}};
+
 
 // The computation graph that the user builds up with the BlitzBuilder.
 pub struct BlitzComputation {

@@ -3,11 +3,11 @@
 use std::collections::HashSet;
 
 use common::{blitz_data::ExecutionProfile, shape::Shape, shape_tree::ShapeTree};
-use hlo::{hlo_module::HloModule, hlo_module_config::HloModuleConfig};
+use hlo::{hlo_module::HloModule, hlo_module_config::HloModuleConfig, hlo_proto::HloProto};
 use stream_executor::{device_memory_allocator::ScopedDeviceMemory, stream::Stream};
 
 use crate::{
-  hlo_profile_printer_data::HloProfilePrinterData, hlo_proto::HloProto, maybe_owning_device_memory::MaybeOwningDeviceMemory, service_executable_run_options::ServiceExecutableRunOptions, shaped_buffer::{ScopedShapedBuffer, ShapedBuffer}
+  hlo_profile_printer_data::HloProfilePrinterData, maybe_owning_device_memory::MaybeOwningDeviceMemory, service_executable_run_options::ServiceExecutableRunOptions, shaped_buffer::{ScopedShapedBuffer, ShapedBuffer}
 };
 
 // ExecutionInput buffers are in one of three states:

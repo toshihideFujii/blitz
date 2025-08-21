@@ -2,11 +2,14 @@
 
 use common::{
   blitz_data::{
-    ChannelHandle, ChannelType, DeviceHandle, ExecutionHandle, ExecutionOptions, ExecutionProfile
-  }, execution_options_util::create_default_execution_options,
-  layout::Layout, literal::Literal, shape::{ProgramShape, Shape}
+    ChannelHandle, ChannelType, DeviceHandle, ExecutionHandle, ExecutionOptions,
+    ExecutionProfile}, execution_options_util::create_default_execution_options,
+  layout::Layout, literal::Literal, shape::{ProgramShape, Shape}, shape_util::ShapeUtil
 };
-use service::{blitz_computation::BlitzComputation, hlo_proto::HloSnapshot, service::{GlobalData, Service}};
+
+use hlo::hlo_proto::HloSnapshot;
+
+use service::{blitz_computation::BlitzComputation, service::{BlitzComputationInstance, GlobalData, Service}};
 
 //use crate::blitz_computation::BlitzComputation;
 
@@ -74,19 +77,73 @@ impl<'backend> Client<'backend> {
   //   device is chosen by the service.
   // * If execution_profile is not nullptr then the pointed-to ExecutionProfile
   //   will be filled with profile data from the execution.
-  pub fn execute_computation(
+  pub fn execute_by_computation(
     &self,
-    _computation: &BlitzComputation,
-    _arguments: &Vec<GlobalData>,
-    _execution_options: Option<ExecutionOptions>,
-    _execution_profile: Option<ExecutionProfile>) -> Result<GlobalData, String>
+    computation: BlitzComputation,
+    arguments: Vec<GlobalData>,
+    mut execution_options: Option<ExecutionOptions>,
+    execution_profile: Option<ExecutionProfile>) -> Result<GlobalData, String>
   {
+    let options_storage: Option<ExecutionOptions> = None;
+    if execution_options.is_none() ||
+      execution_options.as_ref().unwrap().device_handles().is_empty()
+    {
+      if execution_options.is_some() {
+
+      } else {
+          
+      }
+      execution_options = options_storage;
+      let device_handles =
+        self.get_device_handles(1);
+      check_error(&device_handles);
+      debug_assert!(!device_handles.as_ref().unwrap().is_empty());
+    }
+
+    let mut computation_instances: Vec<BlitzComputationInstance> = vec![];
+    let instance =
+      BlitzComputationInstance::new(computation, arguments,
+        execution_options.unwrap(), execution_profile.unwrap());
+    computation_instances.push(instance);
+
+    // Instead of invoking Compile() and Execute(), invoke
+    // Service::ExecuteParallel() to execute our one computation.  Compile()
+    // caches the executable forever, which isn't what we want.
+
+    //println!("Making execute_parallel request: {:?}",
+      //execution_options.as_ref().unwrap());
+    let results_wrapper =
+      self.execute_parallel(computation_instances);
+    check_error(&results_wrapper);
+    let results = results_wrapper.unwrap();
+
+    // The result selection is a bit hacky, but better than assuming it is
+    // device 0.
+    for i in 0..results.len() {
+      let shape = self.get_shape(&results[i]);
+      check_error(&shape);
+      if !ShapeUtil::is_empty_tuple(shape.as_ref().unwrap()) {
+        println!("Fetching result from device {:?}: {:?}",
+          i, ShapeUtil::human_string(shape.as_ref().unwrap()));
+        //return Ok(results[i]);
+      }
+    }
+
+    debug_assert!(!results.is_empty());
+    println!("Defaulting to device 0 result");
+    //Ok(results[0])
     unimplemented!()
   }
 
   // Executes a list XlaComputationInstances and returns global data produced
   // from each computation.
-  pub fn execute_parallel(&self) {}
+  pub fn execute_parallel(
+    &self,
+    computations: Vec<BlitzComputationInstance>
+  ) -> Result<Vec<GlobalData>, String>
+  {
+    self.stub.execute_graph_parallel(&computations)
+  }
 
   // Requests device_count device handles available on the target. The returned
   // device handles are used to specify the devices to execute the computations
@@ -172,12 +229,22 @@ impl<'backend> Client<'backend> {
   // Execute() and Transfer().
   pub fn execute_and_transfer<T>(
     &self,
-    _computation: &BlitzComputation,
-    _arguments: &Vec<GlobalData>,
-    _execution_options: Option<ExecutionOptions>,
-    _execution_profile: Option<ExecutionProfile>) -> Result<Literal<T>, String>
+    computation: BlitzComputation,
+    arguments: Vec<GlobalData>,
+    execution_options: Option<ExecutionOptions>,
+    execution_profile: Option<ExecutionProfile>) -> Result<Literal<T>, String>
     where T: Clone + Default + PartialEq
   {
+    let data =
+      self.execute_by_computation(
+        computation, arguments, execution_options, execution_profile);
+    check_error(&data);
+
+    //let shape_with_output_layout: Option<Shape> = None;
+    //if execution_options.is_some() &&
+      //execution_options.as_ref().unwrap().has_shape_with_output_layout()
+    //{
+    //}
     unimplemented!()
   }
 
@@ -198,11 +265,11 @@ impl<'backend> Client<'backend> {
   // stored using that layout.
   pub fn compute_constant<T>(
     &self,
-    _computation: &BlitzComputation,
-    _output_layout: Option<Layout>) -> Result<Literal<T>, String>
+    computation: &BlitzComputation,
+    output_layout: Option<&Layout>) -> Result<Literal<T>, String>
     where T: Clone + Default + PartialEq
   {
-    unimplemented!()
+    self.stub.compute_constant_graph(computation, output_layout)
   }
 
   // Unregister the memory for the given GlobalData on the device.
@@ -245,7 +312,10 @@ impl<'backend> Client<'backend> {
     self.create_channel_handle_by_type(ChannelType::DeviceToHost)
   }
 
-  pub fn load_snapshot(&self, _module: &HloSnapshot) -> Result<BlitzComputation, String> {
+  pub fn load_snapshot(
+    &self, module: &HloSnapshot) -> Result<BlitzComputation, String>
+  {
+    debug_assert!(module.has_hlo() && module.hlo().has_hlo_module());
     unimplemented!()
   }
 
@@ -255,5 +325,12 @@ impl<'backend> Client<'backend> {
 
   fn create_channel_handle_by_type(&self, t: ChannelType) -> Result<ChannelHandle, String> {
     self.stub.create_channel_handle(t)
+  }
+}
+
+fn check_error<T>(value: &Result<T, String>) {
+  if value.is_err() {
+    let err_msg = value.as_ref().err().unwrap();
+    assert!(false, "{:?}", err_msg);
   }
 }

@@ -54,13 +54,13 @@ pub type OwningDeviceMemory = ScopedDeviceMemory<u8>;
 // Intended usage is through Allocate() functions which return an owning smart
 // pointer.
 pub struct DeviceMemoryAllocator {
-  platform: Box<dyn Platform>
+  platform: Platform
 }
 
 impl DeviceMemoryAllocator {
   // Parameter platform indicates which platform the allocator allocates memory
   // on. Must be non-null.
-  pub fn new(platform: Box<dyn Platform>) -> Self {
+  pub fn new(platform: Platform) -> Self {
     DeviceMemoryAllocator { platform: platform }
   }
 
@@ -83,8 +83,8 @@ impl DeviceMemoryAllocator {
   }
 
   // Return the platform that the allocator allocates memory on.
-  pub fn platform(&self) -> &dyn Platform {
-    self.platform.as_ref()
+  pub fn platform(&self) -> &Platform {
+    &self.platform
   }
 
   // Can we call Deallocate() as soon as a computation has been scheduled on

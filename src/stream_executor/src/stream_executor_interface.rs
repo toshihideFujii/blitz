@@ -14,7 +14,7 @@ impl StreamExecutorInterface {
   }
 
   // Returns a reference to the platform that created this executor.
-  pub fn get_platform(&self) -> &dyn Platform {
+  pub fn get_platform(&self) -> &Platform {
     unimplemented!()
   }
 

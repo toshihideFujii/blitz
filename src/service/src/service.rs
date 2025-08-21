@@ -14,7 +14,7 @@ use common::{
 };
 
 use hlo::{evaluator::hlo_evaluator::HloEvaluator, hlo_module::HloModule,
-  hlo_module_config::HloModuleConfig, hlo_module_group::HloModuleGroup};
+  hlo_module_config::HloModuleConfig, hlo_module_group::HloModuleGroup, hlo_proto::HloSnapshot};
 use stream_executor::{platform::{Platform, StreamPriority},
   stream::Stream, stream_executor::StreamExecutor};
 
@@ -27,21 +27,21 @@ use crate::{
   dynamic_dimension_inference::DynamicDimensionInference,
   dynamic_padder::DynamicPadder, executable::Executable,
   execution_tracker::ExecutionTracker, hlo_module_util::{self, create_module_config},
-  hlo_proto::HloSnapshot, service_executable_run_options::ServiceExecutableRunOptions,
+  service_executable_run_options::ServiceExecutableRunOptions,
   shaped_buffer::ShapedBuffer, transfer_manager::TransferManager
 };
 
 // Options to configure the service when it is created.
-//#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ServiceOptions {
-  platform: Option<Box<dyn Platform>>,
+  platform: Option<Platform>,
   number_of_replicas: i64,
   intra_op_parallelism_threads: i64,
   allowed_devices: Option<HashSet<i64>>
 }
 
 impl ServiceOptions {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     ServiceOptions {
       platform: None,
       number_of_replicas: 1,
@@ -51,12 +51,12 @@ impl ServiceOptions {
   }
 
   // Set the platform backing the service, or nullptr for the default platform.
-  pub fn set_platform(&mut self, platform: Box<dyn Platform>) -> &mut Self {
+  pub fn set_platform(&mut self, platform: Platform) -> &mut Self {
     self.platform = Some(platform);
     self
   }
 
-  pub fn platform(&self) -> &Option<Box<dyn Platform>> {
+  pub fn platform(&self) -> &Option<Platform> {
     &self.platform
   }
 
@@ -266,7 +266,7 @@ impl<'backend> Service<'backend> {
 
     let mut snapshot = HloSnapshot::default();
     if executable.as_ref().unwrap().dumping_snapshot() {
-      snapshot.set_hlo(); // TODO
+      //snapshot.set_hlo(); // TODO
       snapshot.set_execution_platform(
         self.execute_backend.as_ref().unwrap().platform().name());
       let result = record_arguments(

@@ -5,9 +5,9 @@ use common::{
   shape::Shape
 };
 
-//use stream_executor::device_memory_allocator::DeviceMemoryAllocator;
 
-use crate::compilation_environments::CompilationEnvironments;
+//use stream_executor::device_memory_allocator::DeviceMemoryAllocator;
+use hlo::compilation_environments::CompilationEnvironments;
 
 // Class containing options for building an LocalExecutable with
 // LocalClient::Compile.

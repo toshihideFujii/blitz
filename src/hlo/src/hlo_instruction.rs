@@ -2456,6 +2456,10 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn has_hlo_module(&self) -> bool {
+    unimplemented!()
+  }
+
   fn is_elementwise_impl(&self, _operand_idx: Option<i64>) -> bool {
     false
   }

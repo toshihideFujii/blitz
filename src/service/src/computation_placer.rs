@@ -17,12 +17,12 @@ impl DeviceAssignment {
     }
   }
 
-  pub fn replica_count(&self) -> usize {
-    self.array.height()
+  pub fn replica_count(&self) -> i64 {
+    self.array.height() as i64
   }
 
-  pub fn computation_count(&self) -> usize {
-    self.array.width()
+  pub fn computation_count(&self) -> i64 {
+    self.array.width() as i64
   }
 
   pub fn logical_id_for_device() {}

@@ -8,7 +8,7 @@ use crate::{
 // Create a default ExecutionOptions proto; this proto has its debug options
 // populated to the default values taken from flags.
 pub fn create_default_execution_options() -> ExecutionOptions {
-  let execution_options = ExecutionOptions::new();
+  let execution_options = ExecutionOptions::default();
   //execution_options.set_debug_options(get_debug_options_from_flags());
   execution_options
 }

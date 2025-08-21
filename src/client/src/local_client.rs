@@ -6,10 +6,12 @@ use common::{
   literal::Literal, shape::Shape
 };
 
+use hlo::hlo_proto::HloSnapshot;
+
 use service::{
   backend::Backend, blitz_computation::BlitzComputation, compiler::AotCompilationResult,
   executable::Executable, executable_build_options::ExecutableBuildOptions,
-  hlo_proto::HloSnapshot, local_service::LocalService,
+  local_service::LocalService,
   service_executable_run_options::ServiceExecutableRunOptions,
   shaped_buffer::{ScopedShapedBuffer, ShapedBuffer}, stream_pool::StreamPool
 };
@@ -313,7 +315,7 @@ impl<'backend> LocalClient<'backend> {
   }
 
   // Returns the platform that the underlying service targets.
-  pub fn platform(&self) -> &dyn Platform {
+  pub fn platform(&self) -> &Platform {
     self.local_service.backend().platform()
   }
 

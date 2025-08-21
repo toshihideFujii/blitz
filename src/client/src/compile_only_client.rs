@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use common::{blitz_data::ExecutionOptions, shape::{ProgramShape, Shape}};
+use hlo::hlo_module_config::HloModuleConfig;
 use service::{
   blitz_computation::BlitzComputation,
   compile_only_service::{AotBlitzComputationInstance, CompileOnlyService},
@@ -10,12 +11,14 @@ use service::{
 // An Blitz Client specialization for doing ahead-of-time compilation.  This does
 // not require (or attempt to instantiate) an execution-capable backend for the
 // relevant platform.
-pub struct CompileOnlyClient {
-  compiler_service: CompileOnlyService
+pub struct CompileOnlyClient<'backend> {
+  compiler_service: CompileOnlyService<'backend>
 }
 
-impl CompileOnlyClient {
-  pub fn new() {}
+impl<'backend> CompileOnlyClient<'backend> {
+  pub fn new(compiler_service: CompileOnlyService<'backend>) -> Self {
+    CompileOnlyClient { compiler_service: compiler_service }
+  }
 
   // Compiles a list of blitz computations for ahead-of-time execution.
   // This is intended for use in static compilation. The |options|
@@ -47,11 +50,12 @@ impl CompileOnlyClient {
   // execution_options is optional; if not given a default is used.
   pub fn create_module_config(
     &self,
-    _program_shape: &ProgramShape,
-    _argument_shapes: &Vec<Shape>,
-    _execution_options: &ExecutionOptions) -> Result<(), String> // TODO: how to get ?
+    program_shape: &ProgramShape,
+    argument_shapes: &Vec<Shape>,
+    execution_options: &ExecutionOptions) -> Result<HloModuleConfig, String>
   {
-    unimplemented!()
+    self.compiler_service.service.create_module_config(
+      program_shape, argument_shapes, execution_options, None)
   }
 
   // Returns the size of a pointer in bytes for a given triple.

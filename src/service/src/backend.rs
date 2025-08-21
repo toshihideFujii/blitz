@@ -13,7 +13,7 @@ use crate::{
 
 // Options to configure the backend when it is created.
 pub struct BackendOptions {
-  platform: Option<Box<dyn Platform>>,
+  platform: Option<Platform>,
   intra_op_parallelism_threads: i64,
   allowed_devices: Option<HashSet<i64>>
 }
@@ -28,12 +28,12 @@ impl BackendOptions {
   }
 
   // Set the platform backing the backend, or nullptr for the default platform.
-  pub fn set_platform(&mut self, platform: Box<dyn Platform>) -> &mut Self {
+  pub fn set_platform(&mut self, platform: Platform) -> &mut Self {
     self.platform = Some(platform);
     self
   }
 
-  pub fn platform(&self) -> &Option<Box<dyn Platform>> {
+  pub fn platform(&self) -> &Option<Platform> {
     &self.platform
   }
 
@@ -68,7 +68,7 @@ impl BackendOptions {
 //
 //    StreamPool::Ptr stream = backend->BorrowStream().value();
 pub struct Backend {
-  platform: Box<dyn Platform>,
+  platform: Platform,
   compiler: Compiler,
   transfer_manager: TransferManager,
   computation_placer: ComputationPlacer,
@@ -79,16 +79,16 @@ pub struct Backend {
 impl Backend {
   // Creates a new backend.
   pub fn new(options: &BackendOptions) -> Self {
-    let platform = options.platform();
+    let platform = options.platform().as_ref().unwrap();
     let _compiler =
-      Compiler::get_for_platform(platform.as_ref().unwrap().as_ref());
+      Compiler::get_for_platform(&platform);
     
     unimplemented!()
   }
 
   // Accessors for the various objects.
-  pub fn platform(&self) -> &dyn Platform {
-    self.platform.as_ref()
+  pub fn platform(&self) -> &Platform {
+    &self.platform
   }
 
   pub fn compiler(&self) -> &Compiler {

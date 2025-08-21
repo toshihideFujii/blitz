@@ -32,7 +32,7 @@ impl PlatformUtil {
   //
   // Note that, even if a platform is present with zero devices, if we *do* have
   // compilation support for it, it will be returned in this sequence.
-  pub fn get_supported_platforms() -> Result<Vec<Box<dyn Platform>>, String> {
+  pub fn get_supported_platforms() -> Result<Vec<Platform>, String> {
     unimplemented!()
   }
 
@@ -41,13 +41,13 @@ impl PlatformUtil {
   // the default platform. If exactly two platforms are present and one of them
   // is the interpreter platform, then the other platform is the default
   // platform. Otherwise returns an error.
-  pub fn get_default_platform(&self) -> Result<Box<dyn Platform>, String> {
+  pub fn get_default_platform(&self) -> Result<&Platform, String> {
     unimplemented!()
   }
 
   // Returns the platform according to the given name. Returns error if there is
   // no such platform.
-  pub fn get_platform(_platform_name: String) -> Result<Box<dyn Platform>, String> {
+  pub fn get_platform(_platform_name: String) -> Result<Platform, String> {
     unimplemented!()
   }
 
@@ -58,7 +58,7 @@ impl PlatformUtil {
   //
   // If the platform has no visible devices, a not-found error is returned.
   pub fn get_stream_executors(
-    _platform: &dyn Platform,
+    _platform: &Platform,
     _allowed_devices: Option<HashSet<i64>>) -> Result<Vec<StreamExecutor>, String>
   {
     unimplemented!()    

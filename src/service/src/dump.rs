@@ -8,8 +8,8 @@
 use std::{collections::HashMap, sync::LazyLock};
 
 use common::blitz_data::DebugOptions;
-use hlo::hlo_module::HloModule;
-use crate::hlo_proto::HloSnapshot;
+use hlo::{hlo_module::HloModule, hlo_proto::HloSnapshot};
+
 
 // Argument used when calling DumpHloModuleIfEnabled before optimizations are
 // performed on an HloModule.
