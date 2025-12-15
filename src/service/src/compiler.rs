@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 
-use common::{blitz_data::{DebugOptions, Precision}, shape::Shape};
+use common::{blitz_data::{DebugOptions, Precision}, computation_placer::DeviceAssignment, shape::Shape};
 use hlo::{hlo_instruction::HloInstruction, hlo_module::HloModule, hlo_module_group::HloModuleGroup};
 use stream_executor::{device_memory_allocator::DeviceMemoryAllocator, platform::Platform, stream_executor::StreamExecutor};
 
-use crate::{computation_placer::DeviceAssignment, executable::Executable, metrics_hook_interface::MetricsHookInterface};
+use crate::{executable::Executable, metrics_hook_interface::MetricsHookInterface};
 
 // Abstract superclass describing the result of an ahead-of-time compilation.
 pub struct AotCompilationResult {}

@@ -98,16 +98,16 @@ impl HloInstructionSequence {
 
 // A class representing a sequential schedule of instructionns for an HLO module.
 #[derive(Clone, PartialEq)]
-pub struct HloSchedule {
-  //module: Box<HloModule>,
+pub struct HloSchedule<'module> {
+  module: &'module HloModule,
   sequences: HashMap<i64, HloInstructionSequence>,
   execution_threads: HashMap<i64, String>,
 }
 
-impl HloSchedule {
-  pub fn new(/*module: HloModule*/) -> Self {
+impl<'module> HloSchedule<'module> {
+  pub fn new(module: &'module HloModule) -> Self {
     HloSchedule {
-      //module: Box::new(module),
+      module: module,
       sequences: HashMap::new(),
       execution_threads: HashMap::new()
     }
@@ -221,7 +221,10 @@ impl HloSchedule {
   }
 
   pub fn update() {}
-  pub fn verify() {}
+
+  pub fn verify(&self) -> Result<(), String> {
+    unimplemented!()
+  }
 
   pub fn to_string(&self) -> String {
     unimplemented!()

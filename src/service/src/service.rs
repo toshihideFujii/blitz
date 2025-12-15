@@ -8,9 +8,7 @@ use common::{
     ComputationGraphStatsRequest, ComputationStatsResponse,
     DeviceHandle, ExecutionHandle, ExecutionOptions,
     ExecutionProfile, GlobalDataHandle
-  }, executable_run_options::ExecutableRunOptions, layout::Layout,
-  layout_util::LayoutUtil, literal::Literal, shape::{ProgramShape, Shape, ShapeEqual},
-  shape_util::ShapeUtil
+  }, computation_placer::DeviceAssignment, executable_run_options::ExecutableRunOptions, layout::Layout, layout_util::LayoutUtil, literal::Literal, shape::{ProgramShape, Shape, ShapeEqual}, shape_util::ShapeUtil
 };
 
 use hlo::{evaluator::hlo_evaluator::HloEvaluator, hlo_module::HloModule,
@@ -22,7 +20,7 @@ use crate::{
   allocation_tracker::AllocationTracker, backend::Backend,
   blitz_computation::BlitzComputation, channel_tracker::ChannelTracker,
   compilation_cache::CompilationCache, compiler::{AotCompilationOptions,
-  AotCompilationResult, CompileOptions}, computation_placer::DeviceAssignment,
+  AotCompilationResult, CompileOptions},
   //dump::dump_hlo_snapshot_if_enabled,
   dynamic_dimension_inference::DynamicDimensionInference,
   dynamic_padder::DynamicPadder, executable::Executable,
@@ -647,7 +645,9 @@ impl<'backend> Service<'backend> {
 
   // Creates a unique channel handle that can be used for Send/Recv
   // instructions.
-  pub fn create_channel_handle(&self, t: ChannelType) -> Result<ChannelHandle, String> {
+  pub fn create_channel_handle(
+    &mut self, t: ChannelType) -> Result<ChannelHandle, String>
+  {
     self.channel_tracker.new_channel(t.clone())
   }
 

@@ -76,7 +76,11 @@ impl HloDCE {
 
   // Run the pass on the given module.
   // Returns whether the module was changed (instructions were removed).
-  pub fn run(&mut self, module: &HloModule, execution_threads: HashSet<String>) -> bool {
+  pub fn run(
+    &mut self,
+    module: &HloModule,
+    execution_threads: &HashSet<String>) -> Result<bool, String>
+  {
     let mut changed = false;
     println!("Before dce:");
     println!("{:?}", module.to_string());
@@ -96,12 +100,14 @@ impl HloDCE {
     println!("After dve:");
     println!("{:?}", module.to_string());
 
-    changed
+    Ok(changed)
   }
 
   // Finds all computations that are not called by any instruction and removes
   // them from the module. Returns whether any dead code was removed.
-  fn recursively_remove_dead_computations(module: &HloModule, execution_threads: HashSet<String>) -> bool {
+  fn recursively_remove_dead_computations(
+    module: &HloModule, execution_threads: &HashSet<String>) -> bool
+  {
     // Tracks whether any dead code is eliminated by this pass.
     let mut module_contains_dead_code = false;
 

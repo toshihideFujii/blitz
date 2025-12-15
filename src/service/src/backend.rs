@@ -1,15 +1,16 @@
 #![allow(dead_code)]
 
 use std::collections::HashSet;
+use common::computation_placer::ComputationPlacer;
 use stream_executor::{
   device_memory_allocator::{DeviceMemoryAllocator,
   StreamExecutorMemoryAllocator}, platform::{Platform, StreamPriority},
   stream::Stream, stream_executor::StreamExecutor
 };
 use crate::{
-  compiler::Compiler, computation_placer::ComputationPlacer,
-  transfer_manager::TransferManager
+  compiler::Compiler, transfer_manager::TransferManager
 };
+
 
 // Options to configure the backend when it is created.
 pub struct BackendOptions {

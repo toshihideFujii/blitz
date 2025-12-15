@@ -36,16 +36,27 @@ impl<T> HloEvaluator<T> where T: Clone + Default + PartialEq + 'static {
   pub fn create_embedded() {}
   pub fn on_evaluate_computation() {}
 
-  // Gets the value of running a single HLO instruction.
+   // Gets the value of running a single HLO instruction.
   //
   // This function may recursively evaluate the dependency of this instruction
   // within its parent computation until it encounters something that cannot be
   // evaluated, such as an Infeed or a Parameter instruction.
   // It makes best effort to partially evaluate a dependency if possible.
+  // The caller may pass in non-null `precomputed_analyses` to avoid
+  // recomputation during evaluation; the caller must ensure that any
+  // precomputed analyses were performed on the module containing `instruction`.
+  // The optional `substitutions` map can be used to substitute the given
+  // literals for any instruction in the evaluation graph, usually some of the
+  // instruction's operands.
+  //
+  // For example, given instruction = op(A, B, C) and the map
+  // {A = x, C = y}, this evaluates op(x, B, y).
   pub fn evaluate(
     &self,
     _instruction: &HloInstruction,
-    _recursively_evaluate_nonconstant_operands: bool) -> Result<Literal<T>, String>
+    _precomputed_analysis: &PrecomputedAnalysis,
+    _recursively_evaluate_nonconstant_operands: bool,
+    _substitutions: &HashMap<HloInstruction, Literal<T>>) -> Result<Literal<T>, String>
   {
     unimplemented!()
   }
@@ -107,4 +118,14 @@ impl<T> HloEvaluator<T> where T: Clone + Default + PartialEq + 'static {
   pub fn dynamic_dimension_inference() {}
   pub fn set_use_fast_path() {}
   pub fn set_cusstom_call_handler() {}
+}
+
+pub struct PrecomputedAnalysis {
+
+}
+
+impl PrecomputedAnalysis {
+  pub fn default() -> Self {
+    unimplemented!()
+  }
 }

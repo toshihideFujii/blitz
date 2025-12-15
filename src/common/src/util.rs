@@ -101,6 +101,10 @@ pub fn human_readable_num_flops(flops: f64, nanoseconds: f64) -> String {
   human_readable_num_ops(flops, nanoseconds, "FL".to_string())
 }
 
+pub fn human_readable_num_bytes(_num_bytes: i64) -> String {
+  unimplemented!()
+}
+
 // Return ceiling(log2(n)) for positive integer n.  panic iff n == 0.
 pub fn log_2_ceiling(x: usize) -> u32 {
   x.ilog2()

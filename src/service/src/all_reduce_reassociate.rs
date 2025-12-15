@@ -3,11 +3,12 @@
 use std::collections::HashSet;
 use common::{literal::Literal, primitive_util::cast_preserves_values, shape_util::ShapeUtil};
 use hlo::{hlo_instruction::HloInstruction, hlo_module::HloModule, hlo_opcode::HloOpcode,
-  utils::hlo_query::{contains_layout_constrained_all_reduce, next_channel_id}};
+  utils::hlo_query::{contains_layout_constrained_all_reduce, next_channel_id},
+  collective_ops_utils::{get_reduction_identity, match_reduction_computation,
+  match_reduction_instruction, ReductionKind}
+};
 
-use crate::{all_reduce_key::{get_all_reduce_key, AllReduceKey},
-collective_ops_utils::{get_reduction_identity, match_reduction_computation,
-  match_reduction_instruction, ReductionKind}};
+use crate::{all_reduce_key::{get_all_reduce_key, AllReduceKey}};
 
 // A pass that reassociates all-reduce feeding into compatible elementwise
 // operations. As an example: add(all-reduce(x), all-reduce(y)) will be replaced

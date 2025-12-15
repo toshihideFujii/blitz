@@ -21,7 +21,7 @@ members = [
   "src/runtime",
   "src/service",
   "src/stream_executor"
-]
+, "src/tools"]
 
 [workspace.dependencies]
 client = { path = "src/client" }
@@ -32,3 +32,4 @@ mlir = { path = "src/mlir" }
 runtime = { path = "src/runtime" }
 service = { path = "src/service" }
 stream_executor = { path = "src/stream_executor" }
+tools = { path = "src/tools" }

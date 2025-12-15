@@ -3,17 +3,8 @@
 use std::collections::{HashMap, HashSet};
 
 use common::{shape::ShapeEqual, shape::Shape, shape_util::ShapeUtil};
-use hlo::{
-  hlo_instruction::HloInstruction,
-  hlo_module::HloModule,
-  hlo_opcode::HloOpcode,
-  hlo_value::{HloPosition, HloUse, HloValue, HloValueSet, InstructionValueSet}
-};
 
-use service::{
-  call_graph::{CallContext, CallGraph},
-  hlo_phi_graph::PhiGraph
-};
+use crate::{call_graph::{CallContext, CallGraph}, hlo_computation::HloComputation, hlo_instruction::HloInstruction, hlo_module::HloModule, hlo_opcode::HloOpcode, hlo_phi_graph::PhiGraph, hlo_value::{HloPosition, HloUse, HloValue, HloValueSet, InstructionValueSet}};
 
 // Identifies one array input of an HloInstruction.
 #[derive(Debug, Clone, PartialEq, Hash)]
@@ -114,14 +105,48 @@ impl<'module> HloDataflowAnalysis<'module> {
     }
   }
 
+  // Runs dataflow analysis on the given module. Parameters:
+  //
+  //   ssa_form : If true then new values are defined at the merge points of
+  //     kWhile instructions. Abusing nomenclature somewhat, we call these "phi
+  //     values".  The merge is formed by the init value and loop backedge. The
+  //     SSA form is minimal in that a new phi value is defined only if the
+  //     merge point is reachable by multiple different values. The SSA form is
+  //     also in loop-closed form in that no values defined inside of a loop
+  //     (while body) is used outside of the loop. Example use of this ssa_form
+  //     mode is to reason about live range interference of buffers.
+  //
+  //     If ssa_form is false, then merge points do not define new
+  //     values. Rather, the HloValueSet for the merge point contains the union
+  //     of the merged HloValues.
+  //
+  //   bitcast_defines_value : If true then the Bitcast HLO instruction defines
+  //     a new HLO value in the analysis. If false then Bitcast forwards the
+  //     value of its operand.
   pub fn run(
-    _module: &HloModule,
-    _ssa_form: bool,
-    _bitcast_defines_value: bool,
-    _can_share_buffer: Option<&dyn Fn(&HloInstruction, &HloInstruction, usize) -> bool>,
-    _forwards_operand: Option<&dyn Fn(&HloInstruction, usize) -> ForwardedOperand>,
-    _execution_threads: &HashSet<String>) -> Result<HloDataflowAnalysis<'module>, String>
+    module: &'module HloModule,
+    ssa_form: bool,
+    bitcast_defines_value: bool,
+    execution_threads: HashSet<String>
+  ) -> Result<HloDataflowAnalysis<'module>, String>
   {
+    println!("HloDataflowAnalysis::run on module {:?}", module.name());
+    println!("{:?}", module.to_string());
+
+    let mut dataflow_analysis: HloDataflowAnalysis<'module> =
+      HloDataflowAnalysis::new(
+        module, ssa_form, bitcast_defines_value, execution_threads);
+    let result = dataflow_analysis.run_impl();
+    check_error(&result);
+    
+    Ok(dataflow_analysis)
+  }
+
+  // Runs dataflow analysis on the module attached to this HloDataflowAnalysis.
+  fn run_impl(&mut self) -> Result<(), String> {
+    let result = self.initialize_instruction_value_sets();
+    check_error(&result);
+
     unimplemented!()
   }
 
@@ -1431,7 +1456,123 @@ impl<'module> HloDataflowAnalysis<'module> {
     unimplemented!()
   }
 
-  fn propagate() {}
+  // Propagates the dataflow through the module. In particular, it propagates
+  // the HloValueSet from its defining instruction to the users of the
+  // instructions.
+  fn propagate(&mut self) {
+    type Work = (i64, HloInstruction);
+    let mut worklist: Vec<Work> = vec![];
+    let priority_map =
+      calculate_post_order_schedule(self.module);
+    
+    let mut workset = HashSet::new();
+    let mut add_to_worklist = |instruction: &HloInstruction| {
+      if workset.insert(instruction.clone()) {
+        println!("Add {:?} to worklist with priority {:?}",
+          instruction.name(), priority_map.get(instruction).unwrap());
+      }
+    };
+    let comps = self.module.make_computation_post_order(
+      &HashSet::new(), false);
+    for comp in comps {
+      if !HloInstruction::is_thread_included(
+        comp.execution_thread(), &self.execution_threads)
+      {
+        continue;
+      }
+      for inst in comp.make_instruction_post_order() {
+        add_to_worklist(inst);
+      }
+    }
+    println!("SSA_FORM_: {:?}", self.ssa_form);
+
+    while !worklist.is_empty() {
+      let instruction = worklist.pop().unwrap();
+      //TODO
+      //workset.remove(&instruction.1);
+
+      println!("Worklist top: {:?}", instruction.1.name());
+      if !self.update_instructionn_value_set(&instruction.1) {
+        // No change to the instruction's value set.
+        println!("No change");
+        continue;
+      }
+
+      println!("New value set for {:?}: {:? }",
+        instruction.1.name(), self.get_instruction_value_set(&instruction.1));
+
+      // Instruction value was updated. Add users to work list if we haven't
+      // already.
+      for user in instruction.1.users() {
+        add_to_worklist(user);
+
+        // If user sequentially calls a computation, then the respective
+        // parameter(s) of the computation need to be updated.
+        if user.opcode() == HloOpcode::Conditional {
+          // If operand 0 is the use of instruction, then no parameters need to be
+          // updated, since that is the branch_index of the conditional.
+          // If operand n+1 is the use of instruction, then the branch_computation
+          // n's parameter need to be updated.
+          //
+          // Note that the same instruction can be used in multiple branches'
+          // operands.
+          for j in 0..user.branch_count() {
+            if user.operand(j+1) == &instruction.1 {
+              add_to_worklist(user.branch_computation(j)
+                .parameter_instruction(0).unwrap());
+            }
+          }
+        } else if user.opcode() == HloOpcode::AsyncUpdate ||
+          user.opcode() == HloOpcode::AsyncDone
+        {
+          // For async update and async done, we cannot distinguish which
+          // parameter needs to be updated so add all to the worklist.
+          let num_params = user.async_wrapped_computation().num_parameters();
+          for param_number in 0..num_params {
+            add_to_worklist(user.async_wrapped_computation()
+              .parameter_instruction(param_number).unwrap());
+          }
+        } else {
+          for called_comp in user.called_computations() {
+            if HloInstruction::is_thread_included(
+              called_comp.execution_thread(), &self.execution_threads)
+            {
+              continue;
+            }
+            let call_graph_node =
+              self.call_graph.get_node(called_comp);
+            if call_graph_node.context() == CallContext::ControlFlow {
+              for operand_number in user.operand_indices(&instruction.1) {
+                add_to_worklist(called_comp
+                  .parameter_instruction(operand_number as usize).unwrap());
+              }
+            }
+          }
+        }
+
+        // If instruction is a root instruction, then propagate out to any calling
+        // instruction and across any while backedge.
+        if &instruction.1 == instruction.1.parent().unwrap().root_instruction() {
+          let call_graph_node =
+            self.call_graph.get_node(instruction.1.parent().unwrap());
+          for callsite in call_graph_node.caller_callsites() {
+            if callsite.instruction().opcode() == HloOpcode::While {
+              // Add the while itself, and the body and condition parameters.
+              add_to_worklist(callsite.instruction());
+              add_to_worklist(callsite.instruction().while_body()
+                .parameter_instruction(0).unwrap());
+              add_to_worklist(callsite.instruction().while_condition()
+                .parameter_instruction(0).unwrap());
+            } else if call_graph_node.context() == CallContext::ControlFlow ||
+              callsite.instruction().opcode() == HloOpcode::Conditional
+            {
+              add_to_worklist(callsite.instruction());
+            }
+          }
+        }
+      }
+    }
+  }
 
   // Returns the result of the SSA Phi function applied to the given inputs at
   // the given instruction.
@@ -1514,4 +1655,56 @@ impl<'module> HloDataflowAnalysis<'module> {
   }
 
   fn update_positions_of_values_at() {}
+}
+
+// CalculatePostOrderSchedule traverses a module and assign a ordinal to each
+// instruction based the postorder dependency.
+fn calculate_post_order_schedule_helper(
+  comp: &HloComputation,
+  start_ordinal: i64,
+  ordinal_map: &mut HashMap<HloInstruction, i64>) -> i64
+{
+  let mut ordinal = start_ordinal;
+  for instruction in comp.make_instruction_post_order() {
+    if instruction.opcode() == HloOpcode::Call ||
+      instruction.opcode() == HloOpcode::AsyncStart ||
+      instruction.opcode() == HloOpcode::Conditional
+    {
+      for called_comp in instruction.called_computations() {
+        ordinal = calculate_post_order_schedule_helper(
+          called_comp, ordinal, ordinal_map);
+      }
+    }
+    if instruction.opcode() == HloOpcode::While {
+      ordinal = calculate_post_order_schedule_helper(
+        instruction.while_condition(), ordinal, ordinal_map);
+      ordinal = calculate_post_order_schedule_helper(
+        instruction.while_body(), ordinal, ordinal_map);
+    }
+    // It's possible that in some unit tests the computation graph is not
+    // flatten (meaning we could have multiple callers for one computation). In
+    // that case the oridinal_map will see the instruction multiple times. We
+    // consider that case to be ok as it only shows up in unit tests.
+    println!("Add instruction {:?} to ordinal map with ordinal",
+      instruction.name());
+    ordinal_map.insert(instruction.clone(), ordinal);
+    ordinal += 1;
+  }
+  ordinal
+}
+
+fn calculate_post_order_schedule(
+  module: &HloModule) -> HashMap<HloInstruction, i64>
+{
+  let mut map = HashMap::new();
+  calculate_post_order_schedule_helper(
+    module.entry_computation().unwrap(), 0, &mut map);
+  map
+}
+
+fn check_error<T>(value: &Result<T, String>) {
+  if value.is_err() {
+    let err_msg = value.as_ref().err().unwrap();
+    assert!(false, "{:?}", err_msg);
+  }
 }

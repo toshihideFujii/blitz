@@ -6,10 +6,9 @@ use hlo::{
   hlo_instruction::HloInstruction,
   hlo_module::HloModule,
   hlo_opcode::HloOpcode,
-  utils::hlo_query
+  utils::hlo_query,
+  collective_ops_utils::{match_reduction_instruction, ReductionKind},
 };
-
-use crate::collective_ops_utils::{match_reduction_instruction, ReductionKind};
 
 // A pass that reassociates reduce-scatter feeding into compatible elementwise
 // operations. As an example: add(reduce-scatter(x), reduce-scatter(y)) will be

@@ -57,7 +57,15 @@ pub fn parse_layout(_str: String) -> Result<Layout, String> {
   unimplemented!()
 }
 
-pub fn parse_replica_groups_only() {}
+// Parses and returns a std::vector<ReplicaGroup> from str. str is supposed to
+// contain a list of the replica groups, i.e. just the rhs of the
+// "replica_groups={...}" attribute string, e.g., "{{0,1}, {2,3}}".
+pub fn parse_replica_groups_only(
+  str: &String) -> Result<Vec<ReplicaGroup>, String>
+{
+  let parser = HloParser::new(str);
+  parser.parse_replica_groups_only()
+}
 
 fn can_infer_shape(code: HloOpcode) -> bool {
   match code {
@@ -228,7 +236,9 @@ pub struct HloParser {
 }
 
 impl HloParser {
-  pub fn new() {}
+  pub fn new(_str: &String) -> Self {
+    unimplemented!()
+  }
 
   // Runs the parser and constructs the resulting HLO in the given (empty)
   // HloModule. Returns the error status in case an error occurred.
@@ -408,7 +418,7 @@ impl HloParser {
     Ok(padding_config)
   }
 
-  pub fn parse_replica_groups_only(&self, _replica_groups: Vec<ReplicaGroup>) -> bool {
+  pub fn parse_replica_groups_only(&self) -> Result<Vec<ReplicaGroup>, String> {
     unimplemented!()
   }
 

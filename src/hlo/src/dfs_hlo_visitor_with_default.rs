@@ -21,13 +21,13 @@ pub trait DfsHloVisitor {
   }
 }
 
-struct DfsHloVisitorWithDefaultBase {
+pub struct DfsHloVisitorWithDefault {
   visitor: DfsHloVisitorBase
 }
 
-impl DfsHloVisitorWithDefaultBase {
+impl DfsHloVisitorWithDefault {
   pub fn new() -> Self {
-    DfsHloVisitorWithDefaultBase {
+    DfsHloVisitorWithDefault {
       visitor: DfsHloVisitorBase::new()
     }
   }
@@ -352,14 +352,14 @@ impl DfsHloVisitorWithDefaultBase {
 // Subclasses call ReplaceWithNewInstruction and ReplaceInstruction while
 // visiting.
 pub struct DfsHloRewriteVisitor {
-  base: DfsHloVisitorWithDefaultBase,
+  base: DfsHloVisitorWithDefault,
   changed: bool,
 }
 
 impl DfsHloRewriteVisitor {
   pub fn new() -> Self {
     DfsHloRewriteVisitor {
-      base: DfsHloVisitorWithDefaultBase::new(),
+      base: DfsHloVisitorWithDefault::new(),
       changed: false,
     }
   }

@@ -101,21 +101,31 @@ impl LiteralUtil {
   pub fn create_r4_with_layout() {}
 
   // Creates a scalar literal value zero of the given primitive type.
-  pub fn zero<T>(_primitive_type: PrimitiveType) -> Literal<T>
+  pub fn zero<T>(_primitive_type: &PrimitiveType) -> Literal<T>
     where T: Clone + Default + PartialEq
   {
     unimplemented!()
   }
 
   // Creates a scalar literal value one of the given primitive type.
-  pub fn one<T>(_primitive_type: PrimitiveType) -> Literal<T>
+  pub fn one<T>(_primitive_type: &PrimitiveType) -> Literal<T>
     where T: Clone + Default + PartialEq
   {
     unimplemented!()
   }
 
-  pub fn min_value() {}
-  pub fn max_value() {}
+  pub fn min_value<T>(_primitive_type: &PrimitiveType) -> Literal<T>
+    where T: Clone + Default + PartialEq
+  {
+    unimplemented!()
+  }
+
+  pub fn max_value<T>(_primitive_type: &PrimitiveType) -> Literal<T>
+    where T: Clone + Default + PartialEq
+  {
+    unimplemented!()
+  }
+
   pub fn nan_value() {}
   pub fn create_full_with_descending_layout() {}
 

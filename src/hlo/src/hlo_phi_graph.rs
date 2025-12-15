@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use hlo::hlo_value::HloValue;
+use crate::hlo_value::HloValue;
 
 
 

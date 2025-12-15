@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use common::array2d::Array2D;
+use crate::array2d::Array2D;
 
 // Class that represents the device assignment for a set of Blitz replicated
 // computations. For R replicas and C computations, R * C devices are required
@@ -25,7 +25,14 @@ impl DeviceAssignment {
     self.array.width() as i64
   }
 
-  pub fn logical_id_for_device() {}
+  pub fn device_id(&self, _replica: i64, _computation: i64) -> i64 {
+    unimplemented!()
+  }
+
+  pub fn logical_id_for_device(&self, _id: i64) -> Result<LogicalID, String> {
+    unimplemented!()
+  }
+
   pub fn replica_id_for_device() {}
   pub fn get_device_to_logical_id_map() {}
   pub fn serialize() {}
@@ -37,6 +44,12 @@ impl DeviceAssignment {
   {
     self.array.set_data(replica_count, computation_count, data);    
   }
+}
+
+  // The logical ID of a device is its (replica ID, computation ID) pair.
+pub struct LogicalID {
+  pub replica_id: i64,
+  pub computation_id: i64
 }
 
 // A generic implementation of the Blitz computation placer, which assigns device

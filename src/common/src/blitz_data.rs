@@ -574,6 +574,10 @@ impl ReplicaGroup {
   pub fn mutable_replica_ids(&mut self) -> &mut Vec<i64>{
     &mut self.replica_ids
   }
+
+  pub fn add_replica_ids(&mut self, _id: i64) {
+    unimplemented!()
+  }
 }
 
 pub enum RandomDistribution {
@@ -2037,12 +2041,21 @@ pub enum ChannelType {
 // via a Send and Recv instruction pair. Channels are unbuffered, so Send
 // instructions will be blocked until the data is transferred.
 pub struct ChannelHandle {
-  t: ChannelType
+  t: ChannelType,
+  handle: i64
 }
 
 impl ChannelHandle {
+  pub fn new(t: ChannelType, handle: i64) -> Self {
+    ChannelHandle { t: t, handle: handle }
+  }
+
   pub fn handle(&self) -> i64 {
-    unimplemented!()
+    self.handle
+  }
+
+  pub fn set_handle(&mut self, handle: i64) {
+    self.handle = handle;
   }
 
   pub fn type_(&self) -> ChannelType {
@@ -2256,4 +2269,20 @@ pub struct ResultAccuracy {}
 
 impl ResultAccuracy {
     
+}
+
+// A trace of a HeapSimulator run.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeapSimulatorTrace {
+
+}
+
+pub struct LogicalBuffer {
+  color: i64,
+}
+
+impl LogicalBuffer {
+  pub fn color(&self) -> i64 {
+    self.color
+  }
 }

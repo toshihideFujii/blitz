@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 
 use common::{
-  blitz_data::{OpMetadata, OpSharding, OpShardingType},
-  shape::Shape, shape_util::ShapeUtil
+  blitz_data::{OpMetadata, OpSharding, OpShardingType}, shape::Shape, shape_tree::ShapeTree, shape_util::ShapeUtil
 };
 
 use crate::tile_assignment::TileAssignment;
@@ -39,6 +38,24 @@ pub struct HloSharding {
   unknown: bool,
   replica_on_last_tile_dim: bool,
   shard_group: ShardGroup,
+}
+
+impl Default for HloSharding {
+  fn default() -> Self {
+    HloSharding {
+      tile_assignment: TileAssignment::default(),
+      tuple_elements: Vec::new(),
+      metadata: Vec::new(),
+      subgroup_types: Vec::new(),
+      replicated: false,
+      maximal: false,
+      tuple: false,
+      manual: false,
+      unknown: false,
+      replica_on_last_tile_dim: false,
+      shard_group: ShardGroup::new(0, false, false)
+    }
+  }
 }
 
 impl HloSharding {
@@ -307,7 +324,14 @@ impl HloSharding {
     self.unique_device().is_some()
   }
 
-  pub fn as_shape_tree() {}
+  // Returns the ShapeTree containing the shardings for each element of this
+  // tuple, if IsTuple, or a ShapeTree with a single element containing this
+  // sharding. Only the leaf elements are populated. This creates a new
+  // ShapeTree object so is not cheap.
+  pub fn as_shape_tree(&self, _shape: &Shape) -> Result<ShapeTree<HloSharding>, String> {
+    unimplemented!()
+  }
+
   pub fn get_as_shape_tree() {}
   pub fn get_sub_sharding() {}
   pub fn get_tuple_sharding() {}

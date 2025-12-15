@@ -83,6 +83,7 @@ pub enum HloOpcode {
   PopulationCount,
   Power,
   RaggedAllToAll,
+  RaggedDot,
   Real,
   Recv,
   RecvDone,
@@ -210,6 +211,7 @@ pub fn hlo_opcode_string(opcode: &HloOpcode) -> String {
     HloOpcode::PopulationCount => "pocnt".to_string(),
     HloOpcode::Power => "power".to_string(),
     HloOpcode::RaggedAllToAll => "ragged-all-to-all".to_string(),
+    HloOpcode::RaggedDot => "ragged-dot".to_string(),
     HloOpcode::Real => "real".to_string(),
     HloOpcode::Recv => "recv".to_string(),
     HloOpcode::RecvDone => "recv-done".to_string(),
@@ -418,6 +420,8 @@ pub fn string_to_hlo_opcode(name: &String) -> Result<HloOpcode, String> {
     return Ok(HloOpcode::Power);
   } else if name == "ragged-all-to-all" {
     return Ok(HloOpcode::RaggedAllToAll);
+  } else if name == "ragged-dot" {
+    return Ok(HloOpcode::RaggedDot);
   } else if name == "real" {
     return Ok(HloOpcode::Real);
   } else if name == "recv" {

@@ -18,14 +18,18 @@ pub struct HloPosition {
 }
 
 impl HloPosition {
-  pub fn new() {}
+  pub fn new(instruction: HloInstruction, index: Vec<i64>) -> Self {
+    HloPosition { instruction: instruction, index: index }
+  }
 
   // Returns the shape at this position.
   pub fn shape(&self) -> &Shape {
     unimplemented!()
   }
 
-  pub fn to_string() {}
+  pub fn to_string(&self) -> String {
+    unimplemented!()
+  }
 }
 
 impl PartialOrd for HloPosition {
@@ -49,6 +53,12 @@ impl Ord for HloPosition {
     } else {
       Ordering::Greater
     }
+  }
+}
+
+impl Default for HloPosition {
+  fn default() -> Self {
+    HloPosition { instruction: HloInstruction::default(), index: vec![] }
   }
 }
 
@@ -329,7 +339,7 @@ impl HloValueSet {
 
 // A class collecting the HloValues which might be contained in the output of
 // an HLO instruction.
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InstructionValueSet {
   pub shape_tree: ShapeTree<HloValueSet>
 }

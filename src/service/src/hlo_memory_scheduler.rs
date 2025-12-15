@@ -45,7 +45,7 @@ impl HloTrivialScheduler {
     module: &mut HloModule,
     execution_threads: HashSet<String>) -> Result<bool, String>
   {
-    let mut schedule = HloSchedule::new();
+    let mut schedule = HloSchedule::new(module);
     for computation in
       module.make_computation_post_order(&execution_threads, false)
     {
@@ -67,7 +67,7 @@ impl HloTrivialScheduler {
         }
       }    
     }
-    module.set_schedule(schedule);
+    //module.set_schedule(schedule);
     Ok(true)
   }
 }

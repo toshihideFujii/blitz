@@ -2,14 +2,12 @@
 
 use std::collections::HashMap;
 
-use hlo::{
-  hlo_computation::HloComputation, hlo_instruction::HloInstruction, hlo_module::HloModule,
-  hlo_opcode::HloOpcode, hlo_reachability::HloReachabilityMap,
-  hlo_schdule::{HloInstructionSequence, HloSchedule}, hlo_value::{HloUse, HloValue}
-};
 
-use service::call_graph::CallGraph;
-use crate::hlo_dataflow_analysis::HloDataflowAnalysis;
+use crate::{analysis::{hlo_dataflow_analysis::HloDataflowAnalysis, hlo_reachability::HloReachabilityMap}, call_graph::CallGraph,
+  hlo_computation::HloComputation,
+  hlo_instruction::HloInstruction, hlo_module::HloModule, hlo_opcode::HloOpcode,
+  hlo_schdule::{HloInstructionSequence, HloSchedule},
+  hlo_value::{HloUse, HloValue}};
 
 #[derive(Clone, PartialEq)]
 pub enum ExecutionConstraint {
@@ -381,7 +379,7 @@ impl<'module> HloOrdering<'module> {
   // Returns the sequential instruction order for the given computation, or
   // none if the computation does not have a sequential ordering.
   pub fn sequential_order(
-    &self, _computation: &HloComputation) -> HloInstructionSequence
+    &self, _computation: &HloComputation) -> Option<HloInstructionSequence>
   {
     unimplemented!()
   }
@@ -450,7 +448,7 @@ impl<'module> DependencyHloOrdering<'module> {
 // An HLO ordering based om a total order of instructions in each computation.
 pub struct SequentialHloOrdering<'module> {
   ordering: HloOrdering<'module>,
-  schedule: HloSchedule,
+  schedule: HloSchedule<'module>,
   order_position: HashMap<HloInstruction, i64>,
 }
 

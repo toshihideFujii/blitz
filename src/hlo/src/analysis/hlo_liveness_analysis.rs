@@ -3,8 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use common::shape_tree::ShapeTree;
-use hlo::{hlo_instruction::HloInstruction, hlo_module::HloModule};
-use service::call_graph::CallGraph;
+use crate::{call_graph::CallGraph, hlo_instruction::HloInstruction, hlo_module::HloModule};
 
 // Analysis which identifies all live {HloInstruction, shapeIndex} pairs in
 // an HLO module.

@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use common::{blitz_data::{DebugOptions, Precision}, shape::ProgramShape};
+use common::{blitz_data::{DebugOptions, Precision}, computation_placer::DeviceAssignment, shape::ProgramShape};
 
 use crate::computation_layout::ComputationLayout;
 
@@ -124,6 +124,10 @@ impl HloModuleConfig {
     self.use_spmd_partitioning
   }
 
+  pub fn use_shardy_partitioner(&self) -> bool {
+    unimplemented!()
+  }
+
   pub fn set_use_auto_spmd_partitioning(&mut self, use_auto_spmd_partitioning: bool) {
     self.use_auto_spmd_partitioning = use_auto_spmd_partitioning;
   }
@@ -184,7 +188,7 @@ impl HloModuleConfig {
     unimplemented!()
   }
 
-  pub fn static_device_assignment(&self) {
+  pub fn static_device_assignment(&self) -> &DeviceAssignment {
     unimplemented!()
   }
   

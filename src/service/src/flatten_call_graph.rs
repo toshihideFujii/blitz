@@ -3,16 +3,7 @@
 use std::collections::HashSet;
 
 use hlo::{
-  hlo_computation::HloComputation,
-  hlo_instruction::HloInstruction,
-  hlo_module::HloModule,
-  hlo_opcode::HloOpcode,
-  utils::hlo_query::is_collective_communication_op
-};
-
-use crate::call_graph::{
-  //CallContext,
-  CallGraph, CallGraphNode
+  call_graph::{CallGraph, CallGraphNode}, hlo_computation::HloComputation, hlo_instruction::HloInstruction, hlo_module::HloModule, hlo_opcode::HloOpcode, utils::hlo_query::is_collective_communication_op
 };
 
 // Flattening associates each call site with a unique computation (for

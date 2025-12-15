@@ -126,6 +126,13 @@ impl HloComputation {
     self.param_instructions.get(param_no)
   }
 
+  pub fn mutable_parameter_instruction(
+    &mut self, param_no: usize) -> Option<&mut HloInstruction>
+  {
+    assert!(param_no < self.param_instructions.len());
+    self.param_instructions.get_mut(param_no)
+  }
+
   pub fn parameter_instructions(&self) -> &Vec<HloInstruction> {
     &self.param_instructions
   }

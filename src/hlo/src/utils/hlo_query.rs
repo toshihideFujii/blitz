@@ -29,3 +29,11 @@ pub fn contains_layout_constrained_all_reduce(_module: &HloModule) -> bool {
 pub fn next_channel_id(_module: &HloModule) -> i64 {
   unimplemented!()
 }
+
+// Returns the unique GTE instruction with the given operand and index. Returns
+// nullptr if no such instruction exists or is not unique.
+pub fn get_unique_gte_instruction(
+  _operand: &HloInstruction, _index: i64) -> HloInstruction
+{
+  unimplemented!()    
+}

@@ -2,11 +2,8 @@
 
 use std::{collections::{HashMap, HashSet, VecDeque}, hash::Hash};
 
-use hlo::{
-  hlo_computation::HloComputation,
-  hlo_instruction::HloInstruction,
-  hlo_module::HloModule, hlo_opcode::HloOpcode
-};
+use crate::{hlo_computation::HloComputation, hlo_instruction::HloInstruction,
+  hlo_module::HloModule, hlo_opcode::HloOpcode};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CallContext {
@@ -307,6 +304,16 @@ impl<'module> CallGraph<'module> {
         &visited);
     }
     Ok(())
+  }
+
+  pub fn visit_nodes_with_return<F>(
+    &self,
+    _visitor_func: F,
+    _visit_unreachable_nodes: bool
+  ) -> Result<bool, String>
+    where F: Fn(&mut CallGraphNode) -> Result<bool, String>
+  {
+    unimplemented!()    
   }
 
   // Recursive helper for computing whether 'a' dominates 'b' in the call

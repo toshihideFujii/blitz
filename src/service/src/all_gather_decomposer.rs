@@ -8,13 +8,9 @@ use common::{
   shape::Shape
 };
 use hlo::{hlo_computation::HloComputation, hlo_instruction::HloInstruction,
-  hlo_module::HloModule, hlo_opcode::HloOpcode};
-
-use crate::{
-  //collective_decomposer_utils::{create_start_indices_for_collective_decomposition},
-  collective_ops_utils::{get_collective_op_group_mode,
-  CollectiveOpGroupMode
-}};
+  hlo_module::HloModule, hlo_opcode::HloOpcode,
+  collective_ops_utils::{get_collective_op_group_mode, CollectiveOpGroupMode}
+};
 
 // AllGatherDecomposer is a pass which converts unsupported all-gathers into
 // dynamic-update-slices and all-reduces.

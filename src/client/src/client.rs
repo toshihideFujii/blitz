@@ -298,17 +298,17 @@ impl<'backend> Client<'backend> {
 
   // Creates a channel handle that can be used to transfer data between two
   // computations on different devices via a pair of Send and Recv instructions.
-  pub fn create_channel_handle(&self) -> Result<ChannelHandle, String> {
+  pub fn create_channel_handle(&mut self) -> Result<ChannelHandle, String> {
     self.create_channel_handle_by_type(ChannelType::DeviceToDevice)
   }
 
   // Create a channel for communicating with the host via a SendtoHost or
   // RecvFromHost operation.
-  pub fn create_host_to_device_channel_handle(&self) -> Result<ChannelHandle, String> {
+  pub fn create_host_to_device_channel_handle(&mut self) -> Result<ChannelHandle, String> {
     self.create_channel_handle_by_type(ChannelType::HostToDevice)
   }
 
-  pub fn create_device_to_host_channel_handle(&self) -> Result<ChannelHandle, String> {
+  pub fn create_device_to_host_channel_handle(&mut self) -> Result<ChannelHandle, String> {
     self.create_channel_handle_by_type(ChannelType::DeviceToHost)
   }
 
@@ -323,7 +323,7 @@ impl<'backend> Client<'backend> {
     &self.stub
   }
 
-  fn create_channel_handle_by_type(&self, t: ChannelType) -> Result<ChannelHandle, String> {
+  fn create_channel_handle_by_type(&mut self, t: ChannelType) -> Result<ChannelHandle, String> {
     self.stub.create_channel_handle(t)
   }
 }

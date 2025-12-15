@@ -13,7 +13,7 @@ use common::{
 };
 
 use crate::{
-  collective_device_list::CollectiveDeviceList, dfs_hlo_visitor_with_default::DfsHloVisitor, hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata, hlo_instructions::{
+  collective_device_list::CollectiveDeviceList, dfs_hlo_visitor_with_default::{DfsHloVisitor, DfsHloVisitorWithDefault}, hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata, hlo_instructions::{
     HloAsyncInstruction,
     HloAsyncStartInstruction,
     HloBatchNormGradInstruction,
@@ -1309,6 +1309,10 @@ impl HloInstruction {
     Ok(())
   }
 
+  pub fn accept_visitor(&self, _visitor: &DfsHloVisitorWithDefault) {
+    unimplemented!()
+  }
+
   pub fn accept(&self,
     _visitor: &dyn DfsHloVisitor,
     _call_finish_visit: bool,
@@ -1756,7 +1760,11 @@ impl HloInstruction {
   }
 
   pub fn preserve_layout() {}
-  pub fn has_backend_config() {}
+
+  pub fn has_backend_config(&self) -> bool {
+    unimplemented!()
+  }
+
   pub fn clear_backend_config() {}
   pub fn copy_backend_config_from() {}
 
@@ -1786,6 +1794,10 @@ impl HloInstruction {
 
   pub fn mutable_frontend_attributes(&mut self) -> &mut FrontendAttributes {
     &mut self.mutable_rare().frontend_attributes
+  }
+
+  pub fn has_frontend_attributes(&self) -> bool {
+    unimplemented!()
   }
 
   pub fn add_single_statistic(&mut self, statistic: Statisitic) {
@@ -1819,7 +1831,12 @@ impl HloInstruction {
     &self.rare().statistics_vis
   }
 
-  pub fn raw_backend_config_string() {}
+  // Getter/setter for raw JSON-encoded backend config.  Prefer the
+  // functions above that deal in proto Messages where possible.
+  pub fn raw_backend_config_string(&self) -> String {
+    unimplemented!()
+  }
+
   pub fn set_raw_backend_config_string() {}
 
   pub fn is_default_config(&self) -> bool {
@@ -2045,7 +2062,10 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn fused_instructions() {}
+  pub fn fused_instructions(&self) -> &Vec<HloInstruction> {
+    unimplemented!()
+  }
+  
   pub fn fused_instruction_count() {}
 
   // Delegates to HloFusionInstruction::fused_parameters.
@@ -2089,7 +2109,10 @@ impl HloInstruction {
   }
 
   pub fn set_parameter_replicated_at_leaf_buffers() {}
-  pub fn parameter_replicated_at_leaf_byffers() {}
+
+  pub fn parameter_replicated_at_leaf_byffers(&self) -> Option<&Vec<bool>> {
+    unimplemented!()
+  }
 
   pub fn mutable_parameter_replication(&mut self) -> &mut ParameterReplication {
     unimplemented!()
@@ -2131,7 +2154,9 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn source_target_pairs() {}
+  pub fn source_target_pairs(&self) -> &Vec<(i64, i64)> {
+    unimplemented!()
+  }
 
   pub fn add_source_target_pairs(&mut self, _pair: (i64, i64)) {
     unimplemented!()
@@ -2263,7 +2288,10 @@ impl HloInstruction {
 
   pub fn async_chain_start() {}
   pub fn async_chain_done() {}
-  pub fn async_wrapped_computation() {}
+  
+  pub fn async_wrapped_computation(&self) -> &HloComputation {
+    unimplemented!()
+  }
 
   pub fn async_wrapped_instruction(&self) -> &HloInstruction {
     unimplemented!()
@@ -2398,6 +2426,10 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn is_composite(&self) -> bool {
+    unimplemented!()
+  }
+
   pub fn set_is_composite(&mut self, _is_composite: bool) {
     unimplemented!()
   }
@@ -2440,6 +2472,10 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  pub fn is_host_transfer(&self) -> bool {
+    unimplemented!()
+  }
+
   pub fn set_is_host_transfer(&mut self, _is_host_transfer: bool) {
     unimplemented!()
   }
@@ -2458,6 +2494,10 @@ impl HloInstruction {
 
   pub fn has_hlo_module(&self) -> bool {
     unimplemented!()
+  }
+
+  pub fn is_channel_instruction(&self) -> bool {
+    self.unique_indices()
   }
 
   fn is_elementwise_impl(&self, _operand_idx: Option<i64>) -> bool {

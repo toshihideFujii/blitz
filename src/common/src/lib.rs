@@ -5,6 +5,7 @@ pub mod array3d;
 pub mod array4d;
 pub mod blitz_data;
 pub mod comparison_util;
+pub mod computation_placer;
 pub mod debug_options_flags;
 pub mod debug_options_parsers;
 pub mod error_spec;

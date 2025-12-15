@@ -52,7 +52,7 @@ pub struct HloModule {
   use_auto_spmd_partition: bool,
   input_output_alias_config: HloInputOutputAliasConfig,
   buffer_donor_config: HloBufferDonorConfig,
-  schedule: Option<HloSchedule>,
+  //schedule: Option<HloSchedule>,
   spmd_parameters_shardings: Option<Vec<HloSharding>>,
   spmd_output_sharding: Option<HloSharding>,
   cross_program_prefetches: Vec<CrossProgramPrefetchInfo>,
@@ -124,6 +124,10 @@ impl HloModule {
     //assert!(self.has_entry_computation());
     //self.entry_computation.as_ref().unwrap()
     self.entry_computation.as_ref()
+  }
+
+  pub fn mutable_entry_computation(&mut self) -> Option<&mut HloComputation> {
+    self.entry_computation.as_mut()
   }
 
   pub fn has_entry_computation(&self) -> bool {
@@ -315,29 +319,34 @@ impl HloModule {
   }
 
   // Sets the schedule of the module to the given schedule.
-  pub fn set_schedule(&mut self, schedule: HloSchedule) {
-    self.schedule = Some(schedule);
+  pub fn set_schedule(&mut self, _schedule: HloSchedule) {
+    //self.schedule = Some(schedule);
+    unimplemented!()
   }
 
   // Clears the schedule of the module.
   pub fn clear_schedule(&mut self) {
-    self.schedule = None;
+    //self.schedule = None;
+    unimplemented!()
   }
 
   // Returns true if the module has a schedule set.
   pub fn has_schedule(&self) -> bool {
-    self.schedule.is_some()
+    //self.schedule.is_some()
+    unimplemented!()
   }
 
   // Returns the schedule of the module.
   pub fn schedule(&self) -> &HloSchedule {
-    assert!(self.has_schedule());
-    &self.schedule.as_ref().unwrap()
+    //assert!(self.has_schedule());
+    //&self.schedule.as_ref().unwrap()
+    unimplemented!()
   }
 
   pub fn mutable_schedule(&mut self) -> &mut HloSchedule {
-    assert!(self.has_schedule());
-    self.schedule.as_mut().unwrap()
+    //assert!(self.has_schedule());
+    //self.schedule.as_mut().unwrap()
+    unimplemented!()
   }
 
   pub fn add_computation_and_unify_names_and_ids() {}
