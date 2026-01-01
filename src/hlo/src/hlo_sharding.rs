@@ -1,10 +1,11 @@
 #![allow(dead_code)]
 
 use common::{
-  blitz_data::{OpMetadata, OpSharding, OpShardingType}, shape::Shape, shape_tree::ShapeTree, shape_util::ShapeUtil
+  blitz_data::{OpMetadata, OpSharding, OpShardingType}, printer::{Printer, StringPrinter},
+  shape::Shape, shape_tree::ShapeTree, shape_util::ShapeUtil
 };
 
-use crate::tile_assignment::TileAssignment;
+use crate::{hlo_op_metadata::{op_metadata_to_string}, tile_assignment::TileAssignment};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ShardGroup {
@@ -22,9 +23,21 @@ impl ShardGroup {
     }
   }
 
-  pub fn to_string() {}
+  pub fn to_string(&self) -> String {
+    let mut result = String::new();
+    if self.shard_as {
+      result.push_str("shard_as ");
+      result.push_str(&self.shard_group_id.to_string());
+    } else if self.shard_like {
+      result.push_str("shard_like ");
+      result.push_str(&self.shard_group_id.to_string());
+    }
+    result
+  }
 }
 
+// HLO shardings describe how an HLO instruction is split across multiple
+// computations.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HloSharding {
   tile_assignment: TileAssignment,
@@ -36,7 +49,8 @@ pub struct HloSharding {
   tuple: bool,
   manual: bool,
   unknown: bool,
-  replica_on_last_tile_dim: bool,
+  unreduced: bool,
+  replicate_on_last_tile_dim: bool,
   shard_group: ShardGroup,
 }
 
@@ -52,7 +66,8 @@ impl Default for HloSharding {
       tuple: false,
       manual: false,
       unknown: false,
-      replica_on_last_tile_dim: false,
+      unreduced: false,
+      replicate_on_last_tile_dim: false,
       shard_group: ShardGroup::new(0, false, false)
     }
   }
@@ -63,6 +78,7 @@ impl HloSharding {
     manual: bool,
     replicated: bool,
     unknown: bool,
+    unreduced: bool,
     metadata: Vec<OpMetadata>) -> Self
   {
     HloSharding {
@@ -75,7 +91,34 @@ impl HloSharding {
       tuple: false,
       manual: manual,
       unknown: unknown,
-      replica_on_last_tile_dim: false,
+      unreduced: unreduced,
+      replicate_on_last_tile_dim: false,
+      shard_group: ShardGroup::new(-1, false, false)
+    }
+  }
+
+  // device_id values:
+  // -2: magic number to mean unassigned device, used by spatial partitioning
+  // -1: the id of the host
+  //  0 or positive: the id of a device
+  // NOTE(dimvar): -1 is needed for outside compilation. It can be removed once
+  // we have fully switched to the side-effect tokens.
+  pub fn new_from_device_id(
+    device_id: i64,
+    metadata: Vec<OpMetadata>) -> Self
+  {
+    HloSharding {
+      tile_assignment: TileAssignment::new_from_device_id(device_id),
+      tuple_elements: Vec::new(),
+      metadata: metadata,
+      subgroup_types: Vec::new(),
+      replicated: false,
+      maximal: true,
+      tuple: false,
+      manual: false,
+      unknown: false,
+      unreduced: false,
+      replicate_on_last_tile_dim: false,
       shard_group: ShardGroup::new(-1, false, false)
     }
   }
@@ -83,26 +126,74 @@ impl HloSharding {
   // Creates a trivial sharding that replicates a maximal tile scross all
   // devices.
   pub fn replicate(metadata: Vec<OpMetadata>) -> Self {
-    HloSharding::new(false, true, false, metadata)
+    HloSharding::new(false, true, false,
+      false, metadata)
   }
 
   // Creates a sharding that represents the op is manually partitioned.
   pub fn manual(metadata: Vec<OpMetadata>) -> Self {
-    HloSharding::new(true, false, false, metadata)
+    HloSharding::new(true, false, false,
+      false, metadata)
   }
 
   // Creates a sharding that represents the op has a placeholder sharding.
   pub fn unknown(metadata: Vec<OpMetadata>) -> Self {
-    HloSharding::new(false, false, true, metadata)
+    HloSharding::new(false, false, true,
+      false, metadata)
   }
 
-  pub fn assign_device() {}
-  pub fn tile() {}
-  pub fn iota_tile() {}
+  pub fn unreduced(metadata: Vec<OpMetadata>) -> Self {
+    HloSharding::new(false, false, false,
+      true, metadata)
+  }
+
+  // Creates a sharding that emulates device placement; a tile shape equal to
+  // the input shape (one tile) assigned to a single device.
+  pub fn assign_device(
+    device_id: i64,
+    metadata: Vec<OpMetadata>,
+    use_named_sharding: bool) -> Self
+  {
+    if use_named_sharding {
+      // TODO
+      //return HloSharding::new_from_device_id(device_id, metadata);
+    }
+    HloSharding::new_from_device_id(device_id, metadata)
+  }
+
+  pub fn tile(_tile_assignment: TileAssignment, _metadata: &Vec<OpMetadata>) -> Self {
+    unimplemented!()
+  }
+
+  // Similar to `Tile` but use IotaTileAssignment format.
+  pub fn iota_tile(
+    _tile_assignment_dims: &Vec<i64>,
+    _reshape_dims: &Vec<i64>,
+    _transpose_perm: &Vec<i64>, _metadata: &Vec<OpMetadata>) -> Self
+  {
+    unimplemented!()
+  }
+
   pub fn partial_tile() {}
-  pub fn subgroup() {}
+
+  // Creates a subgroup sharding with device-level tile assignment, the
+  // sharding type of each subgroup is defined by subgroup_types. When creating
+  // the HloSharding, subgroup dims of the same type will be merged.
+  pub fn subgroup(
+    _tile_assignment: TileAssignment,
+    _subgroup_types: &Vec<OpShardingType>,
+    _metadata: &Vec<OpMetadata>) -> Self
+  {
+    unimplemented!()
+  }
+
   pub fn tile_id() {}
   pub fn tuple() {}
+
+  // Creates a new sharding for a flat tuple type.
+  pub fn flat_tuple(_sub_shardings: Vec<HloSharding>) -> HloSharding {
+    unimplemented!()
+  }
 
   pub fn single_tuple(&self, _tuple_shape: &Shape, _sharding: &HloSharding) {}
 
@@ -122,8 +213,161 @@ impl HloSharding {
     unimplemented!()
   }
   
-  pub fn print() {}
-  pub fn to_string() {}
+  // Prints the string representation of this sharding.
+  // Note that this string canonically has outer curly braces, e.g. "{replicated}".
+  pub fn print(&self, printer: &mut dyn Printer, include_metadata: bool) {
+    if self.is_tuple() {
+      debug_assert!(self.metadata.is_empty());
+      if self.tuple_elements.is_empty() {
+        printer.append(&"{}".to_string());
+        return;
+      }
+      printer.append(&"{".to_string());
+      self.tuple_elements[0].print(printer, include_metadata);
+      for i in 1..self.tuple_elements.len() {
+        if i % 5 == 0 {
+          let mut msg = ", /*index=".to_string();
+          msg.push_str(&i.to_string());
+          msg.push_str(&"*/".to_string());
+          printer.append(&msg);
+        } else {
+          printer.append(&", ".to_string());
+        }
+        self.tuple_elements[i].print(printer, include_metadata);
+      }
+      printer.append(&"}".to_string());
+      return;
+    }
+
+    let print_metadata =
+      |printer: &mut dyn Printer|
+    {
+      if include_metadata && !self.metadata.is_empty() {
+        printer.append(&" metadata={".to_string());
+        if self.metadata.len() == 1 {
+          printer.append(&op_metadata_to_string(&self.metadata[0], false));
+        } else {
+          let mut count = 0;
+          let metadata_len = self.metadata.len();
+          for metadata in &self.metadata {
+            printer.append(&"{".to_string());
+            printer.append(&op_metadata_to_string(metadata, false));
+            printer.append(&"}".to_string());
+            count += 1;
+            if count != metadata_len {
+              printer.append(&", ".to_string());
+            }
+          }
+        }
+        printer.append(&"}".to_string());
+      }
+    };
+
+    let print_shard_group =
+      |printer: &mut dyn Printer|
+    {
+      let shard_g_str = self.shard_group.to_string();
+      if !shard_g_str.is_empty() {
+        let str = " ".to_string() + &shard_g_str;
+        printer.append(&str);
+      }
+    };
+
+    if self.replicated {
+      printer.append(&"{replicated".to_string());
+      print_shard_group(printer);
+      print_metadata(printer);
+      printer.append(&"}".to_string());
+      return;
+    }
+    if self.manual {
+      printer.append(&"{manual".to_string());
+      print_shard_group(printer);
+      print_metadata(printer);
+      printer.append(&"}".to_string());
+      return;
+    }
+    if self.unknown {
+      printer.append(&"{unknown".to_string());
+      print_shard_group(printer);
+      print_metadata(printer);
+      printer.append(&"}".to_string());
+      return;
+    }
+    if self.unreduced {
+      printer.append(&"{unreduced".to_string());
+      print_shard_group(printer);
+      print_metadata(printer);
+      printer.append(&"}".to_string());
+      return;
+    }
+    if self.maximal {
+      printer.append(&"{maximal device=".to_string());
+      let mut count = 0;
+      for tile in self.tile_assignment.array().values() {
+        printer.append(&tile.to_string());
+        count += 1;
+        if count != self.tile_assignment.array().values().len() {
+          printer.append(&", ".to_string());
+        }
+      }
+      print_shard_group(printer);
+      print_metadata(printer);
+      printer.append(&"}".to_string());
+      return;
+    }
+
+    let print_last_tile_dims =
+      |printer: &mut dyn Printer|
+    {
+      printer.append(&" last_tile_dims={".to_string());
+      printer.append(&"}".to_string());
+    };
+
+    printer.append(&"{".to_string());
+    self.tile_assignment.print(printer);
+    if self.replicate_on_last_tile_dim {
+      let op_sharding_type_to_string =
+        |t: OpShardingType| -> String
+      {
+        match t {
+          OpShardingType::Manual => return "manual".to_string(),
+          OpShardingType::Maximal => return "maximal".to_string(),
+          OpShardingType::Replicated => return "replicated".to_string(),
+          OpShardingType::Unreduced => return "unreduced".to_string(),
+          _ => return "error_type".to_string(),
+        }
+      };
+      printer.append(&"last_tile_dim_replicate".to_string());
+      let mut count = 0;
+      let subg_len = self.subgroup_types.len();
+      for subg_t in &self.subgroup_types {
+        printer.append(&op_sharding_type_to_string(subg_t.clone()));
+        count += 1;
+        if count != subg_len {
+          printer.append(&", ".to_string());
+        }
+      }
+      printer.append(&"}".to_string());
+    }
+
+    printer.append(&"{".to_string());
+    self.tile_assignment.print(printer);
+    if self.replicate_on_last_tile_dim {
+      printer.append(&"last_tile_dim_replicate".to_string());
+    }
+    print_last_tile_dims(printer);
+    print_shard_group(printer);
+    print_metadata(printer);
+    printer.append(&"}".to_string());
+  }
+
+  // Returns the content printed by Print as a string.
+  pub fn to_string(&self, include_metadata: bool) -> String {
+    let mut printer = StringPrinter::new();
+    self.print(&mut printer, include_metadata);
+    printer.to_string()
+  }
 
   // Validate that this sharding can be applied to a tensor with shape `shape`.
   pub fn validate(&self, _shape: &Shape, _num_devices: Option<i64>) -> Result<(), String>
@@ -243,12 +487,12 @@ impl HloSharding {
 
   // Returns if the sharding has partial replication and partial sharding.
   pub fn replicate_on_last_tile_dim(&self) -> bool {
-    self.replica_on_last_tile_dim
+    self.replicate_on_last_tile_dim
   }
 
   // Returns whether there is any partial replication.
   pub fn has_partial_replication(&self) -> bool {
-    if self.replica_on_last_tile_dim { return true; }
+    if self.replicate_on_last_tile_dim { return true; }
     for t in &self.subgroup_types {
       if *t == OpShardingType::Replicated { return true; }
     }
@@ -447,7 +691,7 @@ impl HloSharding {
         return (i as i64) + self.tiled_data_rank();
       }
     }
-    if self.replica_on_last_tile_dim {
+    if self.replicate_on_last_tile_dim {
       return (self.tile_assignment.num_dimensions() as i64) - 1;
     }
     -1

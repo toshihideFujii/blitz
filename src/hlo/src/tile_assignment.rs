@@ -206,6 +206,14 @@ impl TileAssignment {
     }
   }
 
+  pub fn new_from_vecs(
+    _dims: &Vec<i64>,
+    _reshape_dims: &Vec<i64>,
+    _transpose_perm: &Vec<i64>) -> Self
+  {
+    unimplemented!()    
+  }
+
   pub fn dimensions(&self) -> &Vec<i64> {
     if self.array.is_some() {
       self.array.as_ref().unwrap().dimensions()

@@ -1,51 +1,149 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
-
+use std::collections::{HashMap, HashSet};
 use common::{
-  blitz_data::{Algorithm, ConvolutionDimensionNumbers, FftType, FrontendAttributes, OpMetadata, OpShardingType, PaddingConfig, ParameterReplication, Precision, PrimitiveType, RandomAlgorithm, RandomDistribution, ReplicaGroup, StatisticsViz},
-    comparison_util::{string_to_comparison_direction, string_to_comparison_type, ComparisonDirection, ComparisonType}, layout::Layout, layout_util::LayoutUtil, literal::Literal, literal_util::LiteralUtil, shape::Shape, shape_util::ShapeUtil};
-use hlo::{hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata, hlo_instruction::{self, FusionKind, HloInstruction}, hlo_module::HloModule, hlo_module_config::HloModuleConfig, hlo_opcode::HloOpcode, hlo_sharding::HloSharding};
+  blitz_data::{
+    Algorithm, ConvolutionDimensionNumbers, FftType, FrontendAttributes, OpMetadata,
+    OpShardingType, PaddingConfig, ParameterReplication, Precision, PrimitiveType,
+    RandomAlgorithm, RandomDistribution, ReplicaGroup, Statisitic, StatisticsViz, Window
+  },
+  comparison_util::{
+    ComparisonDirection, ComparisonType, string_to_comparison_direction, string_to_comparison_type
+  },
+  layout::Layout, layout_util::LayoutUtil, literal::Literal, literal_util::LiteralUtil,
+  shape::Shape, shape_util::ShapeUtil
+};
+use hlo::{
+  hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata,
+  hlo_instruction::{self, FusionKind, HloInstruction}, hlo_module::HloModule,
+  hlo_module_config::HloModuleConfig, hlo_opcode::HloOpcode, hlo_sharding::HloSharding, tile_assignment::TileAssignment
+};
 use num::complex::Complex64;
-
 use crate::hlo_lexer::{tok_kind_to_string, HloLexer, TokKind};
 
-// Given a string in the HloModule::to_string() format, parses the string and
+pub struct HloParserOptions {
+  fill_missing_layouts: bool,
+  fill_shortform_constants_with_random_values: bool,
+  keep_module_auto_layouts: bool,
+}
+
+impl HloParserOptions {
+  pub fn default() -> Self {
+    HloParserOptions {
+      fill_missing_layouts: false,
+      fill_shortform_constants_with_random_values: false,
+      keep_module_auto_layouts: false
+    }
+  }
+
+  // When a shape layout is not set (e.g. in the entry computation layout or
+  // instruction layout), set the layout to be the default (e.g. {3,2,1,0}).
+  pub fn set_fill_missing_layouts(&mut self, value: bool) {
+    self.fill_missing_layouts = value;
+  }
+
+  pub fn fill_missing_layouts(&self) -> bool {
+    self.fill_missing_layouts
+  }
+
+  // Fill short form constants (dots) with deterministic random values.
+  pub fn set_fill_shortform_constant_with_random_values(&mut self, value: bool) {
+    self.fill_shortform_constants_with_random_values = value;
+  }
+
+  pub fn fill_shortform_constants_with_random_values(&self) -> bool {
+    self.fill_shortform_constants_with_random_values
+  }
+
+  // Keep module auto layouts, i.e. do not reset unset entry computation layouts
+  // to the default layout.  This is a subset of what fill_missing_layouts=false
+  // does.
+  pub fn set_keep_module_auto_layouts(&mut self, value: bool) {
+    self.keep_module_auto_layouts = value;
+  }
+
+  pub fn keep_module_auto_layouts(&self) -> bool {
+    self.keep_module_auto_layouts
+  }
+}
+
+// Given a string in the HloModule::ToString() format, parses the string and
 // creates a HloModule with the given config.
+// Note: Tests derived from HloHardwareIndependentTestBase should use
+// ParseAndReturnVerifiedModule() instead!
 pub fn parse_and_return_unverified_module(
-  _str: String, _config: &HloModuleConfig) -> Result<HloModule, String>
+  str: String,
+  config: HloModuleConfig,
+  options: HloParserOptions) -> Result<HloModule, String>
 {
+  let module = HloModule::new("_".to_string(), config);
+  let mut parser = HloParser::new(str, options);
+  let result = parser.run(&module);
+  if result.is_err() {
+    return Err(result.err().unwrap());
+  }
+  Ok(module)
+}
+
+// Parses sharding from str. str is supposed to contain the body of the
+// sharding, i.e. just the rhs of the "sharding={...}" attribute string, e.g.,
+// "{replicated}".
+pub fn parse_sharding(str: String) -> Result<HloSharding, String> {
+  let mut parser =
+    HloParser::new(str, HloParserOptions::default());
+  parser.parse_sharding_only()
+}
+
+// Parses original value from str.
+pub fn parse_original_value(_str: String) {
   unimplemented!()
 }
 
-// Parses sharding from str.
-pub fn parse_sharding(_str: String) -> Result<HloSharding, String> {
-  unimplemented!()
+// Parses frontend attributes from str. str is supposed to contain the body of
+// the frontend attributes , i.e. just the rhs of the
+// "frontend_attributes={...}" attribute string, e.g.,
+// "{attr_a=a,attr_b=b}".
+pub fn parse_frontend_attributes(str: String) -> Result<FrontendAttributes, String> {
+  let mut parser = HloParser::new(str, HloParserOptions::default());
+  parser.parse_frontend_attributes_only()
 }
 
-// Parses frontend attributes from str.
-pub fn parse_frontend_attributes(_str: String) -> Result<FrontendAttributes, String> {
-  unimplemented!()
+// Parses statistics viz from str. str is supposed to contain the body of the
+// statistics visualization, i.e. just the rhs of the "statistics={...}"
+// attribute string, e.g., "{visualizing_index=1,nan_percent=50}".
+pub fn parse_statistics_viz(str: String) -> Result<StatisticsViz, String> {
+  let mut parser = HloParser::new(str, HloParserOptions::default());
+  parser.parse_statistics_viz_only()
 }
 
-// Parses statistics viz from str.
-pub fn parse_statistics_viz(_str: String) -> Result<StatisticsViz, String> {
-  unimplemented!()
+// Parses parameter replication from str. str is supposed to contain the body of
+// the parameter replication, i.e. just the rhs of the
+// "parameter_replication={...}" attribute string, e.g., "{true, false}".
+pub fn parse_parameter_replication(str: String) -> Result<Vec<bool>, String> {
+  let mut parser = HloParser::new(str, HloParserOptions::default());
+  parser.parse_parameter_replication_only()
 }
 
-// Parses parameter replication from str.
-pub fn parse_parameter_replication(_str: String) -> Result<Vec<bool>, String> {
-  unimplemented!()
+// Parses the result of window_util::ToString(const Window&).
+pub fn parse_window(str: String) -> Result<Window, String> {
+  let mut parsesr = HloParser::new(str, HloParserOptions::default());
+  parsesr.parse_window_only()
 }
 
-// Parses the result of window_util::to_string().
-pub fn parse_window(_str: String) {}
+// Parses the result of ConvolutionDimensionNumbersToString(), e.g.
+// "b0f_0io->b0f".
+pub fn parse_convolution_demension_numbers(
+  str: String) -> Result<ConvolutionDimensionNumbers, String>
+{
+  let mut parser = HloParser::new(str, HloParserOptions::default());
+  parser.parse_convolution_demension_numbers_only()
+}
 
-// Parses the result of comvolution_dimension_numbers_to_string().
-pub fn parse_convolution_demension_numbers(_str: String) {}
-
-// Parses the result of padding_config_to_string().
-pub fn parse_padding_config(_str: String) {}
+// Parses the result of PaddingConfigToString(), e.g. "0_0x1_1".
+pub fn parse_padding_config(str: String) -> Result<PaddingConfig, String> {
+  let mut parser = HloParser::new(str, HloParserOptions::default());
+  parser.parse_padding_config_only()
+}
 
 // Parses and returns a Shape::to_string-format string.
 pub fn parse_shape(_str: String) -> Result<Shape, String> {
@@ -61,9 +159,9 @@ pub fn parse_layout(_str: String) -> Result<Layout, String> {
 // contain a list of the replica groups, i.e. just the rhs of the
 // "replica_groups={...}" attribute string, e.g., "{{0,1}, {2,3}}".
 pub fn parse_replica_groups_only(
-  str: &String) -> Result<Vec<ReplicaGroup>, String>
+  str: String) -> Result<Vec<ReplicaGroup>, String>
 {
-  let parser = HloParser::new(str);
+  let parser = HloParser::new(str, HloParserOptions::default());
   parser.parse_replica_groups_only()
 }
 
@@ -229,6 +327,7 @@ struct Scope {}
 
 pub struct HloParser {
   lexer: HloLexer,
+  options: HloParserOptions,
   scoped_name_tables: Vec<HashMap<String, (HloInstruction, usize)>>,
   computation_pool: HashMap<String, (HloComputation, usize)>,
   computations: Vec<HloComputation>,
@@ -236,14 +335,21 @@ pub struct HloParser {
 }
 
 impl HloParser {
-  pub fn new(_str: &String) -> Self {
-    unimplemented!()
+  pub fn new(str: String, options: HloParserOptions) -> Self {
+    HloParser {
+      lexer: HloLexer::new(str),
+      options: options,
+      scoped_name_tables: Vec::new(),
+      computation_pool: HashMap::new(),
+      computations: Vec::new(),
+      error: Vec::new(),
+    }
   }
 
   // Runs the parser and constructs the resulting HLO in the given (empty)
   // HloModule. Returns the error status in case an error occurred.
   pub fn run(&mut self, module: &HloModule) -> Result<(), String> {
-    self.lexer.lex();
+    self.lexer.lex(0);
     if self.lexer.get_kind() == TokKind::HloModule ||
        self.lexer.get_kind() == TokKind::Entry ||
        self.lexer.look_ahead() == TokKind::Lbrace
@@ -280,7 +386,7 @@ impl HloParser {
   }
 
   pub fn parse_shape_only(&mut self) -> Result<Shape, String> {
-    self.lexer.lex();
+    self.lexer.lex(0);
     let mut shape = Shape::new();
     if !self.parse_shape(&mut shape) {
       let mut error_msg = "Syntax error:\n".to_string();
@@ -295,7 +401,7 @@ impl HloParser {
   }
 
   pub fn parse_layout_only(&mut self) -> Result<Layout, String> {
-    self.lexer.lex();
+    self.lexer.lex(0);
     let layout = Layout::new();
     if !self.parse_layout(&layout) {
       let mut error_msg = "Syntax error:\n".to_string();
@@ -310,14 +416,24 @@ impl HloParser {
   }
 
   pub fn parse_sharding_only(&mut self) -> Result<HloSharding, String> {
-    //self.lexer.lex();
-    unimplemented!()
+    self.lexer.lex(0);
+    let mut sharding = HloSharding::default();
+    if !self.parse_sharding(&mut sharding) {
+      let mut err_msg = "Syntax error:\n".to_string();
+      err_msg.push_str(&self.get_error());
+      return Err(err_msg);
+    }
+    if self.lexer.get_kind() != TokKind::Eof {
+      let err_msg = "Syntax error:\nExtra content after sharding".to_string();
+      return Err(err_msg);
+    }
+    Ok(sharding)
   }
 
   pub fn parse_frontend_attributes_only(&mut self) -> Result<FrontendAttributes, String> {
-    self.lexer.lex();
-    let attributes = FrontendAttributes::new();
-    if !self.parse_frontend_attributes(&attributes) {
+    self.lexer.lex(0);
+    let mut attributes = FrontendAttributes::default();
+    if !self.parse_frontend_attributes(&mut attributes) {
       let mut error_msg = "Syntax error:\n".to_string();
       error_msg.push_str(&self.get_error());
       return Err(error_msg);
@@ -331,9 +447,9 @@ impl HloParser {
   }
 
   pub fn parse_statistics_viz_only(&mut self) -> Result<StatisticsViz, String> {
-    self.lexer.lex();
-    let statistics_viz = StatisticsViz::new();
-    if !self.parse_statistics_viz(&statistics_viz) {
+    self.lexer.lex(0);
+    let mut statistics_viz = StatisticsViz::default();
+    if !self.parse_statistics_viz(&mut statistics_viz) {
       let mut error_msg = "Syntax error:\n".to_string();
       error_msg.push_str(&self.get_error());
       return Err(error_msg);
@@ -347,8 +463,8 @@ impl HloParser {
   }
 
   pub fn parse_parameter_replication_only(&mut self) -> Result<Vec<bool>, String> {
-    self.lexer.lex();
-    let mut parameter_replication = ParameterReplication::new();
+    self.lexer.lex(0);
+    let mut parameter_replication = ParameterReplication::default();
     if !self.parse_parameter_replication(&mut parameter_replication) {
       let mut error_msg = "Syntax error:\n".to_string();
       error_msg.push_str(&self.get_error());
@@ -367,7 +483,7 @@ impl HloParser {
   }
 
   pub fn parse_boolean_list_or_single_boolean_only(&mut self) -> Result<Vec<bool>, String> {
-    self.lexer.lex();
+    self.lexer.lex(0);
     let mut booleans = vec![];
     if !self.parse_boolean_list_or_single_boolean(&mut booleans) {
       let mut error_msg = "Syntax error:\n".to_string();
@@ -382,14 +498,28 @@ impl HloParser {
     Ok(booleans)
   }
 
-  pub fn parse_window_only(&self) {}
+  pub fn parse_window_only(&mut self) -> Result<Window, String> {
+    self.lexer.lex(0);
+    let mut window = Window::default();
+    if !self.parse_window(&mut window, false) {
+      let mut error_msg = "Syntax error:\n".to_string();
+      error_msg.push_str(&self.get_error());
+      return Err(error_msg);
+    }
+    if self.lexer.get_kind() != TokKind::Eof {
+      let error_msg =
+        "Syntax error:\nExtra content after window".to_string();
+      return Err(error_msg);
+    }
+    Ok(window)
+  }
 
   pub fn parse_convolution_demension_numbers_only(
     &mut self) -> Result<ConvolutionDimensionNumbers, String>
   {
-    self.lexer.lex();
-    let dnums = ConvolutionDimensionNumbers::new();
-    if !self.parse_convolution_demension_numbers(&dnums) {
+    self.lexer.lex(0);
+    let mut dnums = ConvolutionDimensionNumbers::default();
+    if !self.parse_convolution_demension_numbers(&mut dnums) {
       let mut error_msg = "Syntax error:\n".to_string();
       error_msg.push_str(&self.get_error());
       return Err(error_msg);
@@ -403,9 +533,9 @@ impl HloParser {
   }
 
   pub fn parse_padding_config_only(&mut self) -> Result<PaddingConfig, String> {
-    self.lexer.lex();
-    let padding_config = PaddingConfig::new();
-    if !self.parse_padding_config(&padding_config) {
+    self.lexer.lex(0);
+    let mut padding_config = PaddingConfig::default();
+    if !self.parse_padding_config(&mut padding_config) {
       let mut error_msg = "Syntax error:\n".to_string();
       error_msg.push_str(&self.get_error());
       return Err(error_msg);
@@ -578,14 +708,301 @@ impl HloParser {
       "expects '}' at the end of instruction name list".to_string())
   }
 
-  fn parse_window() {}
+  // ::= '{' size stride? pad? lhs_dilate? rhs_dilate? '}'
+  // The subattributes can appear in any order. 'size=' is required, others are
+  // optional.
+  fn parse_window(&mut self, window: &mut Window, expect_outer_curlies: bool) -> bool {
+    //let loc = self.lexer.get_loc();
+    if expect_outer_curlies && !self.parse_token(&TokKind::Lbrace,
+      "expected '{' to start window attribute".to_string())
+    {
+      return false;
+    }
+    let size = vec![];
+    let stride = vec![];
+    let pad: Vec<Vec<i64>> = vec![];
+    let lhs_dilate = vec![];
+    let rhs_dilate = vec![];
+    let rhs_reversal = vec![];
 
-  fn parse_convolution_demension_numbers(&mut self, _dnums: &ConvolutionDimensionNumbers) -> bool {
-    unimplemented!()
+    let mut end_token = TokKind::Eof;
+    if expect_outer_curlies {
+      end_token = TokKind::Rbrace;
+    }
+
+    while self.lexer.get_kind() != end_token {
+      //let attr_loc = self.lexer.get_loc();
+      let mut field_name = String::new();
+      if !self.parse_attribute_name(&mut field_name) {
+        assert!(false, "expects aub-attributes in window");
+        return false;
+      }
+      if field_name == "size".to_string() {
+        if !self.parse_dxd(&"size".to_string(), &size) {
+          return false;
+        }
+      }
+      if field_name == "stride".to_string() {
+        if !self.parse_dxd(&"stride".to_string(), &stride) {
+          return false;
+        }
+      }
+      if field_name == "lhs_dilate".to_string() {
+        if !self.parse_dxd(&"lhs_dilate".to_string(), &lhs_dilate) {
+          return false;
+        }
+      }
+      if field_name == "rhs_dilate".to_string() {
+        if !self.parse_dxd(&"rhs_dilate".to_string(), &rhs_dilate) {
+          return false;
+        }
+      }
+      if field_name == "pad".to_string() {
+        if !self.parse_window_pad(&pad) {
+          return false;
+        }
+      }
+      if field_name == "rhs_reversal".to_string() {
+        if !self.parse_dxd(&"rhs_reversal".to_string(), &rhs_reversal) {
+          return false;
+        }
+      }
+      assert!(false, "unexpected attribute name: {:?}", field_name);
+      return false;
+    }
+
+    if !stride.is_empty() && stride.len() != size.len() {
+      assert!(false, "expects 'stride=' has the same size as 'size='");
+      return false;
+    }
+    if !lhs_dilate.is_empty() && lhs_dilate.len() != size.len() {
+      assert!(false, "expects 'lhs_dilate=' has the same size as 'size='");
+      return false;
+    }
+    if !rhs_dilate.is_empty() && rhs_dilate.len() != size.len() {
+      assert!(false, "expects 'rhs_dilate=' has the same size as 'size='");
+      return false;
+    }
+    if !pad.is_empty() && pad.len() != size.len() {
+      assert!(false, "expects 'pad=' has the same size as 'size='");
+      return false;
+    }
+
+    for i in 0..size.len() {
+      window.add_dimensions().set_size(size[i]);
+      if !pad.is_empty() {
+        window.mutable_dimensions(i).set_padding_low(pad[i][0]);
+        window.mutable_dimensions(i).set_padding_high(pad[i][i]);
+      }
+      // If some field is not present, it has the default value.
+      let mut stride_value = 1;
+      if !stride.is_empty() {
+        stride_value = stride[i];
+      }
+      window.mutable_dimensions(i).set_stride(stride_value);
+      let mut base_dilation = 1;
+      if !lhs_dilate.is_empty() {
+        base_dilation = lhs_dilate[i];
+      }
+      window.mutable_dimensions(i).set_base_dilation(base_dilation);
+      let mut window_dilation = 1;
+      if !rhs_dilate.is_empty() {
+        window_dilation = rhs_dilate[i];
+      }
+      window.mutable_dimensions(i).set_window_dilation(window_dilation);
+      let mut window_reversal = false;
+      if !rhs_reversal.is_empty() {
+        window_reversal = rhs_reversal[i] == 1;
+      }
+      window.mutable_dimensions(i).set_window_reversal(window_reversal);
+    }
+
+    !expect_outer_curlies ||
+    self.parse_token(&TokKind::Rbrace,
+      "expected '}' to end window attribute".to_string())
   }
 
-  fn parse_padding_config(&mut self, _padding_config: &PaddingConfig) -> bool {
-    unimplemented!()
+  // This is the inverse of HloInstruction::ConvolutionDimensionNumbersToString.
+  // The string looks like "dim_labels=0bf_0io->0bf".
+  //
+  // '?' dims don't appear in ConvolutionDimensionNumbers.  There can be more than
+  // one '?' dim.
+  fn parse_convolution_demension_numbers(
+    &mut self, dnums: &mut ConvolutionDimensionNumbers) -> bool
+  {
+    if self.lexer.get_kind() != TokKind::DimLabels {
+      assert!(false, "expects dim labels pattern, e.g., 'bf0_0io->0bf'");
+      return false;
+    }
+    let str = self.lexer.get_str_val();
+
+    // The str is expected to have 3 items, lhs, rhs, out, and it must look like
+    // lhs_rhs->out, that is, the first separator is "_" and the second is "->".
+    let split1: Vec<&str> = str.split('_').collect();
+    if split1.len() != 2 {
+      assert!(false, "expects 3 items: lhs, rhs, and output dims, but sees {:?}", str);
+      return false;
+    }
+    let split11_val = split1[1].to_string();
+    let split2: Vec<&str> = split11_val.split("->").collect();
+    if split2.len() != 2 {
+      assert!(false, "expexts 3 items: lhs, rhs, and output dims, but sees {:?}", str);
+      return false;
+    }
+
+    let lhs = split1[0].to_string();
+    let rhs = split2[0].to_string();
+    let out = split2[1].to_string();
+
+    let mut chars = HashSet::new();
+    let mut is_unique = |str: &String| -> bool {
+      for c in str.chars() {
+        // '?' dims are skipped.
+        if c == '?' { continue; }
+        if !chars.insert(c) { return false; }
+      }
+      true
+    };
+
+    // **** lhs
+    if !is_unique(&lhs) {
+      assert!(false, "expects unique lhs dimension numbers, but sees {:?}", lhs);
+      return false;
+    }
+    // Count number of spatial dimensions.
+    for c in lhs.chars() {
+      if c != 'b' && c != 'f' && c != '?' {
+        dnums.add_input_spatial_dimensions(-1);
+      }
+    }
+    for i in 0..lhs.len() {
+      let c = lhs.chars().nth(i).unwrap();
+      if c == '?' {
+        continue;
+      } else if c == 'b' {
+        dnums.set_input_batch_dimension(i as i64);
+      } else if c == 'f' {
+        dnums.set_input_feature_dimension(i as i64);
+      } else if c >= '0' {
+        let c_val = c.to_digit(10).unwrap() as usize;
+        let zero_val = '0'.to_digit(10).unwrap() as usize;
+        if c_val < zero_val + lhs.len() {
+          // TODO
+          //dnums.set_input_spatial_dimensions(c - '0', i);
+        }
+      } else {
+        assert!(false, "expects [0-{:?}bf?] in lhs dimension numbers", lhs.len()-1);
+        return false;
+      }
+    }
+
+    // ***** rhs
+    if !is_unique(&rhs) {
+      assert!(false, "expects unique rhs dimension numbers, but sees {:?}", rhs);
+      return false;
+    }
+    // Count number of spatial dimensions.
+    for c in rhs.chars() {
+      if c != 'i' && c != 'o' && c != '?' {
+        dnums.add_kernel_spatial_dimensions(-1);
+      }
+    }
+    for i in 0..rhs.len() {
+      let c = rhs.chars().nth(i).unwrap();
+      if c == '?' {
+        continue;
+      } else if c == 'i' {
+        dnums.set_kernel_input_feature_dimension(i as i64);
+      } else if c == 'o' {
+        dnums.set_kernel_output_feature_dimension(i as i64);
+      } else if c >= '0' {
+        let c_val = c.to_digit(10).unwrap() as usize;
+        let zero_val = '0'.to_digit(10).unwrap() as usize;
+        if c_val < zero_val + rhs.len() {
+          // TODO
+        }
+      } else {
+        assert!(false, "expects [0-{:?}io?] in rhs dimension numbers", rhs.len()-1);
+        return false;
+      }
+    }
+
+    // ***** output
+    if !is_unique(&out) {
+      assert!(false, "expects unique output dimension numbers, but sees {:?}", out);
+      return false;
+    }
+    // Count number of spatial dimensions.
+    for c in out.chars() {
+      if c != 'b' && c != 'f' && c != '?' {
+        dnums.add_output_spatial_dimensions(-1);
+      }
+    }
+    for i in 0..out.len() {
+      let c = out.chars().nth(i).unwrap();
+      if c == '?' {
+        continue;
+      } else if c == 'b' {
+        dnums.set_output_batch_dimension(i as i64);
+      } else if c == 'f' {
+        dnums.set_output_feature_dimension(i as i64);
+      } else if c >= '0' {
+        let c_val = c.to_digit(10).unwrap() as usize;
+        let zero_val = '0'.to_digit(10).unwrap() as usize;
+        if c_val < zero_val + out.len() {
+          // TODO
+        }
+      } else {
+        assert!(false, "expects [0-{:?}bf?] in output dimension numbers", out.len()-1);
+        return false;
+      }
+    }
+
+    // lhs, rhs, and output should have the same number of spatial dimensions.
+    if dnums.input_spatial_dimensions_size() != dnums.output_spatial_dimensions_size() ||
+      dnums.input_spatial_dimensions_size() != dnums.kernel_spatial_dimensions_size()
+    {
+      assert!(false, "input, kernel, and output must have same number of
+        spatial dimensions, but got {:?}, {:?}, {:?} respectively.",
+        dnums.input_spatial_dimensions_size(),
+        dnums.kernel_spatial_dimensions_size(),
+        dnums.output_spatial_dimensions_size());
+    }
+
+    self.lexer.lex(0);
+    true
+  }
+
+  // This is the inverse xla::ToString(PaddingConfig). The padding config string
+  // looks like "0_0_0x3_3_1". The string is first separated by 'x', each
+  // substring represents one PaddingConfigDimension. The substring is 3 (or 2)
+  // numbers joined by '_'.
+  fn parse_padding_config(&mut self, padding: &mut PaddingConfig) -> bool {
+    if self.lexer.get_kind() != TokKind::Pad {
+      assert!(false, "expects padding config, e.g., '0_0_0x3_3_1'");
+      return false;
+    }
+    //let loc = self.lexer.get_loc();
+    let str = self.lexer.get_str_val();
+    let splitted_x: Vec<&str> = str.split('x').collect();
+    for padding_dim_str in splitted_x {
+      let splitted_i64_str: Vec<&str> = padding_dim_str.split('_').collect();
+      let mut padding_dim = vec![];
+      for i64_str in splitted_i64_str {
+        let value = i64_str.chars().nth(0).unwrap().to_digit(10).unwrap() as i64;
+        padding_dim.push(value);
+      }
+      let dim = padding.add_dimensions();
+      dim.set_edge_padding_low(padding_dim[0]);
+      dim.set_edge_padding_high(padding_dim[1]);
+      let mut interior_value = 0;
+      if padding_dim.len() == 3 {
+        interior_value = padding_dim[2];
+      }
+      dim.set_interior_padding(interior_value);
+    }
+    self.lexer.lex(0);
+    true
   }
 
   // '{' metadata_string '}'
@@ -617,7 +1034,7 @@ impl HloParser {
   }
 
   // ::= single_metadata | ('{' [single_metadata (',' single_metadata)*] '}')
-  fn parse_single_or_list_metadata(&mut self, _metadata: Vec<OpMetadata>) -> bool {
+  fn parse_single_or_list_metadata(&mut self, _metadata: &Vec<OpMetadata>) -> bool {
     if self.lexer.get_kind() == TokKind::Lbrace && self.lexer.look_ahead() == TokKind::Lbrace {
       if !self.parse_token(&TokKind::Lbrace,
         "expected '{' to start metadata lsit".to_string())
@@ -640,17 +1057,17 @@ impl HloParser {
     match self.lexer.get_kind() {
       TokKind::Maximal => {
         *t = OpShardingType::Maximal;
-        self.lexer.lex();
+        self.lexer.lex(0);
         return true;
       },
       TokKind::Replicated => {
         *t = OpShardingType::Replicated;
-        self.lexer.lex();
+        self.lexer.lex(0);
         return true;
       },
       TokKind::Manual => {
         *t = OpShardingType::Manual;
-        self.lexer.lex();
+        self.lexer.lex(0);
         return true;
       },
       _ => return false
@@ -675,16 +1092,48 @@ impl HloParser {
       "expected '}' to end sharding type list".to_string())
   }
 
-  fn parse_sharding() {}
+  // ::= '{' (single_sharding | tuple_sharding) '}'
+  // tuple_sharding ::= single_sharding* (',' single_sharding)*
+  fn parse_sharding(&mut self, sharding: &mut HloSharding) -> bool {
+    // A single sharding starts with '{' and is not followed by '{'.
+    // A tuple sharding starts with '{' and is followed by '{', or is '{''}' for
+    // an empty tuple.
+    if !self.parse_token(&TokKind::Lbrace,
+      "expected '{' to start sharding attribute".to_string())
+    {
+      return false;
+    }
+    if self.lexer.get_kind() != TokKind::Lbrace &&
+      self.lexer.get_kind() != TokKind::Rbrace
+    {
+      return self.parse_single_sharding(sharding, true);
+    }
+    // Tuple sharding.
+    // Allow empty tuple shardings.
+    let mut tuple_shardings = vec![];
+    if self.lexer.get_kind() != TokKind::Rbrace {
+      loop {
+        let mut tuple_sharding = HloSharding::default();
+        if !self.parse_single_sharding(&mut tuple_sharding, false) {
+          return false;
+        }
+        tuple_shardings.push(tuple_sharding);
+        if !self.eat_if_present(&TokKind::Comma) { break; }
+      }
+    }
+    *sharding = HloSharding::flat_tuple(tuple_shardings);
+    self.parse_token(&TokKind::Rbrace,
+      "expected '}' to end sharding attribute".to_string())
+  }
 
   // frontend_attributes ::= '{' attributes '}'
   // attributes
   //   ::= /*empty*/
   //   ::= attribute '=' value (',' attribute '=' value)*
   fn parse_frontend_attributes(
-    &mut self, _frontend_attributes: &FrontendAttributes) -> bool
+    &mut self, frontend_attributes: &mut FrontendAttributes) -> bool
   {
-    if self.parse_token(&TokKind::Lbrace,
+    if !self.parse_token(&TokKind::Lbrace,
       "expected '{' to start frontend attributes".to_string()) {
       return false;
     }
@@ -693,11 +1142,22 @@ impl HloParser {
     } else {
       loop {
         let mut attribute = "".to_string();
-        if !self.parse_attribute_name(&mut attribute) { return false; }
-        if self.lexer.get_kind() != TokKind::String { return false; }
-        // TODO
-        // frontend_attributes.mutable_map
-        self.lexer.lex();
+        if !self.parse_attribute_name(&mut attribute) {
+          return false;
+        }
+        let mut result = String::new();
+        if self.lexer.get_kind() == TokKind::String {
+          if !self.parse_string(&mut result) {
+            return false;
+          }
+        } else if self.lexer.get_kind() == TokKind::Lbrace {
+          if !self.parse_json_dict(&mut result) {
+            return false;
+          }
+        } else {
+          return false;
+        }
+        frontend_attributes.mutable_map().insert(attribute, result);
         if !self.eat_if_present(&TokKind::Comma) { break; }
       }
     }
@@ -705,11 +1165,271 @@ impl HloParser {
       "expects '}' at the end of frontend attributes".to_string())
   }
 
-  fn parse_statistics_viz(&mut self, _statistics_viz: &StatisticsViz) -> bool {
-    unimplemented!()
+  // statistics
+  //    ::= '{' /*empty*/ '}'
+  //    ::= '{' index, single_statistic '}'
+  // index ::= 'visualizing_index=' value
+  // single_statistic ::= statistic '=' value (',' statistic '=' value)*
+  fn parse_statistics_viz(&mut self, statistics_viz: &mut StatisticsViz) -> bool {
+    if !self.parse_token(&TokKind::Lbrace,
+      "expected '{' to start statistics".to_string())
+    {
+      return false;
+    }
+    if self.lexer.get_kind() == TokKind::Rbrace {
+      // empty
+    } else {
+      // index must exist
+      let mut visualizing_index_attr_name = String::new();
+      if !self.parse_attribute_name(&mut visualizing_index_attr_name) {
+        return false;
+      }
+      if self.lexer.get_kind() != TokKind::Int {
+        return false;
+      }
+      statistics_viz.set_stat_index_to_visualize(self.lexer.get_i64_val());
+      self.lexer.lex(0);
+
+      // then process statistics
+      while self.eat_if_present(&TokKind::Comma) {
+        let mut stat_name = String::new();
+        if !self.parse_attribute_name(&mut stat_name) {
+          return false;
+        }
+        if self.lexer.get_kind() != TokKind::Decimal &&
+          self.lexer.get_kind() != TokKind::Int
+        {
+          return false;
+        }
+        let mut statistic = Statisitic::default();
+        statistic.set_stat_name(stat_name);
+        if self.lexer.get_kind() == TokKind::Decimal {
+          statistic.set_stat_val(self.lexer.get_decimal_val() as i64);
+        } else {
+          statistic.set_stat_val(self.lexer.get_i64_val());
+        }
+        self.lexer.lex(0);
+        statistics_viz.add_statistics(statistic);
+      }
+    }
+    self.parse_token(&TokKind::Rbrace,
+      "expexts '}' at the end of statistics".to_string())
   }
 
-  fn parse_single_sharding() {}
+  // devices argument is optional: if not present, the tile assignment is assumed
+  // to be an iota tile assignment.
+  fn parse_tile_assignment(
+    &mut self,
+    _tile_assignment_dimensions: &Vec<i64>,
+    _iota_reshape_dims: &Vec<i64>,
+    _iota_transpose_perm: &Vec<i64>,
+    _devices: &Vec<i64>) -> bool
+  {
+    unimplemented!()    
+  }
+
+  // ::= '{' 'replicated'? 'manual'? 'maximal'? 'unknown'? ('device=' int)? shape?
+  //         ('devices=' ('[' dims ']')* device_list)?
+  //         (('shard_like' | 'shard_as') int)* '}'
+  //         ('metadata=' metadata)*
+  //
+  // dims ::= int_list
+  // device_list ::= int_list? ('<=[' int_list ']{' int_list '}')?
+  // metadata ::= single_metadata |
+  //              ('{' [single_metadata (',' single_metadata)*] '}')
+  // last_tile_dims ::= sharding_type_list
+  fn parse_single_sharding(
+    &mut self, sharding: &mut HloSharding, lbrace_pre_lexed: bool) -> bool
+  {
+    if !lbrace_pre_lexed && !self.parse_token(&TokKind::Lbrace,
+      "expected '{' to start sharding attribute".to_string())
+    {
+      return false;
+    }
+
+    let mut maximal = false;
+    let mut replicated = false;
+    let mut manual = false;
+    let mut unknown = false;
+    let mut unreduced = false;
+    let mut last_tile_dim_replicate = false;
+    let mut _last_tile_dims = false;
+    let mut shard_like = false;
+    let mut shard_as = false;
+    let mut shard_group_id = -1;
+    let mut devices = vec![];
+    let tile_assignment_dimensions = vec![];
+    let iota_reshape_dims = vec![];
+    let iota_transpose_perm = vec![];
+    let mut subgroup_types = vec![];
+    let metadata = vec![];
+
+    while self.lexer.get_kind() != TokKind::Rbrace {
+      match self.lexer.get_kind() {
+        TokKind::Maximal => {
+          maximal = true;
+          self.lexer.lex(0);
+        }
+        TokKind::Replicated => {
+          replicated = true;
+          self.lexer.lex(0);
+        }
+        TokKind::Manual => {
+          manual = true;
+          self.lexer.lex(0);
+        }
+        TokKind::Unknown => {
+          unknown = true;
+          self.lexer.lex(0);
+        }
+        TokKind::Unreduced => {
+          unreduced = true;
+          self.lexer.lex(0);
+        }
+        TokKind::AttributeName => {
+          if self.lexer.get_str_val() == "device".to_string() {
+            if self.lexer.lex(0) != TokKind::Int {
+              return self.token_error("device= attribute must be an integer".to_string());
+            }
+            devices.push(self.lexer.get_i64_val());
+            self.lexer.lex(0);
+          } else if self.lexer.get_str_val() == "devices".to_string() {
+            self.lexer.lex(0);
+            if !self.parse_tile_assignment(
+              &tile_assignment_dimensions,
+              &iota_reshape_dims, &iota_transpose_perm, &devices)
+            {
+              return false;
+            }
+          } else if self.lexer.get_str_val() == "metadata".to_string() {
+            self.lexer.lex(0);
+            if !self.parse_single_or_list_metadata(&metadata) {
+              return false;
+            }
+          } else if self.lexer.get_str_val() == "last_tile_dims".to_string() {
+            _last_tile_dims = true;
+            self.lexer.lex(0);
+            if !self.parse_list_sharding_type(&mut subgroup_types) {
+              return false;
+            }
+          } else {
+            return self.token_error("unknown attribute in sharding:
+              expected device=, devices=, metadata= or last_tile_dims=".to_string());
+          }
+        }
+        TokKind::LastTileDimReplicate => {
+          last_tile_dim_replicate = true;
+          self.lexer.lex(0);
+        }
+        TokKind::ShardAs => {
+          shard_as = true;
+          self.lexer.lex(0);
+          if !self.parse_i64(&mut shard_group_id) {
+            return false;
+          }
+        }
+        TokKind::ShardLike => {
+          shard_like = true;
+          self.lexer.lex(0);
+          if !self.parse_i64(&mut shard_group_id) {
+            return false;
+          }
+        }
+        TokKind::Rbrace => break,
+        _ => {
+          let mut err_msg = "unexpected token: ".to_string();
+          err_msg.push_str(&self.lexer.get_kind().to_string());
+          return self.token_error(err_msg)
+        }
+      }
+    }
+
+    if replicated {
+      if !devices.is_empty() {
+        assert!(false, "replicated shardings should not have any devices assigned");
+        return false;
+      }
+      *sharding = HloSharding::replicate(metadata);
+    } else if maximal {
+      if devices.len() != 1 {
+        assert!(false, "maximal shardings should have exactly one device assigned");
+        return false;
+      }
+      *sharding = HloSharding::assign_device(
+        devices[0], metadata, false);
+    } else if manual {
+      if !devices.is_empty() {
+        assert!(false, "manual shardings should not have any devices assigned");
+        return false;
+      }
+      *sharding = HloSharding::manual(metadata);
+    } else if unknown {
+      if !devices.is_empty() {
+        assert!(false, "unknown shardings should not have any devices assigned");
+        return false;
+      }
+      *sharding = HloSharding::unknown(metadata);
+    } else if unreduced {
+      if !devices.is_empty() {
+        assert!(false, "unreduced shardings should not have any devices assigned");
+        return false;
+      }
+      *sharding = HloSharding::unreduced(metadata);
+    } else {
+      if tile_assignment_dimensions.is_empty() {
+        assert!(false, "non-maximal sharding must have a tile assignment list
+          including dimensions");
+        return false;
+      }
+      if !iota_transpose_perm.len() != iota_reshape_dims.len() {
+        assert!(false, "iota_transpose_perm should have the same rank as
+          iota_reshape_dims");
+        return false;
+      }
+      if last_tile_dim_replicate {
+        debug_assert!(subgroup_types.is_empty());
+        subgroup_types.push(OpShardingType::Replicated);
+      }
+      if !iota_reshape_dims.is_empty() {
+        debug_assert!(devices.is_empty());
+        if subgroup_types.is_empty() {
+          *sharding = HloSharding::iota_tile(
+            &tile_assignment_dimensions, &iota_reshape_dims,
+            &iota_transpose_perm, &metadata);
+        } else {
+          *sharding = HloSharding::subgroup(
+            TileAssignment::new_from_vecs(&tile_assignment_dimensions,
+              &iota_reshape_dims, &iota_transpose_perm),
+            &subgroup_types, &metadata);
+        }
+      } else {
+        if devices.len() <= 1 {
+          assert!(false, "non-maximal shardings must have more than one desice assigned");
+          return false;
+        }
+        let mut tiles: Vec<i64> = vec![];
+        tiles.clone_from(&tile_assignment_dimensions);
+        devices.clone_from(&tile_assignment_dimensions);
+        if subgroup_types.is_empty() {
+          *sharding = HloSharding::tile(TileAssignment::new_from_vec(&tiles), &metadata);
+        } else {
+          *sharding = HloSharding::subgroup(
+            TileAssignment::new_from_vec(&tiles), &subgroup_types, &metadata);
+        }
+      }
+    }
+
+    if shard_as || shard_like {
+      let mut shard_g = HloSharding::shard_like(shard_group_id);
+      if shard_as {
+        shard_g = HloSharding::shard_as(shard_group_id);
+      }
+      sharding.set_shard_group(shard_g);
+    }
+
+    self.lexer.lex(0);
+    true
+  }
 
   // parameter_replication ::=
   //   '{' ('true' | 'false')* (',' ('true' | 'false'))*  '}'
@@ -729,7 +1449,7 @@ impl HloParser {
         } else {
           return false;
         }
-        self.lexer.lex();
+        self.lexer.lex(0);
         if !self.eat_if_present(&TokKind::Comma) { break; }
       }
     }
@@ -772,11 +1492,11 @@ impl HloParser {
   fn parse_boolean(&mut self, boolean_list: &mut Vec<bool>) -> bool {
     if self.lexer.get_kind() == TokKind::True {
       boolean_list.push(true);
-      self.lexer.lex();
+      self.lexer.lex(0);
       return true;
     } else if self.lexer.get_kind() == TokKind::False {
       boolean_list.push(false);
-      self.lexer.lex();
+      self.lexer.lex(0);
       return true;
     }
     false
@@ -785,8 +1505,15 @@ impl HloParser {
   //fn parse_replica_groups_only() {}
 
   fn parse_domain() {}
-  fn parse_dxd() {}
-  fn parse_window_pad() {}
+
+  fn parse_dxd(&mut self, _name: &String, _result: &Vec<i64>) -> bool {
+    unimplemented!()
+  }
+
+  fn parse_window_pad(&mut self, _pad: &Vec<Vec<i64>>) -> bool {
+    unimplemented!()
+  }
+
   fn parse_slice_ranges() {}
   fn parse_precision_list() {}
   fn parse_hlo_computation() {}
@@ -865,7 +1592,7 @@ impl HloParser {
       return self.token_error("expects name".to_string());
     }
     *result = self.lexer.get_str_val();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -874,7 +1601,7 @@ impl HloParser {
       return self.token_error("expects attribute name".to_string());
     }
     *result = self.lexer.get_str_val();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -884,7 +1611,7 @@ impl HloParser {
       return self.token_error("expects string".to_string());
     }
     *result = self.lexer.get_str_val();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -894,7 +1621,7 @@ impl HloParser {
       return self.token_error("expects JSON dict".to_string());
     }
     *result = self.lexer.get_str_val();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1006,7 +1733,7 @@ impl HloParser {
     }
     let _val = self.lexer.get_str_val();
     // TODO: fft_type_parse
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1017,7 +1744,7 @@ impl HloParser {
       return self.token_error("expected primitive type".to_string());
     }
     *result = self.lexer.get_primitive_type_val();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1035,7 +1762,7 @@ impl HloParser {
       return self.token_error(err_msg);
     }
     *result = comparison_direction.unwrap();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1053,7 +1780,7 @@ impl HloParser {
       return self.token_error(err_msg);
     }
     *result = comparison_type.unwrap();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1071,7 +1798,7 @@ impl HloParser {
       return self.token_error(err_msg);
     }
     *result = fusion_kind.unwrap();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1089,7 +1816,7 @@ impl HloParser {
       return self.token_error(err_msg);
     }
     *result = random_distribution.unwrap();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1107,7 +1834,7 @@ impl HloParser {
       return self.token_error(err_msg);
     }
     *result = random_algorithm.unwrap();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1124,7 +1851,7 @@ impl HloParser {
       return self.token_error(err_msg);
     }
     *result = precision.unwrap();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1141,7 +1868,7 @@ impl HloParser {
       return self.token_error(err_msg);
     }
     *result = algorithm.unwrap();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1151,7 +1878,7 @@ impl HloParser {
       return self.token_error("expects integer".to_string());
     }
     *result = self.lexer.get_i64_val();
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1171,7 +1898,7 @@ impl HloParser {
       TokKind::NegInf => *result = f64::NEG_INFINITY,
       _ => return self.token_error("expects decimal or integer".to_string())
     };
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1179,7 +1906,7 @@ impl HloParser {
     if self.lexer.get_kind() != TokKind::Lparen {
       return self.token_error("expects '(' before complex number".to_string());
     }
-    self.lexer.lex();
+    self.lexer.lex(0);
 
     let mut real = 0.0;
     let loc = self.lexer.get_loc();
@@ -1191,7 +1918,7 @@ impl HloParser {
     if self.lexer.get_kind() != TokKind::Comma {
       return self.token_error("expect comma after real part of complex literal".to_string());
     }
-    self.lexer.lex();
+    self.lexer.lex(0);
 
     let mut imag = 0.0;
     let loc = self.lexer.get_loc();
@@ -1205,7 +1932,7 @@ impl HloParser {
     }
 
     *result = Complex64::new(real, imag);
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1220,7 +1947,7 @@ impl HloParser {
     } else {
       *result = false;
     }
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1229,7 +1956,7 @@ impl HloParser {
     if self.lexer.get_kind() != *kind {
       return self.token_error(msg);
     }
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
@@ -1252,18 +1979,33 @@ impl HloParser {
     self.error(self.lexer.get_loc(), msg)
   }
 
-  fn error(&self, _loc: usize, _msg: String) -> bool {
-    unimplemented!()
+  fn error(&self, _loc: usize, msg: String) -> bool {
+    println!("Error: {:?}", msg);
+    assert!(false);
+    false
   }
 
   fn eat_if_present(&mut self, kind: &TokKind) -> bool {
     if self.lexer.get_kind() != *kind {
       return false;
     }
-    self.lexer.lex();
+    self.lexer.lex(0);
     true
   }
 
   fn add_instruction() {}
   fn add_computation() {}
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_parse_sharding() {
+    let original = "{maximal device=42}".to_string();
+    let sharding = parse_sharding(original.clone());
+    assert!(sharding.is_ok());
+    assert_eq!(sharding.unwrap().to_string(false), original);
+  }
 }

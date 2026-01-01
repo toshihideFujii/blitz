@@ -5,6 +5,7 @@ authors = ["toshihidefujii"]
 edition = "2021"
 
 [dependencies]
+regex = "1.12.2"
 #generic-array = "0.14.4"
 #num_cpus = "1.13.0"
 #rsys = "0.1.0"

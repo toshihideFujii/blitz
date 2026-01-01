@@ -23,6 +23,7 @@ pub mod hlo_module_metadata;
 pub mod hlo_module;
 pub mod hlo_op_metadata;
 pub mod hlo_opcode;
+pub mod hlo_original_value;
 pub mod hlo_phi_graph;
 pub mod hlo_proto;
 pub mod hlo_schdule;

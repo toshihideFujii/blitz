@@ -190,7 +190,7 @@ impl BlitzBuilder {
       metadata: OpMetadata::new(),
       oneshot_metadata: None,
       sharding: None,
-      frontend_attributes: FrontendAttributes::new(),
+      frontend_attributes: FrontendAttributes::default(),
       die_immediately_on_error: false,
       first_error: Ok(()),
       instructions: Vec::new(),
@@ -294,7 +294,7 @@ impl BlitzBuilder {
     num_spatial_dims: i64) -> ConvolutionDimensionNumbers
   {
     let mut dimension_numbers =
-      ConvolutionDimensionNumbers::new();
+      ConvolutionDimensionNumbers::default();
     
     dimension_numbers
       .set_input_batch_dimension(BlitzBuilder::CONV_BATCH_DIMENSION);

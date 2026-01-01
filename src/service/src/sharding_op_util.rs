@@ -24,7 +24,7 @@ pub fn parse_attributes(
   opaque: String, unspecified_dims: &mut Vec<i64>) -> Result<(), String>
 {
   let mut lexer = HloLexer::new(opaque.clone());
-  while lexer.lex() != TokKind::Eof {
+  while lexer.lex(0) != TokKind::Eof {
     if lexer.get_kind() != TokKind::AttributeName {
       let mut err_msg = "Cannot parse sharding op attributes: ".to_string();
       err_msg.push_str(&opaque);
@@ -32,12 +32,12 @@ pub fn parse_attributes(
     }
     let attr_name = lexer.get_str_val();
     if attr_name == "unspecified_dims".to_string() {
-      assert!(lexer.lex() == TokKind::Lsquare);
-      while lexer.lex() == TokKind::Int {
+      assert!(lexer.lex(0) == TokKind::Lsquare);
+      while lexer.lex(0) == TokKind::Int {
         unspecified_dims.push(lexer.get_i64_val());
-        if lexer.lex() != TokKind::Comma { break; }
+        if lexer.lex(0) != TokKind::Comma { break; }
       }
-      assert!(lexer.lex() == TokKind::Rsquare);
+      assert!(lexer.lex(0) == TokKind::Rsquare);
     } else {
       let mut err_msg = "Unknown attribute name in sharding op: ".to_string();
       err_msg.push_str(&attr_name);

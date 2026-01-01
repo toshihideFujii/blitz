@@ -376,7 +376,7 @@ impl ShapeInference {
     let mut dimensions = vec![];
     let mut is_dunamic = vec![false; operand_shape.dimensions_vec().len()];
     for i in 0..operand_shape.dimensions_vec().len() {
-      let p = padding_config.dimensions(i as i64);
+      let p = padding_config.dimension(i as i64);
       if operand_shape.is_unbounded_dynamic_dimension(i) {
         dimensions[i] = Shape::UNBOUNDED_SIZE;
       } else {

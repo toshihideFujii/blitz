@@ -33,9 +33,9 @@ impl SourceTargetPairs {
     SourceTargetPairs { pairs: Vec::new() }
   }
 
-  pub fn from_string(str: &String) -> Result<SourceTargetPairs, String> {
+  pub fn from_string(str: String) -> Result<SourceTargetPairs, String> {
     let groups_wrapper =
-      parse_replica_groups_only(str);
+      parse_replica_groups_only(str.clone());
     if groups_wrapper.is_err() {
       return Err(groups_wrapper.err().unwrap());
     }
@@ -44,7 +44,7 @@ impl SourceTargetPairs {
     for g in &groups {
       if g.replica_ids().len() != 2 {
         let mut err_msg = "Incorrect element size: ".to_string();
-        err_msg.push_str(str);
+        err_msg.push_str(&str);
         return Err(err_msg);
       }
       res.emplace_back(g.replica_ids()[0], g.replica_ids()[1]);
@@ -63,7 +63,7 @@ impl SourceTargetPairs {
       err_msg.push_str("does not have source-target pairs attribute.");
       return Err(err_msg);
     }
-    SourceTargetPairs::from_string(src_tgt_pairs.unwrap())
+    SourceTargetPairs::from_string(src_tgt_pairs.unwrap().clone())
   }
 
   pub fn join(a: &SourceTargetPairs, b: &SourceTargetPairs) -> Self {

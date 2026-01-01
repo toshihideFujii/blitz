@@ -177,7 +177,7 @@ pub struct FrontendAttributes {
 }
 
 impl FrontendAttributes {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     FrontendAttributes {
       //map: HashMap::new()
     }
@@ -213,8 +213,20 @@ pub struct Statisitic {
 }
 
 impl Statisitic {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     Statisitic { stat_name: "".to_string(), stat_val: 0 }
+  }
+
+  pub fn set_stat_name(&mut self, stat_name: String) {
+    self.stat_name = stat_name;
+  }
+
+  pub fn stat_name(&self) -> String {
+    self.stat_name.clone()
+  }
+
+  pub fn set_stat_val(&mut self, stat_val: i64) {
+    self.stat_val = stat_val;
   }
 
   pub fn stat_val(&self) -> i64 {
@@ -229,7 +241,7 @@ pub struct StatisticsViz {
 }
 
 impl StatisticsViz {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     StatisticsViz { stat_index_to_viaualize: 0, statiscics: Vec::new() }    
   }
 
@@ -274,6 +286,7 @@ pub enum OpShardingType {
   Tuple,
   Other,
   Manual,
+  Unreduced,
   Unknown,
 }
 
@@ -354,7 +367,7 @@ pub struct ParameterReplication {
 }
 
 impl ParameterReplication {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     ParameterReplication {
       replicated_at_leaf_buffers: Vec::new()
     }
@@ -383,7 +396,7 @@ pub struct ConvolutionDimensionNumbers {
 }
 
 impl ConvolutionDimensionNumbers {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     ConvolutionDimensionNumbers {
       input_batch_dimension: 0,
       input_feature_dimension: 0,
@@ -449,6 +462,10 @@ impl ConvolutionDimensionNumbers {
     self.input_spatial_dimensions.len()
   }
 
+  pub fn set_input_spatial_dimensions(&self, _c: char, _i: usize) {
+    unimplemented!()
+  }
+
   pub fn input_spatial_dimensions(&self, index: usize) -> i64 {
     self.input_spatial_dimensions[index]
   }
@@ -494,6 +511,7 @@ impl ConvolutionDimensionNumbers {
   }
 }
 
+#[derive(Debug, Clone)]
 pub struct PaddingConfigDimension {
   edge_padding_low: i64,
   edge_padding_high: i64,
@@ -501,6 +519,14 @@ pub struct PaddingConfigDimension {
 }
 
 impl PaddingConfigDimension {
+  pub fn default() -> Self {
+    PaddingConfigDimension {
+      edge_padding_low: 0,
+      edge_padding_high: 0,
+      interior_padding: 0
+    }
+  }
+
   pub fn edge_padding_low(&self) -> i64 {
     self.edge_padding_low
   }
@@ -520,24 +546,36 @@ impl PaddingConfigDimension {
   pub fn interior_padding(&self) -> i64 {
     self.interior_padding
   }
+
+  pub fn set_interior_padding(&mut self, interior_padding: i64) {
+    self.interior_padding = interior_padding;
+  }
 }
 
 // Describes the padding configuration for Pad operation. The padding amount on
 // both edges as well as between the elements are specified for each dimension.
 #[derive(Debug, Clone)]
-pub struct PaddingConfig {}
+pub struct PaddingConfig {
+  dimensions: Vec<PaddingConfigDimension>
+}
 
 impl PaddingConfig {
-  pub fn new() -> Self {
-    PaddingConfig {  }
+  pub fn default() -> Self {
+    PaddingConfig { dimensions: Vec::new() }
   }
 
   pub fn dimensions_vec(&self) -> &Vec<PaddingConfigDimension> {
+    &self.dimensions
+  }
+
+  pub fn dimension(&self, _dimno: i64) -> &PaddingConfigDimension {
     unimplemented!()
   }
 
-  pub fn dimensions(&self, _dimno: i64) -> &PaddingConfigDimension {
-    unimplemented!()
+  pub fn add_dimensions(&mut self) -> &mut PaddingConfigDimension {
+    let dimension = PaddingConfigDimension::default();
+    self.dimensions.push(dimension);
+    self.dimensions.last_mut().unwrap()
   }
 
   pub fn mutable_dimensions(&mut self, _dimno: i64) -> &mut PaddingConfigDimension {
@@ -1890,7 +1928,104 @@ pub struct SparsityDescriptor {
 }
 
 #[derive(Debug, Clone)]
-pub struct Window {}
+pub struct Window {
+  dimensions: Vec<WindowDimension>
+}
+
+impl Window {
+  pub fn default() -> Self {
+    Window { dimensions: Vec::new() }
+  }
+
+  pub fn add_dimensions(&mut self) ->  &mut WindowDimension {
+    let dimension = WindowDimension::default();
+    self.dimensions.push(dimension);
+    self.dimensions.last_mut().unwrap()
+  }
+
+  pub fn mutable_dimensions(&mut self, i: usize) -> &mut WindowDimension {
+    &mut self.dimensions[i]
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct WindowDimension {
+  // The size of the window in this dimension. For a rectangle, this would be
+  // the width or height.
+  size: i64,
+  // The stride at which the window moves across the base area in this
+  // dimension. In other words, this is the spacing between different
+  // positions of the window in this dimension.
+  stride: i64,
+  // If positive, means the amount of padding to add to the base area at the low
+  // end of this dimension; if negative, its negative means the number of
+  // elements removed from the low end of this dimension. For example, in the
+  // horizontal dimension of a rectangle, this would be the number of padding
+  // values to pad on the left, given that indices increase when going right.
+  // The actual padding value depends upon the context. Convolution pads with
+  // zeros. ReduceWindow and SelectAndScatter pads with the reduce function's
+  // init value.
+  padding_row: i64,
+  // As padding_low, but on the high end of this dimension. For example, in the
+  // horizontal dimension of a rectangle, this would be the number of values to
+  // pad on the right, given that indices increase when going right.
+  padding_high: i64,
+  // Dilation factor of the sliding window in this dimension. A dilation factor
+  // of 1 means no dilation. window_dilation - 1 no-op entries ("holes") are
+  // implicitly placed between each kernel element. This value may not be less
+  // than 1. See documentation for convolution.
+  window_dilation: i64,
+  // Dilation factor of the base area in this dimension. A dilation factor of 1
+  // means no dilation. base_dilation - 1 no-op entries ("holes") are implicitly
+  // placed between each base area element. This value may not be less than 1.
+  // See documentation for convolution.
+  base_dilation: i64,
+  // Window reversal means that this dimension was logically reversed before the
+  // operation.
+  window_reversal: bool,
+}
+
+impl WindowDimension {
+  pub fn default() -> Self {
+    WindowDimension {
+      size: 0,
+      stride: 0,
+      padding_row: 0,
+      padding_high: 0,
+      window_dilation: 0,
+      base_dilation: 0,
+      window_reversal: false,
+    }
+  }
+
+  pub fn set_size(&mut self, size: i64) {
+    self.size = size;
+  }
+
+  pub fn set_stride(&mut self, _stride: i64) {
+    unimplemented!()
+  }
+
+  pub fn set_padding_low(&mut self, _padding_row: i64) {
+    unimplemented!()
+  }
+
+  pub fn set_padding_high(&mut self, _padding_high: i64) {
+    unimplemented!()
+  }
+
+  pub fn set_window_dilation(&mut self, window_dilation: i64) {
+    self.window_dilation = window_dilation;
+  }
+
+  pub fn set_base_dilation(&mut self, _base_dilation: i64) {
+    unimplemented!()
+  }
+
+  pub fn set_window_reversal(&mut self, window_reversal: bool) {
+    self.window_reversal = window_reversal;
+  }
+}
 
 #[derive(Debug, Clone)]
 pub struct ScatterDimensionNummbers {

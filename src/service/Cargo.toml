@@ -10,4 +10,4 @@ common = { workspace = true }
 hlo = { workspace = true }
 stream_executor = { workspace = true }
 num = "0.4.3"
-regex = "1.10.4"
+regex = "1.12.2"
