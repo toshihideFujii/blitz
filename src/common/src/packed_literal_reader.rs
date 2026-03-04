@@ -26,7 +26,7 @@ impl PackedLiteralReader {
   pub fn read<T>(
     &self,
     _shape: &Shape,
-    _layout: &Option<Layout>) -> Result<Literal<T>, String>
+    _layout: &Option<Layout>) -> Result<Literal, String>
     where T: Clone + Default + PartialEq
   {
     unimplemented!()

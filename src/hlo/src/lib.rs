@@ -29,4 +29,5 @@ pub mod hlo_proto;
 pub mod hlo_schdule;
 pub mod hlo_sharding;
 pub mod hlo_value;
+pub mod name_uniquer;
 pub mod tile_assignment;

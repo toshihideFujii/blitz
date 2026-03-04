@@ -3,16 +3,20 @@
 use std::collections::{HashMap, HashSet};
 
 use common::{
-  blitz_data::FrontendAttributes,
+  blitz_data::{FrontendAttributes, StackFrameIndex},
   printer::Printer,
   shape::Shape
 };
 
 use crate::{
-  compilation_environments::CompilationEnvironments, hlo_computation::HloComputation, hlo_input_output_alias_config::{
+  compilation_environments::CompilationEnvironments, hlo_computation::HloComputation,
+  hlo_input_output_alias_config::{
     HloBufferDonorConfig,
     HloInputOutputAliasConfig
-  }, hlo_instruction::HloPrintOptions, hlo_module_config::HloModuleConfig, hlo_module_metadata::HloModuleMetadata, hlo_proto::HloModuleProto, hlo_schdule::HloSchedule, hlo_sharding::HloSharding
+  },
+  hlo_instruction::HloPrintOptions, hlo_module_config::HloModuleConfig,
+  hlo_module_metadata::HloModuleMetadata, hlo_proto::HloModuleProto,
+  hlo_schdule::HloSchedule, hlo_sharding::HloSharding, name_uniquer::NameUniquer
 };
 
 pub struct StackFrame {
@@ -41,6 +45,9 @@ pub struct HloModule {
   entry_computation: Option<HloComputation>,
   computations: Vec<HloComputation>,
   next_unique_id: i64,
+  // Used to keep track of the next unique computation id that should be
+  // assigned to computations in this module.
+  next_unique_computation_id: i64,
   unique_id: i64,
   is_dynamic: bool,
   profile_verison: i64,
@@ -57,11 +64,40 @@ pub struct HloModule {
   spmd_output_sharding: Option<HloSharding>,
   cross_program_prefetches: Vec<CrossProgramPrefetchInfo>,
   metadata: HloModuleMetadata,
+  stack_frame_index: StackFrameIndex,
+  // Unique name generator for computation and instruction names, which are
+  // unique per module. Will be reset to nullopt when Finalize() is called.
+  computation_name_uniquer: Option<NameUniquer>,
+  instruction_name_uniquer: Option<NameUniquer>,
 }
 
 impl HloModule {
-  pub fn new(_name: String, _config: HloModuleConfig) -> Self {
-    unimplemented!()
+  pub fn new(name: String, config: HloModuleConfig) -> Self {
+    HloModule {
+      name: name,
+      entry_computation: None,
+      computations: Vec::new(),
+      next_unique_id: 0,
+      next_unique_computation_id: 0,
+      unique_id: 0,
+      is_dynamic: false,
+      profile_verison: 0,
+      relative_speedup: 0.0,
+      autofdo_fingerprint: "".to_string(),
+      use_auto_spmd_partitioning: false,
+      config: config,
+      frontend_attributes: FrontendAttributes::default(),
+      use_auto_spmd_partition: false,
+      input_output_alias_config: HloInputOutputAliasConfig::default(),
+      buffer_donor_config: HloBufferDonorConfig::default(),
+      spmd_parameters_shardings: None,
+      spmd_output_sharding: None,
+      cross_program_prefetches: Vec::new(),
+      metadata: HloModuleMetadata::default(),
+      stack_frame_index: StackFrameIndex::default(),
+      computation_name_uniquer: Some(NameUniquer::new(".".to_string())),
+      instruction_name_uniquer: Some(NameUniquer::new(".".to_string())),
+    }
   }
 
   // Convert an HloModule to or from a proto.
@@ -74,12 +110,99 @@ impl HloModule {
      unimplemented!() 
   }
 
-  pub fn add_entry_computation() {}
-  pub fn add_entry_computation_with_layouts() {}
+  // Adds an entry computation to the module. A module can only have one entry
+  // computation. Returns a pointer to the newly added computation.
+  pub fn add_entry_computation(
+    &mut self, computation: HloComputation) -> &HloComputation
+  {
+    self.add_computation_internal(computation, true,
+      true, false)
+  }
+
+  // Same as the AddEntryComputation function above but the module's
+  // entry_computation_layout is updated to match the layout of the new entry
+  // computation.
+  pub fn add_entry_computation_with_layouts(
+    &mut self, computation: HloComputation) -> &HloComputation
+  {
+    self.add_computation_internal(computation, true,
+      true, true)
+  }
+
+  fn add_computation_internal(
+    &mut self,
+    mut computation: HloComputation,
+    is_entry: bool,
+    uniquify_identifiers: bool,
+    preserve_entry_layouts: bool) -> &HloComputation
+  {
+    if is_entry {
+      assert!(self.entry_computation.is_none());
+      self.entry_computation = Some(computation.clone());
+
+      if preserve_entry_layouts {
+        let program_shape = self.entry_computation
+          .as_ref().unwrap().compute_program_shape(true);
+        self.mutable_config().set_computation_layout_if_exists(program_shape);
+      } else if self.config().has_entry_computation_layout() {
+        // If the module configuration has no entry layout computation set, create
+        // a default one based on the program shape.
+        let program_shape = self.entry_computation
+          .as_ref().unwrap().compute_program_shape(true);
+        self.mutable_config().set_default_computation_layout(program_shape);
+      }
+      self.input_output_alias_config = HloInputOutputAliasConfig::new(
+        self.entry_computation.as_ref().unwrap()
+        .root_instruction().shape().clone());
+      self.buffer_donor_config = HloBufferDonorConfig::default();
+    }
+
+    if uniquify_identifiers {
+      computation.uniquify_name(self.computation_name_uniquer());
+      for instruction in computation.mutable_instructions() {
+        instruction.uniquify_name(self.instruction_name_uniquer());
+      }
+      // Set unique id to this computation.
+      computation.clear_unique_id_internal();
+      computation.set_unique_id(self.read_and_increment_next_unique_computation_id());
+      // Computation sets unique ID internally in sequence
+      // Recompacts the instructions vector to remove nullptr entries.
+      computation.cleanup();
+    } else {
+      // Don't uniquify the names of the computation or instruction, but we must
+      // run the names through the uniquifiers to prevent future name collisions
+      // for computations and instructions created later.
+      self.resync_next_unique_computation_id(
+        computation.unique_id());
+      let _ = self.computation_name_uniquer().get_unique_name(
+        &computation.name());
+      for instruction in computation.mutable_instructions() {
+        self.instruction_name_uniquer().get_unique_name(&instruction.name());
+      }
+    }
+
+    computation.set_parent(self);
+    // TODO
+    for (caller, _count) in &computation.caller_computations {
+      if caller.parent().unwrap() == self {
+        // TODO
+      }
+    }
+    for (callee, _count) in &computation.callee_computations {
+      if callee.parent().unwrap() == self {
+        // TODO
+      }
+    }
+    self.computations.push(computation);
+    self.computations.last().unwrap()
+  }
+
   pub fn replace_entry_computation() {}
 
   // Adds an embedded computation to the module.
-  pub fn add_embedded_computation(&mut self, _computation: HloComputation) -> &HloComputation {
+  pub fn add_embedded_computation(
+    &mut self, _computation: HloComputation) -> &HloComputation
+  {
     unimplemented!()
   }
 
@@ -111,6 +234,10 @@ impl HloModule {
 
   pub fn name(&self) -> String {
     self.name.clone()
+  }
+
+  pub fn mutable_name(&mut self) -> &mut String {
+    &mut self.name
   }
 
   pub fn set_name(&mut self, name: String) {
@@ -178,7 +305,17 @@ impl HloModule {
   pub fn layout_canonicalization_callback() {}
   pub fn absl_hash_value() {}
 
-  pub fn computations<F>(&self, _callback: F) -> &Vec<HloComputation>
+  // Gets the computations in this module.
+  //
+  // Returns a view of HloComputation*s, so you can iterate over this in the
+  // natural way:
+  //
+  //   for (HloComputation* c : module->computations()) { ... }
+  pub fn computations(&self) -> &Vec<HloComputation> {
+    unimplemented!()
+  }
+
+  pub fn computations_with_cb<F>(&self, _callback: F) -> &Vec<HloComputation>
     where F: Fn(&HloModule) -> Result<(Vec<Shape>, Shape), String>
   {
     unimplemented!()
@@ -291,7 +428,20 @@ impl HloModule {
   pub fn new_module_config_from_proto() {}
   pub fn outline_expression_from_computation() {}
   pub fn random_new_64() {}
-  pub fn instruction_name_uniquer() {}
+
+  // Returns the NameUniquer for uniquing instruction names in this module.
+  pub fn instruction_name_uniquer(&mut self) -> &mut NameUniquer {
+    debug_assert!(self.computation_name_uniquer.is_some(),
+      "Can't get instruction name uniquer after HloModule was finalized");
+    self.instruction_name_uniquer.as_mut().unwrap()
+  }
+
+  // Returns the NameUniquer for uniquing computation names in this module.
+  pub fn computation_name_uniquer(&mut self) -> &mut NameUniquer {
+    debug_assert!(self.computation_name_uniquer.is_some(),
+      "Can't get computation name uniquer after HloModule was finalized");
+    self.computation_name_uniquer.as_mut().unwrap()
+  }
 
   // Assign a new unique dense id for an instruction.
   pub fn new_unique_instruction_id(&mut self) -> i64 {
@@ -432,4 +582,22 @@ impl HloModule {
   pub fn comp_envs() {}
   pub fn get_fingerprint_128() {}
   pub fn get_stack_frame() {}
+
+  // Setter for the stack frame index.
+  pub fn set_stack_frame_index(&mut self, stack_frame_index: StackFrameIndex) {
+    self.stack_frame_index = stack_frame_index;
+  }
+
+  fn resync_next_unique_computation_id(&mut self, last_assigned_unique_id: i64) {
+    // TODO
+    self.next_unique_computation_id =
+      i64::max(self.next_unique_computation_id, last_assigned_unique_id + 1)
+  }
+
+  fn read_and_increment_next_unique_computation_id(&mut self) -> i64 {
+    // TODO
+    let id = self.next_unique_computation_id;
+    self.next_unique_computation_id += 1;
+    id
+  }
 }

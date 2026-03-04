@@ -1,5 +1,9 @@
 
-use common::{array::Array, array2d::Array2D, printer::{append_join, Printer, StringPrinter}, util::product};
+use common::{
+  array::Array, array2d::Array2D,
+  printer::{append_join, Printer, StringPrinter}, util::product
+};
+
 
 // Describes a TileAssignment with a device array generated from reshaping and
 // transposing an iota array, a.k.a. HloShardingV2. This is a more scalable
@@ -25,24 +29,19 @@ impl IotaTileAssignment {
     reshape_dims: &Vec<i64>,
     transpose_perm: &Vec<i64>) -> Self
   {
-    let mut instance = IotaTileAssignment {
-      ndims: dims.len() as i64,
-      reshape_ndims: reshape_dims.len() as i64,
-      dims: Vec::new(),
-      reshape_dims: Vec::new(),
-      transpose_perm: Vec::new(),
-      storage: Vec::new(),
-    };
+    let mut instance = IotaTileAssignment::new(
+      dims.len() as i64, reshape_dims.len() as i64);
+    debug_assert!(reshape_dims.len() == transpose_perm.len());
     instance.dims.clone_from(dims);
     instance.reshape_dims.clone_from(reshape_dims);
     instance.transpose_perm.clone_from(transpose_perm);
     instance
   }
 
-  pub fn new(ndims: i64, reshape_dims: i64) -> Self {
+  pub fn new(ndims: i64, reshape_ndims: i64) -> Self {
     IotaTileAssignment {
       ndims: ndims,
-      reshape_ndims: reshape_dims,
+      reshape_ndims: reshape_ndims,
       dims: Vec::new(),
       reshape_dims: Vec::new(),
       transpose_perm: Vec::new(),
@@ -53,6 +52,22 @@ impl IotaTileAssignment {
   pub fn create(dims: &Vec<i64>) -> Self {
     IotaTileAssignment::new_detail(
       dims, &vec![product(dims)], &vec![0])
+  }
+
+  pub fn create_from_vecs(
+    dims: &Vec<i64>, reshape_dims: &Vec<i64>, transpose_perm: &Vec<i64>) -> Self
+  {
+    let mut dims_span = vec![];
+    dims_span.clone_from(reshape_dims);
+    let mut perm_span = vec![];
+    perm_span.clone_from(transpose_perm);
+
+    cannonicalize_iota_dims(&mut dims_span, &mut perm_span);
+    if dims_span.is_empty() {
+      // TODO
+    }
+    IotaTileAssignment::new_detail(
+      dims, &dims_span, &perm_span)    
   }
 
   pub fn value_at(&self, index: &Vec<i64>) -> i64 {
@@ -120,7 +135,7 @@ impl IotaTileAssignment {
     printer.append(&"]<=[".to_string());
     append_join(printer, self.reshape_dims(), ",".to_string());
     printer.append(&"]".to_string());
-    if self.reshape_dims.len() > 1 {
+    if self.reshape_ndims > 1 {
       printer.append(&"T(".to_string());
       append_join(printer, self.transpose_perm(), ",".to_string());
       printer.append(&")".to_string());
@@ -156,6 +171,7 @@ impl IotaTileAssignment {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TileAssignment {
   iota: Option<IotaTileAssignment>,
+  // Pointer to the storage of the fully materialized array format.
   array: Option<Array>,
   array_2d: Option<Array2D<i64>>
 }
@@ -207,11 +223,16 @@ impl TileAssignment {
   }
 
   pub fn new_from_vecs(
-    _dims: &Vec<i64>,
-    _reshape_dims: &Vec<i64>,
-    _transpose_perm: &Vec<i64>) -> Self
+    dims: &Vec<i64>,
+    reshape_dims: &Vec<i64>,
+    transpose_perm: &Vec<i64>) -> Self
   {
-    unimplemented!()    
+    TileAssignment {
+      iota: Some(IotaTileAssignment::create_from_vecs(
+        dims, reshape_dims, transpose_perm)),
+      array: None,
+      array_2d: None
+    }
   }
 
   pub fn dimensions(&self) -> &Vec<i64> {
@@ -314,7 +335,7 @@ impl TileAssignment {
       printer.append(&"devices=[".to_string());
       append_join(printer, self.array().dimensions(), ",".to_string());
       printer.append(&"]".to_string());
-      //append_join(printer, self.array().values(), ",".to_string());
+      append_join(printer, self.array().values(), ",".to_string());
     }
   }
 
@@ -356,6 +377,87 @@ impl TileAssignment {
     if self.array.is_none() {
       assert!(self.iota.is_some());
       self.array = Some(self.iota.as_ref().unwrap().to_array());
+    }
+  }
+}
+
+// Helper function to canonicalize reshape_dims and transpose_perm of an
+// IotaTileAssignment, below shows some examples of the process of
+// canonicalization, the format is [reshape_dims]T(transpose_perm),
+// transpose_perm can be omitted if transpose is noop.
+//
+// [3,4,5] => [12,1,5] => [12,5] => [60,1] => [60]
+//
+// [3,4,5]T(2,1,0)
+//
+// [3,4,5]T(1,2,0) => [3,20]T(1,0)
+//
+// [3,4,5]T(1,0,2)
+//
+// [3,4,5]T(2,0,1) => [12,5]T(1,0)
+//
+// [3,4,5]T(2,1,0)
+//
+// [1,3,1,4,1,5]T(4,3,2,5,1,0) => [3,4,5]T(1,2,0) => [3,20,1]T(1,0,2) =>
+// [3,20]T(1,0)
+fn cannonicalize_iota_dims(dims: &mut Vec<i64>, perm: &mut Vec<i64>) {
+  debug_assert!(dims.len() == perm.len());
+  if dims.len() <= 1 {
+    return;
+  }
+  let mut old_to_new_dims: Vec<i64> = vec![0; dims.len()];
+  loop {
+    let mut changed = false;
+    let mut new_ndims = 0;
+    // Remove all dimensions of size one.
+    for i in 0..dims.len() {
+      if dims[i] == 1 {
+        old_to_new_dims[i] = -1;
+      } else {
+        old_to_new_dims[i] = new_ndims;
+        new_ndims += 1;
+      }
+    }
+    if (new_ndims as usize) != dims.len() {
+      let mut new_idx = 0;
+      for i in 0..dims.len() {
+        let new_dim = old_to_new_dims[i];
+        if new_dim >= 0 {
+          dims[new_dim as usize] = dims[i];
+        }
+        let new_perm_dim = old_to_new_dims[perm[i] as usize];
+        if new_perm_dim >= 0 {
+          perm[new_idx] = new_perm_dim;
+          new_idx += 1;
+          debug_assert!(new_idx <= new_ndims as usize);
+        }
+      }
+      let perm_after = perm.split_at(new_ndims as usize);
+      *perm = perm_after.0.to_vec();
+      let dims_after = dims.split_at(new_ndims as usize);
+      *dims = dims_after.0.to_vec();
+    }
+    // Merge subranges of dimensions that are major to minor order into single
+    // dimensions of size of their product. The merged dimension is placed at
+    // the first dimension of the subrange, and the other merged dimensions
+    // are set to 1, which are then removed. `remove_one_dims` is always
+    // called right before this, so it can assume there is no size one
+    // dimension.
+    let n = dims.len();
+    let mut base = 0;
+    for i in 1..n {
+      let base_dim = perm[base] as usize;
+      let dim = perm[i] as usize;
+      if base_dim + (i - base) == dim {
+        dims[base_dim] *= dims[dim];
+        dims[dim] = 1;
+        changed = true;
+      } else {
+        base = i;
+      }
+    }
+    if !changed {
+      break;
     }
   }
 }

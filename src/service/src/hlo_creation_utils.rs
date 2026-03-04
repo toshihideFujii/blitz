@@ -80,7 +80,8 @@ pub fn make_convert_to_hlo(
   if hlo.shape().element_type() == *t {
     return hlo.clone();
   }
-  let mut shape = ShapeUtil::change_element_type(hlo.shape()  , t);
+  let mut shape =
+    ShapeUtil::change_element_type(hlo.shape()  , t);
   let elt_t = shape.element_type();
   if is_sub_byte_non_pred_type(&elt_t) {
     shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(
@@ -89,11 +90,11 @@ pub fn make_convert_to_hlo(
     shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(0);
   }
   
-  let hlo_clone = hlo.clone();
+  let converted =
+    HloInstruction::create_convert(&shape, &hlo);
   let result =
     hlo.mutable_parent().unwrap().add_instruction_by_metadata(
-      HloInstruction::create_convert(shape, hlo_clone),
-      metadata.unwrap());
+      converted, metadata.unwrap());
   debug_assert_eq!(result.shape().element_type(), *t);
   result.clone()
 }

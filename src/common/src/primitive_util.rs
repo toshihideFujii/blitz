@@ -179,15 +179,18 @@ pub fn is_integral_type(t: &PrimitiveType) -> bool {
   is_unsigned_integral_type(t) || is_signed_integral_type(t)
 }
 
+pub fn is_predicate_type(t: &PrimitiveType) -> bool {
+  *t == PrimitiveType::Pred
+}
+
 pub fn is_4bit_type(t: &PrimitiveType) -> bool {
   *t == PrimitiveType::S4 || *t == PrimitiveType::U4
 }
 
+// Returns true if values of the given primitive type are held in array shapes.
 pub fn is_array_type(t: &PrimitiveType) -> bool {
-  *t != PrimitiveType::Invalid &&
-  *t != PrimitiveType::Tuple &&
-  *t != PrimitiveType::OpaqueType &&
-  *t != PrimitiveType::Token
+  *t == PrimitiveType::Pred || is_integral_type(t) ||
+    is_floating_point_type(t) || is_complex_type(t)
 }
 
 pub fn primitive_type_bit_width() {
@@ -433,6 +436,7 @@ impl PrimitiveTypeNameGenerator {
     generator.lowercase_name.insert(PrimitiveType::S32, "s32".to_string());
     generator.lowercase_name.insert(PrimitiveType::U32, "u32".to_string());
     generator.lowercase_name.insert(PrimitiveType::F32, "f32".to_string());
+    generator.lowercase_name.insert(PrimitiveType::Pred, "pred".to_string());
     generator.lowercase_name.insert(PrimitiveType::OpaqueType, "opaque".to_string());
     generator.lowercase_name.insert(PrimitiveType::Token, "token".to_string());
     generator

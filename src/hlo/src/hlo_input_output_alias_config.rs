@@ -71,6 +71,10 @@ pub struct HloInputOutputAliasConfig {
 }
 
 impl HloInputOutputAliasConfig {
+  pub fn default() -> Self {
+    HloInputOutputAliasConfig { alias: ShapeTree::default() }  
+  }
+
   pub fn new(mut output_shape: Shape) -> Self {
     HloInputOutputAliasConfig {
       alias: ShapeTree::new(&mut output_shape)
@@ -151,5 +155,7 @@ impl HloInputOutputAliasConfig {
 pub struct HloBufferDonorConfig {}
 
 impl HloBufferDonorConfig {
-    
+  pub fn default() -> Self {
+    HloBufferDonorConfig {  }
+  }
 }

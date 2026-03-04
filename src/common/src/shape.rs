@@ -220,9 +220,20 @@ impl Shape {
     self.dimensions[dim_index] = value;
   }
 
-  pub fn add_dimensions(&mut self, value: i64) {
+  // Appends a new dimension with the given size.
+  // Arguments:
+  //   - `value` is the size of the dimension if it is static, or the upper
+  //      bound of the dimension size if it is dynamic.
+  //   - `is_dynamic` is the dynamic-ness of the dimension:
+  //     - false: the dimension is static.
+  //     - true: the dimension is dynamic.
+  // Precondition:
+  //   - This is an array shape.
+  //   - Either `value` is >= 0, or `is_dynamic` is true and `value` is
+  //     kUnboundedSize.
+  pub fn add_dimensions(&mut self, value: i64, is_dynamic: bool) {
     self.dimensions.push(value);
-    self.dynamic_dimensions.push(false);
+    self.dynamic_dimensions.push(is_dynamic);
   }
 
   pub fn clear_dimensions(&mut self) {
@@ -278,6 +289,11 @@ impl Shape {
     &self.layout
   }
 
+  // Returns a pointer to the layout of the shape. If the shape does not have a
+  // layout, an empty layout is created.
+  // Precondition: this is an array shape or a buffer shape.
+  // Postcondition: the returned pointer is not null, and the pointee is owned
+  // by this shape.
   pub fn mutable_layout(&mut self) -> &mut Option<Layout> {
     assert!(self.is_array());
     if !self.has_layout() {
@@ -324,6 +340,11 @@ impl Shape {
     let minor_to_major =
       self.mutable_layout().as_mut().unwrap().minor_to_major_vec_mut();
     minor_to_major.push(value);
+  }
+
+  // Returns true if the given dimension size is valid.
+  pub fn is_valid_dimension_size(size: i64, is_dynamic: bool) -> bool {
+    size >= 0 || (is_dynamic && size == i64::MIN)
   }
 }
 
@@ -527,8 +548,9 @@ impl ProgramShape {
     &self.parameters[index]
   }
 
-  pub fn add_parameter(&mut self, shape: Shape) {
+  pub fn add_parameter(&mut self, shape: Shape, name: String) {
     self.parameters.push(shape);
+    self.parameter_names.push(name);
   }
 
   pub fn set_parameter(&mut self, index: usize, shape: Shape) {

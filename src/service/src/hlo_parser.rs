@@ -1,25 +1,32 @@
 #![allow(dead_code)]
 
-use std::collections::{HashMap, HashSet};
+use std::{any::Any, collections::{HashMap, HashSet}};
 use common::{
-  blitz_data::{
-    Algorithm, ConvolutionDimensionNumbers, FftType, FrontendAttributes, OpMetadata,
-    OpShardingType, PaddingConfig, ParameterReplication, Precision, PrimitiveType,
-    RandomAlgorithm, RandomDistribution, ReplicaGroup, Statisitic, StatisticsViz, Window
+  array::Array, blitz_data::{
+    Algorithm, ConvolutionDimensionNumbers, DimLevelType, FftType, FileLocation,
+    FrontendAttributes, OpMetadata, OpShardingType, PaddingConfig, ParameterReplication,
+    Precision, PrimitiveType, RandomAlgorithm, RandomDistribution, ReplicaGroup,
+    ResultAccuracy, ResultAccuracyMode, StackFrame, StackFrameIndex, Statisitic,
+    StatisticsViz, Window
   },
   comparison_util::{
-    ComparisonDirection, ComparisonType, string_to_comparison_direction, string_to_comparison_type
+    ComparisonDirection, ComparisonType, string_to_comparison_direction,
+    string_to_comparison_type
   },
-  layout::Layout, layout_util::LayoutUtil, literal::Literal, literal_util::LiteralUtil,
-  shape::Shape, shape_util::ShapeUtil
+  layout::{Layout, SplitConfig, Tile}, layout_util::LayoutUtil, literal::Literal,
+  literal_util::LiteralUtil, primitive_util::{is_complex_type, is_floating_point_type, is_integral_type, primitive_type_name, primitive_type_switch}, shape::Shape,
+  shape_util::ShapeUtil
 };
 use hlo::{
-  hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata,
-  hlo_instruction::{self, FusionKind, HloInstruction}, hlo_module::HloModule,
-  hlo_module_config::HloModuleConfig, hlo_opcode::HloOpcode, hlo_sharding::HloSharding, tile_assignment::TileAssignment
+  computation_layout::ComputationLayout, hlo_computation::{HloComputation, HloComputationBuilder},
+  hlo_domain_metadata::DomainMetadata, hlo_instruction::{self, FusionKind, HloInstruction},
+  hlo_module::HloModule, hlo_module_config::HloModuleConfig,
+  hlo_opcode::{HloOpcode, hlo_opcode_string, string_to_hlo_opcode},
+  hlo_original_value::OriginalValue, hlo_schdule::HloSchedule, hlo_sharding::HloSharding,
+  name_uniquer::NameUniquer, tile_assignment::TileAssignment
 };
 use num::complex::Complex64;
-use crate::hlo_lexer::{tok_kind_to_string, HloLexer, TokKind};
+use crate::{hlo_lexer::{HloLexer, TokKind, tok_kind_to_string}, shape_inference::ShapeInference};
 
 pub struct HloParserOptions {
   fill_missing_layouts: bool,
@@ -76,9 +83,9 @@ pub fn parse_and_return_unverified_module(
   config: HloModuleConfig,
   options: HloParserOptions) -> Result<HloModule, String>
 {
-  let module = HloModule::new("_".to_string(), config);
+  let mut module = HloModule::new("_".to_string(), config);
   let mut parser = HloParser::new(str, options);
-  let result = parser.run(&module);
+  let result = parser.run(&mut module);
   if result.is_err() {
     return Err(result.err().unwrap());
   }
@@ -151,7 +158,7 @@ pub fn parse_shape(_str: String) -> Result<Shape, String> {
 }
 
 // Parses and returns a Layout::to_string-format string.
-pub fn parse_layout(_str: String) -> Result<Layout, String> {
+pub fn parse_layout_by_string(_str: String) -> Result<Layout, String> {
   unimplemented!()
 }
 
@@ -165,7 +172,7 @@ pub fn parse_replica_groups_only(
   parser.parse_replica_groups_only()
 }
 
-fn can_infer_shape(code: HloOpcode) -> bool {
+fn can_infer_shape(code: &HloOpcode) -> bool {
   match code {
     HloOpcode::Abs => return true,
     HloOpcode::Add => return true,
@@ -293,22 +300,33 @@ enum AttrType {
   CustomCallSchedule,
   CustomCallApiVersion,
   SparsityDescriptor,
+  // A double-quoted string, or a string that looks like a JSON dictionary
+  // enclosed in matching curly braces (returned value includes the curlies).
   StringOrJsonDict,
+  CollectiveDeviceList,
+  ResultAccuracy,
+  OriginalValue,
+  OriginalValueRecoveryTable,
+  Mode
 }
 
 struct AttrConfig {
-  required: bool,
-  attr_type: AttrType,
-  result: String // TODO
+  required: bool, // whether it's required or optional
+  attr_type: AttrType, // what type it is
+  result: Box<dyn Any> // where to store the parsed result.
 }
 
 impl AttrConfig {
-  pub fn new(required: bool, attr_type: AttrType, result: String) -> Self {
+  pub fn new(required: bool, attr_type: AttrType, result: Box<dyn Any>) -> Self {
     AttrConfig {
       required: required,
       attr_type: attr_type,
       result: result
     }
+  }
+
+  pub fn result(&self) -> &Box<dyn Any> {
+    &self.result
   }
 }
 
@@ -328,6 +346,8 @@ struct Scope {}
 pub struct HloParser {
   lexer: HloLexer,
   options: HloParserOptions,
+  // Used to generate names for anonymous instructions.
+  name_uniquer: NameUniquer,
   scoped_name_tables: Vec<HashMap<String, (HloInstruction, usize)>>,
   computation_pool: HashMap<String, (HloComputation, usize)>,
   computations: Vec<HloComputation>,
@@ -339,6 +359,7 @@ impl HloParser {
     HloParser {
       lexer: HloLexer::new(str),
       options: options,
+      name_uniquer: NameUniquer::new(".".to_string()),
       scoped_name_tables: Vec::new(),
       computation_pool: HashMap::new(),
       computations: Vec::new(),
@@ -348,7 +369,7 @@ impl HloParser {
 
   // Runs the parser and constructs the resulting HLO in the given (empty)
   // HloModule. Returns the error status in case an error occurred.
-  pub fn run(&mut self, module: &HloModule) -> Result<(), String> {
+  pub fn run(&mut self, module: &mut HloModule) -> Result<(), String> {
     self.lexer.lex(0);
     if self.lexer.get_kind() == TokKind::HloModule ||
        self.lexer.get_kind() == TokKind::Entry ||
@@ -361,7 +382,7 @@ impl HloParser {
       }
       if !self.parse_hlo_module(module, parse_module_without_header) {
         let mut err_msg =
-          "Syntac error when trying to parse the text as a HloModule.".to_string();
+          "Syntax error when trying to parse the text as a HloModule.".to_string();
         err_msg.push_str(&self.get_error());
         return Err(err_msg);
       }
@@ -388,7 +409,7 @@ impl HloParser {
   pub fn parse_shape_only(&mut self) -> Result<Shape, String> {
     self.lexer.lex(0);
     let mut shape = Shape::new();
-    if !self.parse_shape(&mut shape) {
+    if !self.parse_shape(&mut shape, true) {
       let mut error_msg = "Syntax error:\n".to_string();
       error_msg.push_str(&self.get_error());
       return Err(error_msg);
@@ -402,8 +423,8 @@ impl HloParser {
 
   pub fn parse_layout_only(&mut self) -> Result<Layout, String> {
     self.lexer.lex(0);
-    let layout = Layout::new();
-    if !self.parse_layout(&layout) {
+    let mut layout = Layout::new();
+    if !self.parse_layout(&mut layout) {
       let mut error_msg = "Syntax error:\n".to_string();
       error_msg.push_str(&self.get_error());
       return Err(error_msg);
@@ -558,30 +579,639 @@ impl HloParser {
     self.scoped_name_tables.last()
   }
 
+  fn mutable_current_name_table(
+    &mut self) -> Option<&mut HashMap<String, (HloInstruction, usize)>>
+  {
+    self.scoped_name_tables.last_mut()
+  }
+
   fn find_instruction(&self, _name: &String) -> Option<&(HloInstruction, usize)> {
     unimplemented!()
   }
 
-  fn parse_single_instruction(&self, _module: &HloModule) -> bool {
-    unimplemented!()
+  // Parse a single instruction worth of text.
+  fn parse_single_instruction(&mut self, module: &mut HloModule) -> bool {
+    if !self.scoped_name_tables.is_empty() { // TODO
+      assert!(false, "Parser state is not clean. Please do not call any other
+        methods before calling parse_single_instruction.");
+      return false;
+    }
+    let mut builder =
+      HloComputationBuilder::new(module.name());
+
+    // The missing instruction hook we register creates the shaped instruction on
+    // the fly as a parameter and returns it. 
+    let _parameter_count = 0;
+    let _create_missing_instruction = || {};
+
+    // Parse the instruction with the registered hook.
+    let _scope = HloParserScope::new(&self.scoped_name_tables);
+    if self.can_be_shape() {
+      // This means that the instruction's left-hand side is probably omitted,
+      // e.g. f32[10] fusion(...), calls={...}
+      if !self.parse_instruction_rhs(&mut builder, module.mutable_name(),
+      self.lexer.get_loc(), true)
+      {
+        return false;
+      }
+    } else {
+      // This means that the instruction's left-hand side might exist, e.g.
+      //  foo = f32[10] fusion(...), calls={...}
+      let mut root_name = String::new();
+      if !self.parse_instruction(&mut builder, &mut root_name) {
+        return false;
+      }
+    }
+
+    if self.lexer.get_kind() != TokKind::Eof {
+      assert!(false, "Syntax error:\nExpected eof after parsing single instruction.
+        Did you mean to wtite an HLO module and forget the HloModule header?");
+      return false;
+    }
+
+    module.add_entry_computation(builder.build(None));
+    for comp in &self.computations {
+      module.add_embedded_computation(comp.clone());
+    }
+    //let schedule = schedule_from_instruction_order(module);
+    //module.set_schedule(schedule);
+
+    true
   }
 
-  fn parse_hlo_module(&self, _module: &HloModule, _parse_module_without_header: bool) -> bool {
-    unimplemented!()
+  // Parses a module, returning false if an error occurred.
+  // if `parse_module_without_header` is true, the parsed text is sequence of
+  // computations, and assume computation with `ENTRY` annotation or the last
+  // computation as module's entry computation, also using the entry
+  // computation's parameter and `ROOT` instruction's layout as module's layout.
+  fn parse_hlo_module(
+    &mut self, module: &mut HloModule, parse_module_without_header: bool) -> bool
+  {
+    let mut name = String::new();
+    let mut attrs: HashMap<String, AttrConfig> = HashMap::new();
+
+    let is_scheduled: Option<bool> = None;
+    let is_scheduled_conf = AttrConfig::new(
+      false, AttrType::Bool, Box::new(is_scheduled));
+    attrs.insert("is_scheduled".to_string(), is_scheduled_conf);
+
+    let alias_passthrough_params: Option<bool> = None;
+    let alias_passthrough_params_conf = AttrConfig::new(
+      false, AttrType::Bool, Box::new(alias_passthrough_params));
+    attrs.insert("alias_passthrough_params".to_string(),
+    alias_passthrough_params_conf);
+
+    let num_partitions: Option<i64> = None;
+    let num_partitions_conf = AttrConfig::new(
+      false, AttrType::Int64, Box::new(num_partitions));
+    attrs.insert("num_partitions".to_string(), num_partitions_conf);
+
+    let replica_count: Option<i64> = None;
+    let replica_count_conf = AttrConfig::new(
+      false, AttrType::Int64, Box::new(replica_count));
+    attrs.insert("replica_count".to_string(), replica_count_conf);
+
+    let entry_computation_layout: Option<ComputationLayout> = None;
+    let entry_comp_layout_conf = AttrConfig::new(
+      false, AttrType::ComputationLayout,
+      Box::new(entry_computation_layout));
+    attrs.insert("entry_computation_layout".to_string(), entry_comp_layout_conf);
+
+    let frontend_attrs: Option<FrontendAttributes> = None;
+    let frontend_attrs_conf = AttrConfig::new(
+      false, AttrType::FrontendAttributes, Box::new(frontend_attrs));
+    attrs.insert("frontend_attributes".to_string(), frontend_attrs_conf);
+
+    if !parse_module_without_header {
+      if self.lexer.get_kind() != TokKind::HloModule {
+        return self.token_error("expects HloModule".to_string());
+      }
+      // Eat 'HloModule'
+      self.lexer.lex(0);
+      if !self.parse_name(&mut name) {
+        return false;
+      }
+      if !self.parse_attributes(&attrs, true, &None) {
+        return false;
+      }
+      module.set_name(name.clone());
+    }
+
+    if !self.parse_stack_frame_index(module) || !self.parse_computations(module)
+    {
+      return false;
+    }
+
+    if parse_module_without_header {
+      let mut new_name = "module_".to_string();
+      new_name.push_str(&module.entry_computation().unwrap().name());
+      name = new_name;
+    }
+    module.set_name(name);
+    
+    if is_scheduled.is_some() && is_scheduled.unwrap() == false {
+      module.set_schedule(schedule_from_instruction_order(&module.clone()));
+    }
+    let config = module.mutable_config();
+    if alias_passthrough_params.is_some() && alias_passthrough_params.unwrap() == false {
+      config.set_alias_passthrough_params(true);
+    }
+    if num_partitions.is_some() && num_partitions.unwrap() != 1 {
+      config.set_num_partitions(num_partitions.unwrap());
+      config.set_use_spmd_partitioning(true);
+    }
+    if replica_count.is_some() && replica_count.unwrap() != 1 {
+      config.set_replica_count(replica_count.unwrap());
+    }
+    let entry_comp_layout_conf: Option<&AttrConfig> =
+      attrs.get(&"entry_computation_layout".to_string());
+    if entry_comp_layout_conf.is_some() {
+      let entry_comp_layout = entry_comp_layout_conf
+        .unwrap().result().downcast_ref::<ComputationLayout>().unwrap().clone();
+      *config.mutable_entry_computation_layout() =entry_comp_layout;
+    } else {
+      // If entry_computation_layout is not specified explicitly, we infer the
+      // layout from parameter and root instructions.
+    }
+    let frontend_attrs_conf: Option<&AttrConfig> =
+      attrs.get(&"frontend_attributes".to_string());
+    if frontend_attrs_conf.is_some() {
+      let frontend_attrs = frontend_attrs_conf
+        .unwrap().result().downcast_ref::<FrontendAttributes>().unwrap().clone();
+      module.set_frontend_attributes(frontend_attrs);
+    }
+
+    true
   }
 
-  fn parse_computations() {}
-  fn parse_computation() {}
-  fn parse_instruction_list() {}
-  fn parse_instruction() {}
-  fn parse_instruction_rhs() {}
+  // Parses a list of `int {file_name_id=int function_name_id=int line=int
+  // end_line=int column=int end_column=int}` into
+  // StackFrameIndexProto::file_locations.
+  pub fn parse_file_location_list(
+    &mut self, stack_frame_index: &mut StackFrameIndex) -> bool
+  {
+    let file_name_id: Option<i64> = None;
+    let file_name_conf = AttrConfig::new(
+      true, AttrType::Int64, Box::new(file_name_id));
+
+    let func_name_id: Option<i64> = None;
+    let func_name_conf = AttrConfig::new(
+      true, AttrType::Int64, Box::new(func_name_id));
+
+    let line: Option<i64> = None;
+    let line_conf = AttrConfig::new(
+      true, AttrType::Int64, Box::new(line));
+
+    let end_line: Option<i64> = None;
+    let end_line_conf = AttrConfig::new(
+      true, AttrType::Int64, Box::new(end_line));
+
+    let column: Option<i64> = None;
+    let column_conf = AttrConfig::new(
+      true, AttrType::Int64, Box::new(column));
+
+    let end_column: Option<i64> = None;
+    let end_column_conf = AttrConfig::new(
+      true, AttrType::Int64, Box::new(end_column));
+
+    let mut attrs = HashMap::new();
+    attrs.insert("file_name_id".to_string(), file_name_conf);
+    attrs.insert("function_name_id".to_string(), func_name_conf);
+    attrs.insert("line".to_string(), line_conf);
+    attrs.insert("end_line".to_string(), end_line_conf);
+    attrs.insert("column".to_string(), column_conf);
+    attrs.insert("end_column".to_string(), end_column_conf);
+
+    while self.eat_if_present(&TokKind::Int) {
+      if !self.parse_sub_attributes(&attrs) {
+        return false;
+      }
+      let mut file_location = FileLocation::default();
+      
+      let file_name_conf: &AttrConfig = attrs.get("file_name_id").unwrap();
+      let file_name_id = file_name_conf.result.downcast_ref::<i64>().unwrap();
+      file_location.set_file_name_id(*file_name_id);
+
+      let function_name_conf: &AttrConfig = attrs.get("function_name_id").unwrap();
+      let function_name_id = function_name_conf.result.downcast_ref::<i64>().unwrap();
+      file_location.set_function_name_id(*function_name_id);
+
+      let line_conf: &AttrConfig = attrs.get("line").unwrap();
+      let line = line_conf.result.downcast_ref::<i64>().unwrap();
+      file_location.set_line(*line);
+
+      let end_line_conf: &AttrConfig = attrs.get("end_line").unwrap();
+      let end_line = end_line_conf.result.downcast_ref::<i64>().unwrap();
+      file_location.set_end_line(*end_line);
+
+      let column_conf: &AttrConfig = attrs.get("column").unwrap();
+      let column = column_conf.result.downcast_ref::<i64>().unwrap();
+      file_location.set_column(*column);
+
+      let end_column_conf: &AttrConfig = attrs.get("end_column").unwrap();
+      let end_column = end_column_conf.result.downcast_ref::<i64>().unwrap();
+      file_location.set_end_column(*end_column);
+
+      stack_frame_index.add_file_location(file_location);
+    }
+    true  
+  }
+
+  // Parses a list of `int {function_location_id=int parent_frame_id=int}` into
+  // StackFrameIndexProto::stack_frames.
+  fn parse_stack_frames_list(
+    &mut self, stack_frame_index: &mut StackFrameIndex) -> bool
+  {
+    let file_location_id: Option<i64> = None;
+    let file_loc_conf = AttrConfig::new(
+      true, AttrType::Int64, Box::new(file_location_id));
+    
+    let parent_frame_id: Option<i64> = None;
+    let parent_frame_conf = AttrConfig::new(
+      true, AttrType::Int64, Box::new(parent_frame_id));
+
+    let mut attrs = HashMap::new();
+    attrs.insert("file_location_id".to_string(), file_loc_conf);
+    attrs.insert("parent_frame_id".to_string(), parent_frame_conf);
+
+    while self.lexer.get_kind() == TokKind::Int {
+      self.lexer.lex(0);
+      if !self.parse_sub_attributes(&attrs) {
+        return false;
+      }
+      let file_loc_conf: Option<&AttrConfig> = attrs.get("file_location_id");
+      let file_loc_id = file_loc_conf.unwrap()
+        .result().downcast_ref::<i64>().unwrap();
+
+      let parent_frame_conf: Option<&AttrConfig> = attrs.get("parent_frame_id");
+      let parent_frame_id = parent_frame_conf.unwrap()
+        .result().downcast_ref::<i64>().unwrap();
+      let stack_frame = StackFrame::new(
+        *file_loc_id, *parent_frame_id);
+      
+      stack_frame_index.add_stack_frame(stack_frame);
+    }
+    true    
+  }
+
+  fn parse_stack_frame_index(&mut self, module: &mut HloModule) -> bool {
+    if !self.eat_if_present(&TokKind::FileNames) {
+      return true;
+    }
+    let mut stack_frame_index = StackFrameIndex::default();
+
+    // Parse file names.
+    while self.eat_if_present(&TokKind::Int) {
+      let mut file_name = String::new();
+      self.parse_string(&mut file_name);
+      stack_frame_index.add_file_name(file_name);
+    }
+
+    // Parse function names.
+    if !self.parse_token(&TokKind::FunctionNames,
+      "expects FunctionNames".to_string())
+    {
+      return false;
+    }
+
+    while self.eat_if_present(&TokKind::Int) {
+      let mut function_name = String::new();
+      self.parse_string(&mut function_name);
+      stack_frame_index.add_function_name(function_name);
+    }
+
+    // Parse file locations and stack frames.
+    if !self.parse_token(
+      &TokKind::FileLocations, "expects 'FileLocations'".to_string()) ||
+      !self.parse_file_location_list(&mut stack_frame_index) ||
+      !self.parse_token(
+        &TokKind::StackFrames, "expects 'StackFrames'".to_string()) ||
+      !self.parse_stack_frames_list(&mut stack_frame_index)
+    {
+      return false;
+    }
+
+    module.set_stack_frame_index(stack_frame_index);
+    true
+  }
+
+  // computations ::= (computation)+
+  fn parse_computations(&mut self, module: &mut HloModule) -> bool {
+    let mut entry_computation = HloComputation::default();
+    loop {
+      if !self.parse_computation(&mut entry_computation) {
+        return false;
+      }
+      if self.lexer.get_kind() == TokKind::Eof {
+        break ;
+      }
+    }
+    for i in 0..self.computations.len() {
+      // If entry_computation is not nullptr, it means the computation it pointed
+      // to is marked with "ENTRY"; otherwise, no computation is marked with
+      // "ENTRY", and we use the last computation as the entry computation. We
+      // add the non-entry computations as embedded computations to the module.
+      if self.computations[i] != entry_computation {
+        module.add_embedded_computation(self.computations[i].clone());
+        continue;
+      }
+      module.add_entry_computation(self.computations[i].clone());
+    }
+    true
+  }
+
+  // computation ::= ('ENTRY')? name (param_list_to_shape)? instruction_list(,
+  // 'execution_thread='execution_thread)?
+  fn parse_computation(&mut self, entry_computation: &mut HloComputation) -> bool {
+    //let maybe_entry_loc = self.lexer.get_loc();
+    let is_entry_computation = self.eat_if_present(&TokKind::Entry);
+
+    let mut name = String::new();
+    let name_loc = self.lexer.get_loc();
+    if !self.parse_name(&mut name) {
+      return false;
+    }
+    let mut shape_loc: usize = 0;
+    let mut shape = Shape::new();
+    if self.can_be_param_list_to_shape() &&
+      !self.parse_param_list_to_shape(&mut shape, &mut shape_loc)
+    {
+      return false;
+    }
+    let mut computation = HloComputation::default();
+    if !self.parse_instruction_list(&mut computation, &mut name) {
+      return false;
+    }
+    // If param_list_to_shape was present, check compatibility.
+    if !ShapeUtil::compatible(
+      computation.root_instruction().shape(), &shape)
+    {
+      assert!(false, "Shape of computation {:?} , {:?} is not compatible 
+        with that of root instruction", name, ShapeUtil::human_string(&shape));
+      return false;
+    }
+
+    let mut attrs: HashMap<String, AttrConfig> = HashMap::new();
+    let execution_thread = String::new(); // TODO
+    let exec_thread_conf = AttrConfig::new(
+      false, AttrType::String, Box::new(Some(execution_thread.clone())));
+    attrs.insert("execution_thread".to_string(), exec_thread_conf);
+
+    if !self.parse_attributes(&attrs, true, &None) {
+      return false;
+    }
+
+    computation.set_execution_thread(execution_thread);
+    if is_entry_computation {
+      *entry_computation = computation.clone();
+    }
+
+    self.add_computation(name, computation, name_loc)
+  }
+
+  // instruction_list ::= '{' instruction_list1 '}'
+  // instruction_list1 ::= (instruction)+
+  fn parse_instruction_list(
+    &mut self,
+    computation: &mut HloComputation,
+    computation_name: &mut String) -> bool
+  {
+    let mut builder =
+      HloComputationBuilder::new(computation_name.clone());
+    if !self.parse_token(&TokKind::Lbrace,
+      "expects '{' at the beginning of instruction list".to_string())
+    {
+      return false;
+    }
+    let mut root_name = String::new();
+    loop {
+      if !self.parse_instruction(&mut builder, &mut root_name) {
+        return false;
+      }
+      if self.lexer.get_kind() == TokKind::Rbrace {
+        break;
+      }
+    }
+    if !self.parse_token(&TokKind::Rbrace,
+      "expects '}' at the end of instruction list".to_string())
+    {
+      return false;
+    }
+    let mut root = HloInstruction::default();
+    if !root_name.is_empty() {
+      let root_node: Option<&(HloInstruction, usize)> =
+        self.current_name_table().as_ref().unwrap().get(&root_name);
+      // This means some instruction was marked as ROOT but we didn't find it in
+      // the pool, which should not happen.
+      if root_node.is_none() {
+        assert!(false, "instruction {:?} was marked as ROOT but the parser has
+          not seen it before", root_name);
+        return false;
+      }
+      root = root_node.unwrap().0.clone();
+    }
+    // Now root can be either an existing instruction or a nullptr. If it's a
+    // nullptr, the implementation of Builder will set the last instruction as
+    // the root instruction.
+    self.computations.push(builder.build(Some(&root)));
+    *computation = self.computations.last().unwrap().clone();
+    true
+  }
+
+  // instruction ::= ('ROOT')? name '=' shape opcode operands (attribute)*
+  fn parse_instruction(
+    &mut self, builder: &mut HloComputationBuilder, root_name: &mut String) -> bool
+  {
+    let mut name = String::new();
+    //let maybe_rootloc = self.lexer.get_loc();
+    let is_root = self.eat_if_present(&TokKind::Root);
+
+    let name_loc = self.lexer.get_loc();
+    if !self.parse_name(&mut name) ||
+      !self.parse_token(&TokKind::Equal, "expects '=' in instruction".to_string())
+    {
+      return false;
+    }
+    if is_root {
+      if !root_name.is_empty() {
+        assert!(false, "one computation should have only one ROOT");
+        return false;
+      }
+      *root_name = name.clone();
+    }
+    self.parse_instruction_rhs(builder, &mut name, name_loc, true)
+  }
+
+  fn parse_instruction_rhs(
+    &mut self,
+    builder: &mut HloComputationBuilder,
+    name: &mut String,
+    name_loc: usize,
+    allow_attributes: bool) -> bool
+  {
+    let mut shape = Shape::new();
+    let mut opcode = HloOpcode::Abs;
+    let mut async_wrapped_opcode = HloOpcode::Abs;
+
+    let parse_shape = self.can_be_shape();
+    if parse_shape &&
+      !self.parse_shape(&mut shape,
+        true) ||
+      !self.parse_opcode(&mut opcode,
+        Some(&mut async_wrapped_opcode))
+    {
+      return false;
+    }
+    if !parse_shape && !can_infer_shape(&opcode) {
+      assert!(false, "cannot infer shape for opcode: {:?}", opcode);
+    }
+
+    // Add optional attributes.
+    // These are added to any HloInstruction type if present.
+    let mut attrs: HashMap<String, AttrConfig> = HashMap::new();
+
+    let sharding = HloSharding::default();
+    let config_sharding = AttrConfig::new(
+      false, AttrType::Sharding, Box::new(sharding.clone()));
+    attrs.insert("sharding".to_string(), config_sharding);
+    
+    let frontend_attrs = FrontendAttributes::default();
+    let config_front_attrs = AttrConfig::new(
+      false, AttrType::FrontendAttributes, Box::new(frontend_attrs.clone()));
+    attrs.insert("frontend_attributes".to_string(), config_front_attrs);
+
+    let statistics_vis = StatisticsViz::default();
+    let config_stats = AttrConfig::new(
+      false, AttrType::StatisticsViz, Box::new(statistics_vis.clone()));
+    attrs.insert("statistics".to_string(), config_stats);
+
+    let param_replication = ParameterReplication::default();
+    let config_param = AttrConfig::new(
+      false, AttrType::ParameterReplication, Box::new(param_replication.clone()));
+    attrs.insert("parameter_replication".to_string(), config_param);
+
+    let mut predecessors: Vec<HloInstruction> = vec![];
+    let config_pred = AttrConfig::new(
+      false, AttrType::InstructionList, Box::new(predecessors.clone()));
+    attrs.insert("control-predecessors".to_string(), config_pred);
+
+    let original = OriginalValue::default();
+    let config_orig = AttrConfig::new(
+      false, AttrType::OriginalValue, Box::new(original.clone()));
+    attrs.insert("origin".to_string(), config_orig);
+
+    let metadata = OpMetadata::new();
+    let config_metadata = AttrConfig::new(
+      false, AttrType::Metadata, Box::new(metadata.clone()));
+    attrs.insert("metadata".to_string(), config_metadata);
+
+    let backend_config = String::new();
+    let config_backend = AttrConfig::new(
+      false, AttrType::StringOrJsonDict, Box::new(backend_config.clone()));
+    attrs.insert("backend_config".to_string(), config_backend);
+
+    let mut maybe_shape = None;
+    if parse_shape {
+      maybe_shape = Some(shape);
+    }
+
+    let instr_wrapper = self.create_instruction(
+      builder, name, &mut maybe_shape, &opcode,
+      Some(&async_wrapped_opcode), &mut attrs,
+      allow_attributes, &vec![]);
+    if instr_wrapper.is_none() {
+      return false;
+    }
+    let mut instruction = instr_wrapper.unwrap();
+
+    // Generate a unique name if the name is empty.  This is used for nested
+    // instructions (e.g. the `max` in add(max(x, y), z)).
+    //
+    // Otherwise, register the given name with the name uniquer.
+    if name.is_empty() {
+      let mut uniquable_name = hlo_opcode_string(&instruction.opcode());
+      uniquable_name.push_str(".anon");
+      *name = self.name_uniquer.get_unique_name(&uniquable_name);
+    } else {
+      self.name_uniquer.get_unique_name(name);
+    }
+
+    instruction.set_and_sanitize_name(name);
+    if instruction.name() != *name {
+      assert!(false, "illegal instruction name: {:?}; suggest renaming to: {:?}",
+        name, instruction.name());
+      return false;
+    }
+
+    // Add shared attributes like metadata to the instruction, if they were seen.
+    // sharding
+    instruction.set_sharding(
+      sharding.normalize_tuple_sharding(instruction.shape()));
+
+    // parameter_replication
+    let leaf_count = ShapeUtil::get_leaf_count(instruction.shape());
+    let replicated = param_replication.replicated_at_leaf_buffers();
+    if leaf_count != replicated.len() {
+      assert!(false, "parameter has {:?} leaf buffers, but parameter_replication has
+        {:?} elements", leaf_count, replicated.len());
+      return false;
+    }
+    instruction.set_parameter_replicated_at_leaf_buffers(replicated.clone());
+
+    // predecessors
+    for pre in &mut predecessors {
+      let status = pre.add_control_dependency_to(&instruction);
+      if status.is_err() {
+        assert!(false, "error adding control dependency for: {:?} status: {:?}",
+          name, status.err().unwrap());
+        return false;
+      }
+    }
+
+    // metadata
+    instruction.set_metadata(metadata.clone());
+    if instruction.is_asynchronous() {
+      instruction.async_wrapped_mutable_instruction()
+        .set_metadata(metadata);
+    }
+
+    // original_value
+    instruction.set_original_value(original.clone());
+    if instruction.is_asynchronous() {
+      instruction.async_wrapped_mutable_instruction()
+        .set_original_value(original);
+    }
+
+    // backend_config
+    instruction.set_raw_backend_config_string(backend_config.clone());
+    if instruction.is_asynchronous() {
+      instruction.async_wrapped_mutable_instruction()
+        .set_raw_backend_config_string(backend_config);
+    }
+
+    // frontend_attributes
+    instruction.set_frontend_attributes(frontend_attrs.clone());
+    if instruction.is_asynchronous() {
+      instruction.async_wrapped_mutable_instruction()
+        .set_frontend_attributes(frontend_attrs);
+    }
+
+    // statictics_vis
+    instruction.set_statistics_vis(statistics_vis.clone());
+    if instruction.is_asynchronous() {
+      instruction.async_wrapped_mutable_instruction()
+        .set_statistics_vis(statistics_vis);
+    }
+
+    self.add_instruction(name.clone(), instruction, name_loc)
+  }
+
   fn parse_control_predecessors() {}
 
   // literal
   //  ::= tuple
   //  ::= non_tuple
-  fn parse_literal<T>(&mut self, literal: &mut Literal<T>, shape: &Shape) -> bool
-    where T: Clone + Default + PartialEq
+  fn parse_literal(&mut self, literal: &mut Literal, shape: &Shape) -> bool
   {
     if shape.is_tuple() {
       self.parse_tuple_literal(literal, shape)
@@ -595,8 +1225,8 @@ impl HloParser {
   // literal_list
   //  ::= /*empty*/
   //  ::= literal (',' literal)*
-  fn parse_tuple_literal<T>(&mut self, literal: &mut Literal<T>, shape: &Shape) -> bool
-    where T: Clone + Default + PartialEq
+  fn parse_tuple_literal(
+    &mut self, literal: &mut Literal, shape: &Shape) -> bool
   {
     if self.parse_token(&TokKind::Lparen,
         "expects '(' in front of tuple elements".to_string())
@@ -605,7 +1235,7 @@ impl HloParser {
     }
 
     let element_count = ShapeUtil::tuple_element_count(shape);
-    let mut elements: Vec<Literal<T>> = Vec::new();
+    let mut elements: Vec<Literal> = Vec::new();
     elements.reserve(element_count);
     if self.lexer.get_kind() == TokKind::Rparen {
       // empty
@@ -635,30 +1265,972 @@ impl HloParser {
   //   ::= rank01
   //   ::= rank2345
   // rank2345 ::= shape nested_array
-  fn parse_non_tuple_literal<T>(&mut self, literal: &Literal<T>, shape: &Shape) -> bool
-    where T: Clone + Default + PartialEq
+  fn parse_non_tuple_literal(
+    &mut self, literal: &mut Literal, shape: &Shape) -> bool
   {
     debug_assert!(LayoutUtil::is_dense_array(shape));
     self.parse_dense_literal(literal, shape)
   }
 
-  fn parse_dense_literal<T>(&mut self, _literal: &Literal<T>, _shape: &Shape) -> bool
-    where T: Clone + Default + PartialEq
+  fn parse_dense_literal(
+    &mut self,
+    literal: &mut Literal,
+    shape: &Shape) -> bool
+  {
+    // Cast `rank` to int because we call shape.dimensions(int rank) below, and if
+    // `rank` is an int64_t, that's an implicit narrowing conversion, which is
+    // implementation-defined behavior.
+    let rank = shape.dimensions_size();
+
+    // Create a literal with the given shape in default layout.
+    *literal = LiteralUtil::create_from_dimensions(
+      &shape.element_type(),
+      shape.dimensions_vec().clone());
+
+    let mut nest_level = 0;
+    let mut linear_index = 0;
+
+    // elems_seen_per_dim[i] is how many elements or sub-arrays we have seen for
+    // the dimension i. For example, to parse f32[2,3] {{1, 2, 3}, {4, 5, 6}},
+    // when we are parsing the 2nd '{' (right before '1'), we are seeing a
+    // sub-array of the dimension 0, so elems_seen_per_dim[0]++. When we are at
+    // the first '}' (right after '3'), it means the sub-array ends, and the
+    // sub-array is supposed to contain exactly 3 elements, so check if
+    // elems_seen_per_dim[1] is 3.
+    let mut elems_seen_per_dim = vec![0; rank];
+    let get_index_str =
+      |dim: usize, elems_seen_per_dim: &Vec<i64>| -> String
+    {
+      let mut elems_seen_untile_dim = vec![];
+      elems_seen_untile_dim.clone_from_slice(&elems_seen_per_dim[0..dim]);
+      let mut result = "[".to_string();
+      let mut count = 0;
+      for elem in &elems_seen_untile_dim {
+        result.push_str(&elem.to_string());
+        if count != elems_seen_untile_dim.len() {
+          result.push_str(",");
+        }
+        count += 1;
+      }
+      result.push_str("]");
+      result
+    };
+
+    let add_one_elem_seen =
+      |parser: &mut HloParser,
+       elems_seen_per_dim: &mut Vec<i64>,
+       nest_level: usize| -> bool
+    {
+      if rank > 0 {
+        if nest_level != rank {
+          let mut err_msg = "expects nested array in rank ".to_string();
+          err_msg.push_str(&rank.to_string());
+          err_msg.push_str(", but sees ");
+          err_msg.push_str(&nest_level.to_string());
+          return parser.token_error(err_msg);
+        }
+        elems_seen_per_dim[rank-1] += 1;
+        if elems_seen_per_dim[rank-1] > shape.dimensions_vec()[rank-1] {
+          let mut err_msg = "expects ".to_string();
+          err_msg.push_str(&shape.dimensions(rank-1).to_string());
+          err_msg.push_str(" elements on the minor-most dimension, but sees more");
+          return parser.token_error(err_msg);
+        }
+      }
+      true
+    };
+    
+    loop {
+        match self.lexer.get_kind() {
+          TokKind::Lbrace => {
+            nest_level += 1;
+            if nest_level > rank {
+              let mut err_msg = "expects nested array in rank ".to_string();
+              err_msg.push_str(&rank.to_string());
+              err_msg.push_str(", but sees larger");
+              return self.token_error(err_msg);
+            }
+            if nest_level > 1 {
+              elems_seen_per_dim[nest_level-2] += 1;
+              if elems_seen_per_dim[nest_level-2] > shape.dimensions(nest_level-2) {
+                let mut err_msg = "expects ".to_string();
+                err_msg.push_str(&shape.dimensions(nest_level-2).to_string());
+                err_msg.push_str(" elements in the ");
+                err_msg.push_str(&get_index_str(nest_level-2, &elems_seen_per_dim));
+                err_msg.push_str("th element, but sees more");
+                return self.token_error(err_msg);
+              }
+            }
+            self.lexer.lex(0);
+          }
+          TokKind::Rbrace => {
+            if nest_level == 0 {
+              return self.token_error("unexpected '}' token".to_string());
+            }
+            nest_level -= 1;
+            if elems_seen_per_dim[nest_level] != shape.dimensions(nest_level) {
+              let mut err_msg = "expects ".to_string();
+              err_msg.push_str(&shape.dimensions(nest_level).to_string());
+              err_msg.push_str(" elements in the ");
+              err_msg.push_str(&get_index_str(nest_level, &elems_seen_per_dim));
+              err_msg.push_str("th element, but sees ");
+              err_msg.push_str(&elems_seen_per_dim[nest_level].to_string());
+              return self.token_error(err_msg);
+            }
+            elems_seen_per_dim[nest_level] = 0;
+            self.lexer.lex(0);
+          }
+          TokKind::Lparen => {
+            if !is_complex_type(&shape.element_type()) {
+              let err_msg = "unexpected '(' in literal. Parens are only valid
+                for completx literals".to_string();
+              return self.token_error(err_msg);
+            }
+            linear_index += 1;
+            let mut value: Complex64 = Complex64::new(0.0, 0.0);
+            let loc = self.lexer.get_loc();
+            if !add_one_elem_seen(self, &mut elems_seen_per_dim, nest_level) ||
+              !self.parse_complex(&mut value) ||
+              !self.set_value_in_literal_c64(loc, value, linear_index, literal)
+            {
+              return false;
+            }
+          }
+          TokKind::Dots => {
+            unimplemented!()
+          }
+          TokKind::Comma => {
+            // Skip.
+            self.lexer.lex(0);
+          }
+          TokKind::True => {
+            add_one_elem_seen(self, &mut elems_seen_per_dim, nest_level);
+            if self.lexer.get_kind() == TokKind::True ||
+              self.lexer.get_kind() == TokKind::False
+            {
+              if !self.set_value_in_literal_bool(
+                self.lexer.get_loc(), self.lexer.get_kind() == TokKind::True,
+                linear_index, literal)
+              {
+                return false;
+              }
+              linear_index += 1;
+              self.lexer.lex(0);
+            } else if is_integral_type(&shape.element_type()) ||
+                shape.element_type() == PrimitiveType::Pred
+            {
+              let loc = self.lexer.get_loc();
+              let mut value = 0;
+              if !self.parse_i64(&mut value) {
+                assert!(false, "expects integer for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_i64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else if is_floating_point_type(&shape.element_type()) {
+              let loc = self.lexer.get_loc();
+              let mut value = 0.0;
+              if !self.parse_double(&mut value) {
+                assert!(false, "expects floating point value for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_f64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else {
+              let mut err_msg = "unsupported primitive type ".to_string();
+              err_msg.push_str(&primitive_type_name(&shape.element_type()));
+              return self.token_error(err_msg);
+            }
+          }
+          TokKind::False => {
+            add_one_elem_seen(self, &mut elems_seen_per_dim, nest_level);
+            if self.lexer.get_kind() == TokKind::True ||
+              self.lexer.get_kind() == TokKind::False
+            {
+              if !self.set_value_in_literal_bool(
+                self.lexer.get_loc(), self.lexer.get_kind() == TokKind::True,
+                linear_index, literal)
+              {
+                return false;
+              }
+              linear_index += 1;
+              self.lexer.lex(0);
+            } else if is_integral_type(&shape.element_type()) ||
+                shape.element_type() == PrimitiveType::Pred
+            {
+              let loc = self.lexer.get_loc();
+              let mut value = 0;
+              if !self.parse_i64(&mut value) {
+                assert!(false, "expects integer for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_i64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else if is_floating_point_type(&shape.element_type()) {
+              let loc = self.lexer.get_loc();
+              let mut value = 0.0;
+              if !self.parse_double(&mut value) {
+                assert!(false, "expects floating point value for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_f64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else {
+              let mut err_msg = "unsupported primitive type ".to_string();
+              err_msg.push_str(&primitive_type_name(&shape.element_type()));
+              return self.token_error(err_msg);
+            }
+          }
+          TokKind::Int => {
+            add_one_elem_seen(self, &mut elems_seen_per_dim, nest_level);
+            if self.lexer.get_kind() == TokKind::True ||
+              self.lexer.get_kind() == TokKind::False
+            {
+              if !self.set_value_in_literal_bool(
+                self.lexer.get_loc(), self.lexer.get_kind() == TokKind::True,
+                linear_index, literal)
+              {
+                return false;
+              }
+              linear_index += 1;
+              self.lexer.lex(0);
+            } else if is_integral_type(&shape.element_type()) ||
+                shape.element_type() == PrimitiveType::Pred
+            {
+              let loc = self.lexer.get_loc();
+              let mut value = 0;
+              if !self.parse_i64(&mut value) {
+                assert!(false, "expects integer for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_i64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else if is_floating_point_type(&shape.element_type()) {
+              let loc = self.lexer.get_loc();
+              let mut value = 0.0;
+              if !self.parse_double(&mut value) {
+                assert!(false, "expects floating point value for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_f64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else {
+              let mut err_msg = "unsupported primitive type ".to_string();
+              err_msg.push_str(&primitive_type_name(&shape.element_type()));
+              return self.token_error(err_msg);
+            }
+          }
+          TokKind::Decimal => {
+            add_one_elem_seen(self, &mut elems_seen_per_dim, nest_level);
+            if self.lexer.get_kind() == TokKind::True ||
+              self.lexer.get_kind() == TokKind::False
+            {
+              if !self.set_value_in_literal_bool(
+                self.lexer.get_loc(), self.lexer.get_kind() == TokKind::True,
+                linear_index, literal)
+              {
+                return false;
+              }
+              linear_index += 1;
+              self.lexer.lex(0);
+            } else if is_integral_type(&shape.element_type()) ||
+                shape.element_type() == PrimitiveType::Pred
+            {
+              let loc = self.lexer.get_loc();
+              let mut value = 0;
+              if !self.parse_i64(&mut value) {
+                assert!(false, "expects integer for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_i64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else if is_floating_point_type(&shape.element_type()) {
+              let loc = self.lexer.get_loc();
+              let mut value = 0.0;
+              if !self.parse_double(&mut value) {
+                assert!(false, "expects floating point value for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_f64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else {
+              let mut err_msg = "unsupported primitive type ".to_string();
+              err_msg.push_str(&primitive_type_name(&shape.element_type()));
+              return self.token_error(err_msg);
+            }
+          }
+          TokKind::Inf => {
+            add_one_elem_seen(self, &mut elems_seen_per_dim, nest_level);
+            if self.lexer.get_kind() == TokKind::True ||
+              self.lexer.get_kind() == TokKind::False
+            {
+              if !self.set_value_in_literal_bool(
+                self.lexer.get_loc(), self.lexer.get_kind() == TokKind::True,
+                linear_index, literal)
+              {
+                return false;
+              }
+              linear_index += 1;
+              self.lexer.lex(0);
+            } else if is_integral_type(&shape.element_type()) ||
+                shape.element_type() == PrimitiveType::Pred
+            {
+              let loc = self.lexer.get_loc();
+              let mut value = 0;
+              if !self.parse_i64(&mut value) {
+                assert!(false, "expects integer for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_i64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else if is_floating_point_type(&shape.element_type()) {
+              let loc = self.lexer.get_loc();
+              let mut value = 0.0;
+              if !self.parse_double(&mut value) {
+                assert!(false, "expects floating point value for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_f64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else {
+              let mut err_msg = "unsupported primitive type ".to_string();
+              err_msg.push_str(&primitive_type_name(&shape.element_type()));
+              return self.token_error(err_msg);
+            }
+          }
+          TokKind::NegInf => {
+            add_one_elem_seen(self, &mut elems_seen_per_dim, nest_level);
+            if self.lexer.get_kind() == TokKind::True ||
+              self.lexer.get_kind() == TokKind::False
+            {
+              if !self.set_value_in_literal_bool(
+                self.lexer.get_loc(), self.lexer.get_kind() == TokKind::True,
+                linear_index, literal)
+              {
+                return false;
+              }
+              linear_index += 1;
+              self.lexer.lex(0);
+            } else if is_integral_type(&shape.element_type()) ||
+                shape.element_type() == PrimitiveType::Pred
+            {
+              let loc = self.lexer.get_loc();
+              let mut value = 0;
+              if !self.parse_i64(&mut value) {
+                assert!(false, "expects integer for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_i64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else if is_floating_point_type(&shape.element_type()) {
+              let loc = self.lexer.get_loc();
+              let mut value = 0.0;
+              if !self.parse_double(&mut value) {
+                assert!(false, "expects floating point value for primitive type: {:?}",
+                  primitive_type_name(&shape.element_type()));
+                return false;
+              }
+              if !self.set_value_in_literal_f64(loc, value, linear_index, literal) {
+                return false;
+              }
+              linear_index += 1;
+            } else {
+              let mut err_msg = "unsupported primitive type ".to_string();
+              err_msg.push_str(&primitive_type_name(&shape.element_type()));
+              return self.token_error(err_msg);
+            }
+          }
+          _ => return self.token_error("unexpected token type in a literal".to_string())
+        }
+        if nest_level<= 0 {
+          break;
+        }
+    }
+
+    *literal = literal.relayout(
+      shape.layout().as_ref().unwrap(), &vec![]);
+    true
+  }
+
+  fn create_instruction(
+    &mut self,
+    builder: &mut HloComputationBuilder,
+    name: &String,
+    shape: &mut Option<Shape>,
+    opcode: &HloOpcode,
+    _async_wrapped_opcode: Option<&HloOpcode>,
+    attrs: &mut HashMap<String, AttrConfig>,
+    allow_attributes: bool,
+    preset_operands: &Vec<HloInstruction>) -> Option<HloInstruction>
+  {
+    let mut operands = vec![];
+    if !preset_operands.is_empty() {
+      operands.clone_from(preset_operands);
+    }
+
+    let maybe_infer_shape =
+      |parser: &mut HloParser,
+       shape: &mut Option<Shape>,
+       infer: &dyn Fn()->Result<Shape, String>| -> bool
+    {
+      if shape.is_some() {
+        return true;
+      }
+      let inferred = infer();
+      if inferred.is_err() {
+        let mut err_msg = "failed to infer shape for opcode:".to_string();
+        err_msg.push_str(&hlo_opcode_string(opcode));
+        err_msg.push_str(&inferred.err().unwrap());
+        return parser.token_error(err_msg);
+      }
+      *shape = Some(inferred.unwrap());
+      true
+    };
+
+    let create_unary_instruction =
+      |parser: &mut HloParser,
+       shape: &mut Option<Shape>,
+       builder: &mut HloComputationBuilder| -> Option<HloInstruction>
+    {
+      if preset_operands.is_empty() &&
+        parser.parse_operands(&operands, builder) ||
+        parser.parse_attributes(attrs, allow_attributes, shape)
+      {
+        return None;
+      }
+      let infer = || -> Result<Shape, String> {
+        ShapeInference::infer_unary_op_shape(opcode, &operands[0])
+      };
+      if !maybe_infer_shape(parser, shape, &infer) {
+        return None;
+      }
+      Some(builder.add_instruction(HloInstruction::create_unary(
+        &shape.as_ref().unwrap(), opcode,
+        &operands[0], None)).clone())
+    };
+
+    let create_unary_instruction_with_result_accuracy =
+     |parser: &mut HloParser,
+      shape: &mut Option<Shape>,
+      builder: &mut HloComputationBuilder,
+      attrs: &mut HashMap<String, AttrConfig>| -> Option<HloInstruction>
+    {
+      let result_accuracy: Option<ResultAccuracy> = None;
+      let result_acc_config = AttrConfig::new(
+        false, AttrType::ResultAccuracy, Box::new(result_accuracy));
+      attrs.insert("result_accuracy".to_string(), result_acc_config);
+      if preset_operands.is_empty() &&
+        !parser.parse_operands(&operands, builder) ||
+        !parser.parse_attributes(attrs, allow_attributes, shape)
+      {
+        return None;
+      }
+      let infer = || -> Result<Shape, String> {
+        ShapeInference::infer_unary_op_shape(opcode, &operands[0])
+      };
+      if !maybe_infer_shape(parser, shape, &infer) {
+        return None;
+      }
+      let mut accuracy = ResultAccuracy::default();
+      let result_acc_config: &AttrConfig =
+        attrs.get(&"result_accuracy".to_string()).unwrap();
+      let result_acc =
+        result_acc_config.result.as_ref().downcast_ref::<ResultAccuracy>();
+      if result_acc.is_some() {
+        accuracy = result_acc.unwrap().clone();
+      } else {
+        accuracy.set_mode(ResultAccuracyMode::Default);
+      }
+      Some(builder.add_instruction(HloInstruction::create_unary(
+        &shape.as_ref().unwrap(), opcode,
+        &operands[0], Some(accuracy))).clone())
+    };
+
+    let  create_binary_instruction =
+      |parser: &mut HloParser,
+       shape: &mut Option<Shape>,
+       builder: &mut HloComputationBuilder,
+       attrs: &mut HashMap<String, AttrConfig>| -> Option<HloInstruction>
+    {
+      if preset_operands.is_empty() &&
+        !parser.parse_operands(&operands, builder) ||
+        !parser.parse_attributes(attrs, allow_attributes, shape)
+      {
+        return None;
+      }
+      let infer = || -> Result<Shape, String> {
+        ShapeInference::infer_binary_op_shape(
+          opcode, &operands[0], &operands[1])
+      };
+      if !maybe_infer_shape(parser, shape, &infer) {
+        return None;
+      }
+      Some(builder.add_instruction(HloInstruction::create_binary(
+        &shape.as_ref().unwrap(), opcode,
+        &operands[0], &operands[1])).clone())
+    };
+
+    match opcode {
+      HloOpcode::Parameter => {
+        let mut parameter_number = 0;
+        if !self.parse_token(&TokKind::Lparen,
+          "expects '(' before parameter number".to_string()) ||
+          !self.parse_i64(&mut parameter_number)
+        {
+          return None;
+        }
+        //let loc = self.lexer.get_loc();
+        if parameter_number < 0 {
+          assert!(false, "parameter number must be >= 0");
+          return None;
+        }
+        if !self.parse_token(&TokKind::Rparen,
+          "expects ')' after parameter number".to_string()) ||
+          !self.parse_attributes(attrs, allow_attributes, shape)
+        {
+          return None;
+        }
+        let param_name = name.clone();
+        let result = builder.add_parameter(
+          HloInstruction::create_parameter(
+            parameter_number, shape.as_ref().unwrap(), param_name));
+        if result.is_err() {
+          return None;
+        }
+        Some(result.ok().unwrap().clone())
+      }
+      HloOpcode::Constant => {
+        let mut literal: Literal = Literal::default();
+        if !self.parse_token(&TokKind::Lparen,
+          "expects '(' before constant literal".to_string()) ||
+          !self.parse_literal(&mut literal, shape.as_ref().unwrap()) ||
+          !self.parse_token(&TokKind::Rparen,
+            "expects ')' after constant literal".to_string()) ||
+          !self.parse_attributes(attrs, allow_attributes, shape)
+        {
+          return None;
+        }
+        Some(builder.add_instruction(HloInstruction::create_constant(literal)).clone())
+      }
+      HloOpcode::Iota => {
+        let iota_dimension: Option<i64> = None;
+        let iota_dim_config = AttrConfig::new(
+          true, AttrType::Int64, Box::new(iota_dimension));
+        attrs.insert("iota_dimension".to_string(), iota_dim_config);
+        if preset_operands.is_empty() &&
+          !self.parse_operands(&operands, builder) ||
+          !self.parse_attributes(attrs, allow_attributes, shape)
+        {
+          return None;
+        }
+        Some(builder.add_instruction(HloInstruction::create_iota(
+          shape.as_ref().unwrap(), iota_dimension.unwrap())).clone())
+      }
+      HloOpcode::TopK => {
+        unimplemented!()
+      }
+      // Unary ops with result accuracy.
+      HloOpcode::Acos =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Acosh =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Asin =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Asinh =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Atanh =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Expm1 =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Log =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Log1p =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Logistic =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Sqrt =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Cbrt =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Rsqrt =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Tanh =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Erf =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Sin =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Cos =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Cosh =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Tan =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+      HloOpcode::Exp =>
+        return create_unary_instruction_with_result_accuracy(
+          self, shape, builder, attrs),
+
+      // Unary ops.
+      HloOpcode::Abs =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::AllGatherDone =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::AllReduceDone =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::RoundNearestAfz =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::RoundNearestEven =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::Bitcast =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::Ceil =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::Clz =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::CollectivePermuteDone =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::Copy =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::CopyDone =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::OptimizationBarrier =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::Imag =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::IsFinite =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::Floor =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::Not =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::Negate =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::PopulationCount =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::Real =>
+        return create_unary_instruction(self, shape, builder),
+      HloOpcode::Sign =>
+        return create_unary_instruction(self, shape, builder),
+
+      // Binary ops.
+      HloOpcode::Add =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::Divide =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::Multiply =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::Subtract =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::Atan2 =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::Complex =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::Maximum =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::Minimum =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::Power =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::Remainder =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::And =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::Or =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::Xor =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::ShiftLeft =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::ShiftRightArithmetic =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::ShiftRightLogical =>
+        return create_binary_instruction(self, shape, builder, attrs),
+      HloOpcode::StochasticConvert =>
+        return create_binary_instruction(self, shape, builder, attrs),
+
+      // Ternary ops.
+      HloOpcode::Clamp => {
+        if preset_operands.is_empty() &&
+          !self.parse_operands(&operands, builder) ||
+          !self.parse_attributes(attrs, allow_attributes, shape)
+        {
+          return None;
+        }
+        let infer = || -> Result<Shape, String> {
+          ShapeInference::infer_ternary_op_shape(
+            opcode, &operands[0], &operands[1], &operands[2])
+        };
+        if !maybe_infer_shape(self, shape, &infer) {
+          return None;
+        }
+        Some(builder.add_instruction(HloInstruction::create_ternary(
+          shape.as_ref().unwrap(), opcode, &operands[0],
+          &operands[1], &operands[2])).clone())
+      }
+      HloOpcode::Select => {
+        if preset_operands.is_empty() &&
+          !self.parse_operands(&operands, builder) ||
+          !self.parse_attributes(attrs, allow_attributes, shape)
+        {
+          return None;
+        }
+        let infer = || -> Result<Shape, String> {
+          ShapeInference::infer_ternary_op_shape(
+            opcode, &operands[0], &operands[1], &operands[2])
+        };
+        if !maybe_infer_shape(self, shape, &infer) {
+          return None;
+        }
+        Some(builder.add_instruction(HloInstruction::create_ternary(
+          shape.as_ref().unwrap(), opcode, &operands[0],
+          &operands[1], &operands[2])).clone())
+      }
+
+      // Other supported ops.
+      HloOpcode::Convert => {
+        if preset_operands.is_empty() &&
+          !self.parse_operands(&operands, builder) ||
+          !self.parse_attributes(attrs, allow_attributes, shape)
+        {
+          return None;
+        }
+        Some(builder.add_instruction(HloInstruction::create_convert(
+          shape.as_ref().unwrap(), &operands[0])).clone())
+      }
+      HloOpcode::BitcastConvert => {
+        if preset_operands.is_empty() &&
+          !self.parse_operands(&operands, builder) ||
+          !self.parse_attributes(attrs, allow_attributes, shape)
+        {
+          return None;
+        }
+        Some(builder.add_instruction(HloInstruction::create_bitcast_convert(
+          shape.as_ref().unwrap(), &operands[0])).clone())
+      }
+      _ => return None
+    }
+  }
+
+  fn get_real<T>(value: T) -> T {
+    value
+  }
+
+  fn is_finite(_value: i64) -> bool {
+    unimplemented!()
+  }
+
+  fn check_parsed_value_is_in_range(_loc: usize, _value: i64) -> bool {
+    unimplemented!()
+  }
+
+  fn set_value_in_literal_helper<ParsedElemT>(
+    &mut self,
+    loc: usize,
+    value: ParsedElemT,
+    index: i64,
+    literal: &mut Literal) -> bool
+      where ParsedElemT: 'static
+  {
+    if index >= ShapeUtil::elements_in(literal.shape()) {
+      let mut err_msg =
+        "tries to set value to a literal in shape at linear index ".to_string();
+      err_msg.push_str(&index.to_string());
+      err_msg.push_str("but the index is out of range");
+      return self.error(loc, err_msg);
+    }
+    let _handle_nan = || {};
+
+    literal.mutable_data(&vec![])[index as usize] = Box::new(value);
+    true  
+  }
+
+  fn set_value_in_literal_i64(
+    &mut self,
+    loc: usize,
+    value: i64,
+    index: i64,
+    literal: &mut Literal) -> bool
+  {
+    let elt_t = literal.shape().element_type().clone();
+    let mut f = |t: PrimitiveType| -> bool {
+      if t == PrimitiveType::Pred {
+        let mut bool_v = true;
+        if value == 0 { bool_v = false; }
+         return self.set_value_in_literal_helper(loc, bool_v, index, literal);
+      }
+      if is_integral_type(&t) {
+        return self.set_value_in_literal_helper(loc, value, index, literal);
+      }
+      assert!(false, "unknown integral primitive type {:?}",
+        primitive_type_name(&literal.shape().element_type()));
+      false
+    };
+    primitive_type_switch(&mut f, elt_t)
+  }
+
+  fn set_value_in_literal_f64(
+    &self,
+    _loc: usize,
+    _value: f64,
+    _index: i64,
+    _literal: &mut Literal) -> bool
   {
     unimplemented!()
   }
 
-  fn create_instruction() {}
+  fn set_value_in_literal_bool(
+    &self,
+    _loc: usize,
+    _value: bool,
+    _index: i64,
+    _literal: &mut Literal) -> bool
+  {
+    unimplemented!()
+  }
 
-  fn set_value_in_literal() {}
-  fn set_value_in_literal_helper() {}
+  fn set_value_in_literal_c64(
+    &self,
+    _loc: usize,
+    _value: Complex64,
+    _index: i64,
+    _literal: &mut Literal) -> bool
+  {
+    unimplemented!()
+  }
 
-  fn check_parsed_value_is_in_range() {}
-  fn parse_operands() {}
+  // operands ::= '(' operands1 ')'
+  // operands1
+  //   ::= /*empty*/
+  //   ::= operand (, operand)*
+  // operand ::= (shape)? name
+  //         ::= (shape)? opcode operands
+  fn parse_operands(
+    &mut self,
+    _operands: &Vec<HloInstruction>,
+    _builder: &HloComputationBuilder) -> bool
+  {
+    unimplemented!()
+  }
 
-  fn parse_attributes() {}
-  fn parse_sub_attributes() {}
-  fn parse_attribute_helper() {}
+  // attributes ::= (',' attribute)*
+  //
+  // Parses attributes given names and configs of the attributes. Each parsed
+  // result is passed back through the result pointer in corresponding
+  // AttrConfig. Note that the result pointer must point to a optional<T> typed
+  // variable which outlives this function. Returns false on error. You should
+  // not use the any of the results if this function failed.
+  //
+  // If allow_attributes is false, returns an error if any attributes are
+  // present.  This is used for contexts in which attributes are not allowed but
+  // e.g. we *also* want to raise an error if any required attributes are
+  // missing.
+  //
+  // Example usage:
+  //
+  //  absl::flat_hash_map<std::string, AttrConfig> attrs;
+  //  optional<int64_t> foo;
+  //  attrs["foo"] = {/*required=*/false, AttrTy::kInt64, &foo};
+  //  optional<Window> bar;
+  //  attrs["bar"] = {/*required=*/true, AttrTy::kWindow, &bar};
+  //  if (!ParseAttributes(attrs)) {
+  //    return false; // Do not use 'foo' 'bar' if failed.
+  //  }
+  //  // Do something with 'bar'.
+  //  if (foo) { // If attr foo is seen, do something with 'foo'. }
+  //
+  fn parse_attributes(
+    &mut self,
+    attrs: &HashMap<String, AttrConfig>,
+    allow_attributes: bool,
+    shape: &Option<Shape>) -> bool
+  {
+    //let loc = self.lexer.get_loc();
+    let seen_attrs = HashSet::new();
+    if allow_attributes {
+      while self.eat_if_present(&TokKind::Comma) {
+        if !self.parse_attribute_helper(attrs, &seen_attrs, shape) {
+          return false;
+        }
+      }
+    }
+    // Check that all required attrs were seen.
+    for attr in attrs {
+      if attr.1.required && seen_attrs.get(attr.0) == None {
+        assert!(false, "attribute {:?} is expected but not seen", attr.0);
+        return false;
+      }
+    }
+    true
+  }
+
+  fn parse_attribute_helper(
+    &mut self,
+    _attrs: &HashMap<String, AttrConfig>,
+    _seen_attrs: &HashSet<String>,
+    _shape: &Option<Shape>) -> bool
+  {
+    unimplemented!()
+  }
+
+  // sub_attributes ::= '{' (','? attribute)* '}'
+  //
+  // Usage is the same as ParseAttributes. See immediately above.
+  fn parse_sub_attributes(
+    &mut self, _attrs: &HashMap<String, AttrConfig>) -> bool
+  {
+    unimplemented!()
+  }
 
   fn copy_attribute_to_proto_message() {}
 
@@ -1007,16 +2579,17 @@ impl HloParser {
 
   // '{' metadata_string '}'
   fn parse_metadata(&mut self, _metadata: &OpMetadata) -> bool {
-    let mut attrs: HashMap<String, AttrConfig> = HashMap::new();
+    let _attrs: HashMap<String, AttrConfig> = HashMap::new();
 
-    let op_type = String::new();
-    let op_name = String::new();
-    let source_file = String::new();
-    let source_line = 0;
+    let _op_type = String::new();
+    let _op_name = String::new();
+    let _source_file = String::new();
+    let _source_line = 0;
     //let profile_type = vec![];
     let _deduplicated_name = String::new();
     let _preserve_layout = false;
 
+    /*
     attrs.insert("op_type".to_string(), 
       AttrConfig::new(false, AttrType::String, op_type.clone()));
     attrs.insert("op_name".to_string(), 
@@ -1025,6 +2598,7 @@ impl HloParser {
       AttrConfig::new(false, AttrType::String, source_file.clone()));
     attrs.insert("source_line".to_string(), 
       AttrConfig::new(false, AttrType::Int32, source_line.to_string()));
+    */
     //attrs.insert("profile_type".to_string(), 
       //AttrConfig::new(false, AttrType::BracedInt64List, profile_type));
 
@@ -1220,12 +2794,105 @@ impl HloParser {
   // to be an iota tile assignment.
   fn parse_tile_assignment(
     &mut self,
-    _tile_assignment_dimensions: &Vec<i64>,
-    _iota_reshape_dims: &Vec<i64>,
-    _iota_transpose_perm: &Vec<i64>,
-    _devices: &Vec<i64>) -> bool
+    tile_assignment_dimensions: &mut Vec<i64>,
+    iota_reshape_dims: &mut Vec<i64>,
+    iota_transpose_perm: &mut Vec<i64>,
+    devices: &mut Vec<i64>) -> bool
   {
-    unimplemented!()    
+    if !self.parse_token(&TokKind::Lsquare,
+      "expected '[' to shtart sharding devices shape".to_string())
+    {
+      return false;
+    }
+    loop {
+      let mut dim = -1;
+      if !self.parse_i64(&mut dim) {
+        return false;
+      }
+      tile_assignment_dimensions.push(dim);
+      if !self.eat_if_present(&TokKind::Comma) {
+        break;
+      }
+    }
+    if !self.parse_token(&TokKind::Rsquare,
+      "expected ']' to end sharding devices shape".to_string())
+    {
+      return false;
+    }
+    if self.lexer.get_kind() == TokKind::Leq {
+      self.lexer.lex(0);
+      if !self.parse_token(&TokKind::Lsquare,
+        "expected '[' to start sharding iota_reshape_dims".to_string())
+      {
+        return false;
+      }
+      loop {
+        let mut dim = 0;
+        if !self.parse_i64(&mut dim) {
+          return false;
+        }
+        iota_reshape_dims.push(dim);
+        if !self.eat_if_present(&TokKind::Comma) {
+          break;
+        }
+      }
+      if iota_reshape_dims.is_empty() {
+        assert!(false, "expected non-empty iota_reshape_dims");
+        return false;
+      }
+      if !self.parse_token(&TokKind::Rsquare,
+        "expected ']' to end sharding iota_reshape_dims".to_string())
+      {
+        return false;
+      }
+      if iota_reshape_dims.len() == 1 {
+        iota_transpose_perm.push(0);
+      } else {
+        if self.lexer.get_kind() != TokKind::Ident ||
+          self.lexer.get_str_val() != "T".to_string()
+        {
+          assert!(false, "expected 'T(' to start sharding devices iota_transpose_perm");
+          return false;
+        }
+        self.lexer.lex(0);
+        if !self.parse_token(&TokKind::Lparen,
+          "expected 'T(' to start sharding devices iota_transpose_perm".to_string())
+        {
+          return false;
+        }
+        loop {
+          let mut dim = -1;
+          if !self.parse_i64(&mut dim) {
+            return false;
+          }
+          if dim >= iota_reshape_dims.len() as i64 {
+            assert!(false, "out of range iota minor_to_major value {:?}", dim);
+            return false;
+          }
+          iota_transpose_perm.push(dim);
+          if !self.eat_if_present(&TokKind::Comma) {
+            break;
+          }
+        }
+        if !self.parse_token(&TokKind::Rparen,
+          "expected ')' to end sharding devices iota_transpose_perm".to_string())
+        {
+          return false;
+        }
+      }
+    } else {
+      loop {
+        let mut device = 0;
+        if !self.parse_i64(&mut device) {
+          return false;
+        }
+        devices.push(device);
+        if !self.eat_if_present(&TokKind::Comma) {
+          break;
+        }
+      }
+    }
+    true
   }
 
   // ::= '{' 'replicated'? 'manual'? 'maximal'? 'unknown'? ('device=' int)? shape?
@@ -1258,9 +2925,9 @@ impl HloParser {
     let mut shard_as = false;
     let mut shard_group_id = -1;
     let mut devices = vec![];
-    let tile_assignment_dimensions = vec![];
-    let iota_reshape_dims = vec![];
-    let iota_transpose_perm = vec![];
+    let mut tile_assignment_dimensions = vec![];
+    let mut iota_reshape_dims = vec![];
+    let mut iota_transpose_perm = vec![];
     let mut subgroup_types = vec![];
     let metadata = vec![];
 
@@ -1296,8 +2963,10 @@ impl HloParser {
           } else if self.lexer.get_str_val() == "devices".to_string() {
             self.lexer.lex(0);
             if !self.parse_tile_assignment(
-              &tile_assignment_dimensions,
-              &iota_reshape_dims, &iota_transpose_perm, &devices)
+              &mut tile_assignment_dimensions,
+              &mut iota_reshape_dims,
+              &mut iota_transpose_perm,
+              &mut devices)
             {
               return false;
             }
@@ -1381,7 +3050,7 @@ impl HloParser {
           including dimensions");
         return false;
       }
-      if !iota_transpose_perm.len() != iota_reshape_dims.len() {
+      if iota_transpose_perm.len() != iota_reshape_dims.len() {
         assert!(false, "iota_transpose_perm should have the same rank as
           iota_reshape_dims");
         return false;
@@ -1400,7 +3069,7 @@ impl HloParser {
           *sharding = HloSharding::subgroup(
             TileAssignment::new_from_vecs(&tile_assignment_dimensions,
               &iota_reshape_dims, &iota_transpose_perm),
-            &subgroup_types, &metadata);
+            subgroup_types, metadata);
         }
       } else {
         if devices.len() <= 1 {
@@ -1409,12 +3078,14 @@ impl HloParser {
         }
         let mut tiles: Vec<i64> = vec![];
         tiles.clone_from(&tile_assignment_dimensions);
-        devices.clone_from(&tile_assignment_dimensions);
+        let mut array = Array::new(tiles);
+        array.set_values(&devices);
         if subgroup_types.is_empty() {
-          *sharding = HloSharding::tile(TileAssignment::new_from_vec(&tiles), &metadata);
+          *sharding = HloSharding::tile(
+            TileAssignment::new_from_array(array), &metadata);
         } else {
           *sharding = HloSharding::subgroup(
-            TileAssignment::new_from_vec(&tiles), &subgroup_types, &metadata);
+            TileAssignment::new_from_array(array), subgroup_types, metadata);
         }
       }
     }
@@ -1521,12 +3192,14 @@ impl HloParser {
   fn parse_shape_list() {}
   fn parse_int64_list_list() {}
 
+  // 'parse_and_add_item' is an lambda to parse an element in the list and add
+  // the parsed element to the result. It's supposed to capture the result.
   fn parse_list(
     &mut self,
     start: &TokKind,
     end: &TokKind,
     delim: &TokKind,
-    mut parse_and_add_item: Box<dyn FnMut()->bool>) -> bool
+    mut parse_and_add_item: Box<&mut dyn FnMut(&mut HloParser)->bool>) -> bool
   {
     let mut err_msg = "expects a list starting with ".to_string();
     err_msg.push_str(&tok_kind_to_string(start));
@@ -1538,7 +3211,7 @@ impl HloParser {
       // empty
     } else {
       loop {
-        if !parse_and_add_item() { return false; }
+        if !parse_and_add_item(self) { return false; }
         if !self.eat_if_present(delim) { break; }
       }
     }
@@ -1549,14 +3222,16 @@ impl HloParser {
   }
 
   // param_list_to_shape ::= param_list '->' shape
-  fn parse_param_list_to_shape(&mut self, shape: &mut Shape, shape_loc: &mut usize) -> bool {
+  fn parse_param_list_to_shape(
+    &mut self, shape: &mut Shape, shape_loc: &mut usize) -> bool
+  {
     if !self.parse_param_list() ||
        ! self.parse_token(&TokKind::Arrow, "expects '->'".to_string())
     {
       return false;
     }
     *shape_loc = self.lexer.get_loc();
-    self.parse_shape(shape)
+    self.parse_shape(shape, true)
   }
 
   // param_list ::= '(' param_list1 ')'
@@ -1576,7 +3251,9 @@ impl HloParser {
       loop {
         let mut shape = Shape::new();
         let mut name = String::new();
-        if !self.parse_name(&mut name) || !self.parse_shape(&mut shape) {
+        if !self.parse_name(&mut name) ||
+          !self.parse_shape(&mut shape, true)
+        {
           return false;
         }
         if !self.eat_if_present(&TokKind::Comma) { break; }
@@ -1588,7 +3265,9 @@ impl HloParser {
 
   fn parse_name(&mut self, result: &mut String) -> bool {
     println!("parse_name");
-    if self.lexer.get_kind() != TokKind::Ident && self.lexer.get_kind() != TokKind::Name {
+    if self.lexer.get_kind() != TokKind::Ident &&
+      self.lexer.get_kind() != TokKind::Name
+    {
       return self.token_error("expects name".to_string());
     }
     *result = self.lexer.get_str_val();
@@ -1632,22 +3311,25 @@ impl HloParser {
   //   ::= <=? int64_t (',' param)*
   // param ::= name shape
   fn parse_dimension_sizes(
-    &mut self, _dimension_sizes: &mut Vec<i64>, _dynamic_dimensions: &mut Vec<bool>) -> bool
+    &mut self,
+    dimension_sizes: &mut Vec<i64>,
+    dynamic_dimensions: &mut Vec<bool>) -> bool
   {
-    /*
-    let parse_and_add_item = || -> bool {
+    let mut parse_and_add_item =
+      |parser: &mut HloParser| -> bool
+    {
       let mut i = 0;
       let mut is_dynamic = false;
-      if self.lexer.get_kind() == TokKind::QuestionMark {
+      if parser.lexer.get_kind() == TokKind::QuestionMark {
         i = Shape::UNBOUNDED_SIZE;
         is_dynamic = true;
-        self.lexer.lex();
+        parser.lexer.lex(0);
       } else {
-        if self.lexer.get_kind() == TokKind::Leq {
+        if parser.lexer.get_kind() == TokKind::Leq {
           is_dynamic = true;
-          self.lexer.lex();
+          parser.lexer.lex(0);
         }
-        if !self.parse_i64(&mut i) {
+        if !parser.parse_i64(&mut i) {
           return false;
         }
       }
@@ -1655,18 +3337,236 @@ impl HloParser {
       dynamic_dimensions.push(is_dynamic);
       true
     };
-    self.parse_list(&TokKind::Lsquare, &TokKind::Rsquare,
-      &TokKind::Comma, Box::new(parse_and_add_item))
-      */
-    false
+    self.parse_list(
+      &TokKind::Lsquare, &TokKind::Rsquare,
+      &TokKind::Comma,
+      Box::new(&mut parse_and_add_item))
   }
 
-  fn parse_shape(&mut self, _shape: &mut Shape) -> bool {
-    unimplemented!()
+  // shape ::= shape_val_
+  // shape ::= '(' tuple_elements ')'
+  // shape ::= 'b(' shape ')'
+  // tuple_elements
+  //   ::= /*empty*/
+  //   ::= shape (',' shape)*
+  fn parse_shape(
+    &mut self,
+    result: &mut Shape,
+    allow_fallback_to_default_layout: bool) -> bool
+  {
+    if self.lexer.get_kind() == TokKind::Ident &&
+      self.lexer.get_str_val() == "b".to_string() &&
+      self.lexer.look_ahead() == TokKind::Lparen // Buffer shape
+    {
+
+    }
+    if self.eat_if_present(&TokKind::Lparen) { // Tuple
+
+    }
+    let mut primitive_t = PrimitiveType::S64;
+    if !self.parse_primitive_type(&mut primitive_t) {
+      return false;
+    }
+    // Each element contains a dimension size and a bool indicating whether this
+    // is a dynamic dimension.
+    let mut dimension_sizes = vec![];
+    let mut dynamic_dimensions = vec![];
+    if !self.parse_dimension_sizes(&mut dimension_sizes, &mut dynamic_dimensions) {
+      return false;
+    }
+    result.set_element_type(primitive_t);
+    for i in 0..dimension_sizes.len() {
+      if !Shape::is_valid_dimension_size(
+        dimension_sizes[i], dynamic_dimensions[i]) {
+        return false;
+      }
+      result.add_dimensions(
+        dimension_sizes[i], dynamic_dimensions[i]);
+    }
+    if (allow_fallback_to_default_layout && self.options.fill_missing_layouts()) ||
+      ShapeUtil::is_scalar(result)
+    {
+      LayoutUtil::set_to_default_layout(result);
+    }
+    // We need to lookahead to see if a following open brace is the start of a
+    // layout. The specific problematic case is:
+    //
+    // ENTRY %foo (x: f32[42]) -> f32[123] {
+    //  ...
+    // }
+    //
+    // The open brace could either be the start of a computation or the start of a
+    // layout for the f32[123] shape. We consider it the start of a layout if the
+    // next token after the open brace is an integer or a colon.
+    if self.lexer.get_kind() == TokKind::Lbrace &&
+      (self.lexer.look_ahead() == TokKind::Int ||
+      self.lexer.look_ahead() == TokKind::Colon)
+    {
+      let mut layout = Layout::new();
+      if !self.parse_layout(&mut layout) {
+        return false;
+      }
+      if layout.minor_to_major_size() != result.dimensions_size() {
+        assert!(false, "dimensions size is {:?}, but minor to major size is {:?}",
+          result.dimensions_size(), layout.minor_to_major_size());
+        return false;
+      }
+      if layout.has_physical_shape() {
+        assert!(false, "layout has physical shape, but is not for a sparse array: {:?}",
+          layout.to_string());
+        return false;
+      }
+      *result.mutable_layout() = Some(layout);
+    }
+    true
   }
 
-  fn parse_layout(&mut self, _layout: &Layout) -> bool {
-    unimplemented!()
+// layout
+//   ::= '{' int64_list
+//       (':' dim_level_types
+//            tiles
+//            tail_padding_alignment_in_elements
+//            element_size_in_bits
+//            memory_space
+//            split_configs
+//            physical_shape
+//            dynamic_shape_metadata_prefix_bytes)?
+//       '}'
+// element_size_in_bits
+//   ::= /*empty*/
+//   ::= 'E' '(' int64_t ')'
+// memory_space
+//   ::= /*empty*/
+//   ::= 'S' '(' int64_t ')'
+  fn parse_layout(&mut self, layout: &mut Layout) -> bool {
+    let mut minor_to_major = vec![];
+    let dim_level_types = vec![];
+    let tiles = vec![];
+    let index_primitive_t = PrimitiveType::Invalid;
+    let pointer_primitive_t = PrimitiveType::Invalid;
+    let mut element_size_in_bits = 0;
+    let mut memory_space = 0;
+    let split_configs = vec![];
+    let mut physical_shape = Some(Shape::new());
+    let mut dynamic_shape_metadata_prefix_bytes = 0;
+    let mut tail_padding_alignment_in_elements = 1;
+
+    let mut parse_and_add_item =
+      |parser: &mut HloParser| -> bool
+    {
+      let mut i = 0;
+      if !parser.parse_i64(&mut i) {
+        return false;
+      }
+      minor_to_major.push(i);
+      true
+    };
+
+    let mut msg = "expects layout to start with ".to_string();
+    msg.push_str(&tok_kind_to_string(&TokKind::Lbrace));
+    if !self.parse_token(&TokKind::Lbrace, msg) {
+      return false; 
+    }
+    if self.lexer.get_kind() != TokKind::Rbrace {
+      if self.lexer.get_kind() == TokKind::Int {
+        // Parse minor to major.
+        loop {
+          if !parse_and_add_item(self) {
+            return false;
+          }
+          if self.eat_if_present(&TokKind::Comma) {
+            break;
+          }
+        }
+      }
+      if self.lexer.get_kind() == TokKind::Colon {
+        self.lexer.lex(0);
+        if self.lexer.get_kind() == TokKind::Ident &&
+          self.lexer.get_str_val() == "D".to_string()
+        {
+          self.lexer.lex(0);
+          self.parse_dim_level_types(&dim_level_types);
+        }
+        if self.lexer.get_kind() == TokKind::Ident &&
+          self.lexer.get_str_val() == "T".to_string()
+        {
+          self.lexer.lex(0);
+          self.parse_tiles(&tiles);
+        }
+        if self.lexer.get_kind() == TokKind::Ident &&
+          self.lexer.get_str_val() == "L".to_string()
+        {
+          self.lexer.lex(0);
+          self.parse_layout_int_attribute(
+            &mut tail_padding_alignment_in_elements,
+            "multiple padded to in elements".to_string());
+        }
+        if self.lexer.get_kind() == TokKind::Octothorp {
+          self.lexer.lex(0);
+
+        }
+        if self.lexer.get_kind() == TokKind::Asterisk {
+
+        }
+        if self.lexer.get_kind() == TokKind::Ident &&
+          self.lexer.get_str_val() == "E".to_string()
+        {
+          self.lexer.lex(0);
+          self.parse_layout_int_attribute(&mut element_size_in_bits,
+            "element size in bitz".to_string());
+        }
+        if self.lexer.get_kind() == TokKind::Ident &&
+          self.lexer.get_str_val() == "S".to_string()
+        {
+          self.lexer.lex(0);
+          self.parse_layout_int_attribute(&mut memory_space,
+            "memory space".to_string());
+        }
+        if self.lexer.get_kind() == TokKind::Ident &&
+          self.lexer.get_str_val() == "SC".to_string()
+        {
+          self.lexer.lex(0);
+          self.parse_split_configs(&split_configs);
+          
+        }
+        if self.lexer.get_kind() == TokKind::Ident &&
+          self.lexer.get_str_val() == "P".to_string()
+        {
+          self.lexer.lex(0);
+          self.parse_physical_shape(physical_shape.as_mut().unwrap());
+        }
+        if self.lexer.get_kind() == TokKind::Ident &&
+          self.lexer.get_str_val() == "M".to_string()
+        {
+          self.lexer.lex(0);
+          self.parse_layout_int_attribute(
+            &mut dynamic_shape_metadata_prefix_bytes,
+            "dynamic shape ,etadata prefix bytes".to_string());
+        }
+      }
+    }
+    let mut msg = "expect layout to end with ".to_string();
+    msg.push_str(&tok_kind_to_string(&TokKind::Rbrace));
+    if !self.parse_token(&TokKind::Rbrace, msg) {
+      return false;
+    }
+    let mut vec_tiles = vec![];
+    for i in 0..tiles.len() {
+      vec_tiles.push(tiles[i].clone());
+    }
+    *layout = LayoutUtil::make_layout(
+      &minor_to_major,
+      vec_tiles,
+      tail_padding_alignment_in_elements,
+      index_primitive_t,
+      pointer_primitive_t,
+      element_size_in_bits,
+      memory_space,
+      split_configs,
+      physical_shape,
+      dynamic_shape_metadata_prefix_bytes);
+
+    true
   }
 
   // int_attribute
@@ -1702,9 +3602,38 @@ impl HloParser {
     true
   }
 
-  fn parse_dim_level_types() {}
-  fn parse_tiles() {}
-  fn parse_split_configs() {}
+  // dim_level_types
+  //   ::=  /* empty */
+  //   ::= 'D' '(' dim_level_type_list ')'
+  // dim_level_type_list
+  //   ::= /* empty */
+  //   ..= dim_level_type (',' dim_level_type)*
+  // dim_level_type
+  //   ::= 'D'
+  //   ::= 'C'
+  //   ::= 'S'
+  fn parse_dim_level_types(
+    &mut self, _dim_level_types: &Vec<DimLevelType>) -> bool 
+  {
+    unimplemented!()
+  }
+
+  // tiles
+  //   ::= /*empty*/
+  //   ::= 'T' ('(' dim_list ')')+
+  // dim_list
+  //   ::= /*empty*/
+  //   ::= (int64_t | '*') (',' (int64_t | '*'))*
+  fn parse_tiles(&mut self, _tiles: &Vec<Tile>) -> bool {
+    unimplemented!()
+  }
+
+  // split_configs
+  //   ::= /*empty*/
+  //   ::= 'SC' ('(' int64_t ':' int64_list ')')+
+  fn parse_split_configs(&mut self, _split_configs: &Vec<SplitConfig>) -> bool {
+    unimplemented!()
+  }
 
   // physical_shape
   //   ::= /*empty*/
@@ -1715,7 +3644,7 @@ impl HloParser {
     if !self.parse_token(&TokKind::Lparen, err_msg) {
       return false;
     }
-    self.parse_shape(physical_shape);
+    self.parse_shape(physical_shape, true);
     let mut err_msg = "expects physical shape to end with ".to_string();
     err_msg.push_str(&tok_kind_to_string(&TokKind::Rparen));
     if !self.parse_token(&TokKind::Rparen, err_msg) {
@@ -1724,7 +3653,45 @@ impl HloParser {
     true
   }
 
-  fn parse_opcode() {}
+  fn parse_opcode(
+    &mut self,
+    opcode: &mut HloOpcode,
+    async_wrapped_opcode: Option<&mut HloOpcode>) -> bool
+  {
+    if self.lexer.get_kind() != TokKind::Ident {
+      return self.token_error("expects opcode".to_string());
+    }
+    let val = self.lexer.get_str_val();
+    let status_or_result =
+      string_to_hlo_opcode(&val);
+    if status_or_result.is_err() {
+      let mut try_parsing_async_op =
+        |suffix: &str, async_opcode: HloOpcode| -> bool
+      {
+        if val.ends_with(suffix) {
+          *opcode = async_opcode.clone();
+          // TODO
+          //status_or_result = string_to_hlo_opcode(name)
+          return true;
+        }
+        false
+      };
+      if try_parsing_async_op("-start", HloOpcode::AsyncStart) ||
+        try_parsing_async_op("-updaate", HloOpcode::AsyncUpdate) ||
+        try_parsing_async_op("-done", HloOpcode::AsyncDone)
+      {
+        if status_or_result.is_err() {
+          assert!(false, "expects async wrapped opcode but sees: {:?}", val);
+          return false;
+        }
+        *async_wrapped_opcode.unwrap() = status_or_result.unwrap();
+      }
+    } else {
+      *opcode = status_or_result.unwrap();
+    }
+    self.lexer.lex(0);
+    true
+  }
 
   fn parse_fft_type(&mut self, _result: &mut FftType) -> bool {
     println!("parse_fft_type");
@@ -1971,17 +3938,39 @@ impl HloParser {
   fn parse_sparsity_descriptor() {}
   fn parse_shape_index() {}
 
-  fn can_be_shape() {}
-  fn can_be_param_list_to_shape() {}
+  fn can_be_shape(&mut self) -> bool {
+    // A non-tuple shape starts with a PrimitiveType token; a tuple shape starts
+    // with '('.
+    self.lexer.get_kind() == TokKind::PrimitiveType ||
+    self.lexer.get_kind() == TokKind::Lparen ||
+    (self.lexer.get_kind() == TokKind::Ident &&
+    self.lexer.get_str_val() == "b".to_string() &&
+    self.lexer.look_ahead() == TokKind::Lparen)
+  }
+
+  fn can_be_param_list_to_shape(&self) -> bool {
+    self.lexer.get_kind()== TokKind::Lparen
+  }
 
   // Logs the currentparsing line and the given message. Always return false.
-  fn token_error(&self, msg: String) -> bool {
+  fn token_error(&mut self, msg: String) -> bool {
     self.error(self.lexer.get_loc(), msg)
   }
 
-  fn error(&self, _loc: usize, msg: String) -> bool {
-    println!("Error: {:?}", msg);
-    assert!(false);
+  fn error(&mut self, loc: usize, msg: String) -> bool {
+    let line_col = self.lexer.get_line_and_column(loc);
+    let line = line_col.0;
+    let col = line_col.1;
+
+    let mut error_lines = vec![];
+    let mut err_msg = "was parsing ".to_string();
+    err_msg.push_str(&line.to_string());
+    err_msg.push_str(":");
+    err_msg.push_str(&col.to_string());
+    err_msg.push_str(&msg);
+    error_lines.push(err_msg);
+
+    println!("Error: {:?}", error_lines);
     false
   }
 
@@ -1993,8 +3982,72 @@ impl HloParser {
     true
   }
 
-  fn add_instruction() {}
-  fn add_computation() {}
+  // Adds the instruction to the pool. Returns false and emits an error if the
+  // instruction already exists.
+  fn add_instruction(
+    &mut self,
+    name: String,
+    instruction: HloInstruction,
+    name_loc: usize) -> bool
+  {
+    let result =
+      self.mutable_current_name_table()
+        .unwrap().insert(name.clone(), (instruction, name_loc));
+    if result.is_none() {
+      assert!(false, "instruction already exists: {:?}", name);
+      return false;
+    }
+    true
+  }
+
+  // Adds the computation to the pool. Returns false and emits an error if the
+  // computation already exists.
+  fn add_computation(
+    &mut self,
+    name: String,
+    computation: HloComputation, 
+    name_loc: usize) -> bool
+  {
+    let result =
+      self.computation_pool.insert(name.clone(), (computation, name_loc));
+    if result.is_none() {
+      assert!(false, "computation already exists: {:?}", name);
+      return false;
+    }
+    true
+  }
+}
+
+// A helper class which pushes and pops to an InstrNameTable stack via RAII.
+pub struct HloParserScope {
+  scoped_name_tables: Vec<HashMap<String, (HloInstruction, usize)>>
+}
+
+impl HloParserScope {
+  pub fn new(
+    scoped_name_tables: &Vec<HashMap<String, (HloInstruction, usize)>>) -> Self
+  {
+    let mut cloned_tables = vec![];
+    cloned_tables.clone_from(scoped_name_tables);
+    HloParserScope {
+      scoped_name_tables: cloned_tables
+    }
+  }
+}
+
+// Creates and returns a schedule created using the order of the instructions in
+// the HloComputation::instructions() vectors in the module.
+fn schedule_from_instruction_order(module: &HloModule) -> HloSchedule {
+  let mut schedule = HloSchedule::new(module);
+  for comp in module.computations() {
+    if !comp.is_fusion_computation() {
+      for instr in comp.instructions() {
+        schedule.get_or_create_mutable_sequence(
+          module, comp).push_back(instr.clone());
+      }
+    }  
+  }
+  schedule
 }
 
 #[cfg(test)]
@@ -2002,10 +4055,250 @@ mod tests {
   use super::*;
 
   #[test]
+  fn test_empty() {
+    let original = "".to_string();
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_garbage() {
+    let original =
+      "HloModule thi$ str1ng makes# N0 sen$e @all!*&^%$".to_string();
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_wrong_opcode() {
+    let original = "HloModule wrong_opcode:
+ENTRY %blabla (x: f32[], y: f32[]) -> f32[] {
+  %x = f32[]{} parameter(0)
+  %y = f32[]{} parameter(1)
+  %le = pred[]{} le(f32[]{} %x, f32[]{} %y)
+}
+".to_string();
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_metadata_with_cholesky() {}
+
+  #[test]
+  fn test_wrong_shape() {
+    let original = "HloModule wrong_opcode:
+ENTRY %blabla (x: g32[]) -> g32[] {
+  %x = g32[]{} parameter(0)
+}
+".to_string();
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_wrong_operand_size() {
+    let original = "HloModule wrong_opcode:
+ENTRY %blabla (x: f32[]) -> pred[] {
+  %x = f32[]{} parameter(0)
+  %eq = pred[]{} compare(f32[]{} %x), direction=EQ
+}
+".to_string();
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_operand_not_found() {
+    let original = "HloModule operand_not_found:
+ENTRY %blabla (x: f32[]) -> pred[] {
+  %x = f32[]{} parameter(0)
+  %eq = pred[]{} compare(f32[]{} %x, f32[]{} %y), direction=EQ
+}
+".to_string();
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_more_constants() {
+    let original = "HloModule SelectScalarS32True_module
+ENTRY %SelectScalarS32True.v4 () -> s32[] {
+  %constant.2 = pred[] constant(true)
+  %constant.1 = s32[] constant(-42), sharding={replicated}
+  %constant = s32[] constant(42)
+  %select = s32[] select(pred[] %constant.2, s32[] %constant.1, s32[] %constant)
+}
+".to_string();
+
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_ok());
+    // Constant instructions have no name. The string will be parsed successfully
+    // but the constant names will not be exactly the same.
+  }
+
+  #[test]
+  fn test_configuration_field() {
+    let original = "HloModule AModule
+ENTRY %configuration_test() -> s32[] {
+  %constant = s32[] constant(42), backend_config=\"foo bar\"
+}".to_string();
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_ok());
+    //assert_eq!(result.ok().as_ref().unwrap().entry_computation().as_ref()
+      //.unwrap().root_instruction().raw_backend_config_string(),
+      //"foo bar".to_string());
+  }
+
+  #[test]
+  fn test_literal_dimensions_error() {
+    let original = "HloModule some_2x3_module
+
+ENTRY %some_2x3 () -> f32[2,3] {
+  ROOT %constant = f32[2,3]{1,0} constant(}{1, 2, 3}, {4, 5, 6}})
+}
+
+".to_string();
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_err());
+    assert_eq!(result.err().unwrap(), "unexpected '}' token".to_string());
+  }
+
+  #[test]
   fn test_parse_sharding() {
     let original = "{maximal device=42}".to_string();
     let sharding = parse_sharding(original.clone());
     assert!(sharding.is_ok());
     assert_eq!(sharding.unwrap().to_string(false), original);
+  }
+
+  #[test]
+  fn test_parse_sharding_partial_replication() {
+    let original = "{devices=[2,2]0,1,2,3 last_tile_dim_replicate}".to_string();
+    let sharding = parse_sharding(original.clone());
+    assert!(sharding.is_ok());
+    assert_eq!(sharding.unwrap().to_string(false), original);
+
+    // TODO
+  }
+
+  #[test]
+  fn test_parse_sharding_subgroup() {
+    let mut original = String::new();
+    original.push_str("{devices=[2,2,2,2]0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 ");
+    original.push_str("last_tile_dims={manual, replicated}}");
+    let sharding = parse_sharding(original.clone());
+    assert!(sharding.is_ok());
+    assert_eq!(sharding.unwrap().to_string(false), original);
+
+    let mut tile_assignment = Array::new(vec![2, 2, 2, 2]);
+    tile_assignment.fill_iota(0);
+    let subgroup_types =
+      vec![OpShardingType::Manual, OpShardingType::Replicated];
+    assert_eq!(HloSharding::subgroup_from_array(
+      tile_assignment, subgroup_types, vec![]).to_string(false), original);
+  }
+
+  #[test]
+  fn test_parse_trivial_sharding_partial_replication() {
+    let original = "{devices=[2,2]<=[4] last_tile_dim_replicate}".to_string();
+    let sharding = parse_sharding(original.clone());
+    assert!(sharding.is_ok());
+    assert_eq!(sharding.unwrap().to_string(false), original);
+    let tiling_last_dim_replicated =
+      TileAssignment::new_from_vec(&vec![2, 2]);
+    assert_eq!(HloSharding::partial_tile(
+      tiling_last_dim_replicated, vec![]).to_string(false), original);
+  }
+
+  #[test]
+  fn test_parse_trivial_sharding_subgroup() {
+    let original =
+      "{devices=[2,2,2,2]<=[16] last_tile_dims={manual, replicated}}".to_string();
+    let sharding = parse_sharding(original.clone());
+    assert!(sharding.is_ok());
+    assert_eq!(sharding.unwrap().to_string(false), original);
+    let tile_assignment =
+      TileAssignment::new_from_vec(&vec![2, 2, 2, 2]);
+    let subgroup_types =
+      vec![OpShardingType::Manual, OpShardingType::Replicated];
+    assert_eq!(HloSharding::subgroup(
+      tile_assignment, subgroup_types, vec![]).to_string(false), original);
+  }
+
+  #[test]
+  fn test_parse_transposed_iota_sharding_partial_replication() {
+    let original =
+      "{devices=[2,2]<=[2,2]T(1,0) last_tile_dim_replicate}".to_string();
+    let sharding = parse_sharding(original.clone());
+    assert!(sharding.is_ok());
+    assert_eq!(sharding.unwrap().to_string(false), original);
+
+    let tiling_last_dim_replicated = TileAssignment::new_from_vecs(
+      &vec![2, 2], &vec![2, 2], &vec![1, 0]);
+    assert_eq!(HloSharding::partial_tile(
+      tiling_last_dim_replicated, vec![]).to_string(false), original);
+  }
+
+  #[test]
+  fn test_parse_transposed_iota_sharding_subgroup() {
+    let original =
+      "{devices=[2,2,2,2]<=[2,2,4]T(2,1,0) last_tile_dims={manual, replicated}}".to_string();
+    let sharding = parse_sharding(original.clone());
+    assert!(sharding.is_ok());
+    assert_eq!(sharding.unwrap().to_string(false), original);
+
+    let tile_assignment = TileAssignment::new_from_vecs(
+      &vec![2, 2, 2, 2], &vec![2, 2, 4], &vec![2, 1, 0]);
+    let subgroup_types =
+      vec![OpShardingType::Manual, OpShardingType::Replicated];
+    assert_eq!(HloSharding::subgroup(
+      tile_assignment, subgroup_types, vec![]).to_string(false), original);
+  }
+
+  #[test]
+  fn test_parse_shard_as() {
+    let original = "{manual shard_as 1}".to_string();
+    let sharding = parse_sharding(original.clone());
+    assert!(sharding.is_ok());
+    assert_eq!(sharding.unwrap().to_string(false), original);
+    assert_eq!(HloSharding::manual(vec![])
+      .set_shard_group(HloSharding::shard_as(1)).to_string(false), original);
+  }
+
+  #[test]
+  fn test_parse_shard_like() {
+    let original =
+      "{devices=[2,2,2,2]<=[16] last_tile_dims={manual, replicated} shard_like 1}".to_string();
+    let sharding = parse_sharding(original.clone());
+    assert!(sharding.is_ok());
+    assert_eq!(sharding.unwrap().to_string(false), original);
+  }
+
+  #[test]
+  fn test_parse_unknown_sharding() {
+    let original = "{unknown}".to_string();
+    let sharding = parse_sharding(original.clone());
+    assert!(sharding.is_ok());
+    assert_eq!(sharding.unwrap().to_string(false), original);
+    assert_eq!(HloSharding::unknown(vec![]).to_string(false), original);
   }
 }

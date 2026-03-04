@@ -294,7 +294,7 @@ impl<'module> HloDataflowAnalysis<'module> {
       |_module: &HloModule| -> Result<(Vec<Shape>, Shape), String> {
         unimplemented!()
     };
-    for comp in self.module.computations(&func) {
+    for comp in self.module.computations_with_cb(&func) {
       if HloInstruction::is_thread_included(
         comp.execution_thread(), &self.execution_threads)
       {
@@ -669,7 +669,7 @@ impl<'module> HloDataflowAnalysis<'module> {
     {
       unimplemented!()
     };
-    for comp in self.module.computations(&func) {
+    for comp in self.module.computations_with_cb(&func) {
       if HloInstruction::is_thread_included(
         comp.execution_thread(), &self.execution_threads)
       {
@@ -741,7 +741,7 @@ impl<'module> HloDataflowAnalysis<'module> {
     {
       unimplemented!()
     };
-    for comp in self.module.computations(&func) {
+    for comp in self.module.computations_with_cb(&func) {
       if !HloInstruction::is_thread_included(
         comp.execution_thread(), &self.execution_threads)
       {

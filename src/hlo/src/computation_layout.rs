@@ -2,24 +2,45 @@
 
 use common::{
   printer::{Printer, StringPrinter},
-  shape::Shape,
+  shape::{ProgramShape, Shape},
   shape_layout::ShapeLayout
 };
 
 // Class which contains the layouts of the parameters and results of a
-// computation.
-#[derive(Debug)]
+// computation. The layouts are stored as ShapeLayouts with immutable shapes and
+// mutable layouts.
+#[derive(Debug, Clone, PartialEq)]
 pub struct ComputationLayout {
   parameter_layouts: Vec<ShapeLayout>,
   result_layout: ShapeLayout
 }
 
 impl ComputationLayout {
+  // Creates a new ComputationLayout with the given result layout.
   pub fn new(result_layout: ShapeLayout) -> Self {
     ComputationLayout {
       parameter_layouts: Vec::new(),
       result_layout: result_layout
     }
+  }
+
+  // Constructs a ComputationLayout from a ProgramShape. The layouts of the
+  // parameters and results are set to the default layout. Layouts in the
+  // ProgramShape are ignored if ignore_layouts is true.
+  pub fn new_from_program_shape(
+    program_shape: ProgramShape, ignore_layouts: bool) -> Self
+  {
+    let mut instance = ComputationLayout {
+      parameter_layouts: Vec::new(),
+      result_layout: ShapeLayout::new(program_shape.result().clone())
+    };
+    for shape in program_shape.parameters_vec() {
+      instance.parameter_layouts.push(ShapeLayout::new(shape.clone()));
+    }
+    if ignore_layouts {
+      instance.set_to_default_layout();
+    }
+    instance
   }
 
   // Adds a new parameter layout to the computation layout.

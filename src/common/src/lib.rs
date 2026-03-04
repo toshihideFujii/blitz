@@ -18,6 +18,7 @@ pub mod literal_comparison;
 pub mod literal_util;
 pub mod literal;
 pub mod metric_table_report;
+pub mod online_topsort;
 pub mod overflow_util;
 pub mod packed_literal_reader;
 pub mod parse_flags_from_env;

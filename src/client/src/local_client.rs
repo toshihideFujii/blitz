@@ -234,31 +234,28 @@ impl<'backend> LocalClient<'backend> {
   // ScopedShapedBuffer. If non-null the given memory allocator is used for
   // device memory allocation. If null, the default memory allocator for the
   // device is used.
-  pub fn literal_to_shaped_buffer<T>(
+  pub fn literal_to_shaped_buffer(
     &self,
-    _literal: &Literal<T>,
+    _literal: &Literal,
     _device_ordinal: i64,
     _allocator: &DeviceMemoryAllocator) -> Result<ScopedShapedBuffer, String>
-    where T: Clone + Default + PartialEq
   {
     unimplemented!()    
   }
 
   // Transfer the BorrowingLiteral to the device with the given ordinal.
-  pub fn transfer_to_local_server<T>(
+  pub fn transfer_to_local_server(
     &self,
-    _literal: &Literal<T>,
+    _literal: &Literal,
     _device_ordinal: i64) -> Result<GlobalDataHandle, String>
-    where T: Clone + Default + PartialEq
   {
     unimplemented!()    
   }
 
   // Copy the data from the device contained in the given ShapedBuffer and
   // return as a Literal.
-  pub fn shaped_buffer_to_literal<T>(
-    &self, _shaped_buffer: &ShapedBuffer) -> Result<Literal<T>, String>
-    where T: Clone +Default + PartialEq
+  pub fn shaped_buffer_to_literal(
+    &self, _shaped_buffer: &ShapedBuffer) -> Result<Literal, String>
   {
     unimplemented!()
   }
@@ -274,9 +271,8 @@ impl<'backend> LocalClient<'backend> {
   }
 
   // Transfer the given literal to the infeed queue of the given device.
-  pub fn transfer_to_infeed_local<T>(
-    &self, literal: &Literal<T>, device_ordinal: i64) -> Result<(), String>
-    where T: Clone + Default + PartialEq
+  pub fn transfer_to_infeed_local(
+    &self, literal: &Literal, device_ordinal: i64) -> Result<(), String>
   {
     let executor =
       self.backend().stream_executor(device_ordinal);
@@ -289,9 +285,8 @@ impl<'backend> LocalClient<'backend> {
 
   // Transfer and return a value from the outfeed of the given device. The
   // shape of the object to transfer is determined by `literal`'s shape.
-  pub fn transfer_from_outfeed_local<T>(
-    &self, device_ordinal: i64, literal: &Literal<T>) -> Result<(), String>
-    where T: Clone + Default + PartialEq
+  pub fn transfer_from_outfeed_local(
+    &self, device_ordinal: i64, literal: &Literal) -> Result<(), String>
   {
     let executor =
       self.backend().stream_executor(device_ordinal);

@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
-use common::blitz_data::OpMetadata;
+use common::{blitz_data::OpMetadata, shape::ProgramShape};
 
 use crate::{
   dfs_hlo_visitor_with_default::{DfsHloRewriteVisitor, FunctionVisitor},
   hlo_clone_context::HloCloneContext,
-  hlo_instruction::{self, HloInstruction, HloPrintOptions},
-  hlo_module::HloModule, hlo_opcode::HloOpcode
+  hlo_instruction::{self, HloInstruction, HloPrintOptions, print_name},
+  hlo_module::HloModule, hlo_opcode::HloOpcode, name_uniquer::NameUniquer
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -30,22 +30,119 @@ pub struct HloComputation {
   instructions: Vec<HloInstruction>,
   to_be_deleted: Vec<HloInstruction>,
   param_instructions: Vec<HloInstruction>,
+
+  // Callers and callees of this computation.
+  // * These include all computations that have a caller/callee relationship
+  //   with this computation, even those that may not belong to a module. For
+  //   example, a computation that has been created and is in the process of
+  //   being constructed but has not been added to a module yet may appear here.
+  // * These are ordered maps, ordered by (unique ID, computation pointer). The
+  //   unique ID is used to ensure determinism, whereas the computation pointer
+  //   is used to disambiguate computations that do not belong to any module and
+  //   therefore have a unique ID of -1. We assume that determinism only matters
+  //   for computations that belong to a module (i.e, unique_id != -1), since
+  //   the primary use case for this data structure is to topologically sort
+  //   computations in a module.
+  // * The values of the maps are the number of times the computation is
+  //   referenced. In a graph sense, this is the number of parallel edges.
+  pub callee_computations: BTreeMap<HloComputation, i64>,
+  pub caller_computations: BTreeMap<HloComputation, i64>
 }
 
 impl HloComputation {
-  pub fn new() {}
+  pub fn default() -> Self {
+    HloComputation {
+      name: String::new(),
+      unique_id: -1,
+      root_instruction: HloInstruction::default(),
+      fusion_instruction: HloInstruction::default(),
+      is_fusion_computation: false,
+      custom_call_instruction: HloInstruction::default(),
+      is_custom_call_computation: false,
+      collective_call_instruction: HloInstruction::default(),
+      is_collective_call_instruction: false,
+      while_call_instruction: HloInstruction::default(),
+      is_while_call_body_computation: false,
+      async_instructions: Vec::new(),
+      execution_thread: String::new(),
+      instructions: Vec::new(),
+      to_be_deleted: Vec::new(),
+      param_instructions: Vec::new(),
+      callee_computations: BTreeMap::new(),
+      caller_computations: BTreeMap::new()
+    }
+  }
+
+  pub fn new(
+    name: &String,
+    parameter_count: usize,
+    instructions: &Vec<HloInstruction>,
+    root_instruction: HloInstruction,
+    preserve_instruction_ids: bool) -> Self
+  {
+    let mut instance = HloComputation {
+      name: NameUniquer::get_sanitized_name(name),
+      unique_id: -1,
+      root_instruction: root_instruction,
+      fusion_instruction: HloInstruction::default(),
+      is_fusion_computation: false,
+      custom_call_instruction: HloInstruction::default(),
+      is_custom_call_computation: false,
+      collective_call_instruction: HloInstruction::default(),
+      is_collective_call_instruction: false,
+      while_call_instruction: HloInstruction::default(),
+      is_while_call_body_computation: false,
+      async_instructions: Vec::new(),
+      execution_thread: String::new(),
+      instructions: Vec::new(),
+      to_be_deleted: Vec::new(),
+      param_instructions: Vec::new(),
+      callee_computations: BTreeMap::new(),
+      caller_computations: BTreeMap::new()
+    };
+    instance.param_instructions.resize(
+      parameter_count, HloInstruction::default());
+    let mut root_found = false;
+
+    if preserve_instruction_ids {
+      // Pre-allocate all instructions in the vector since it state should be
+      // identical.
+      let mut max_instruction_local_id = 0;
+      for instr in instructions {
+        max_instruction_local_id =
+          usize::max(max_instruction_local_id, instr.local_id() as usize);
+      }
+      instance.instructions.resize(max_instruction_local_id + 1,
+        HloInstruction::default());
+    }
+    for instr in instructions {
+      if instr.opcode() == HloOpcode::Parameter {
+        let param_no = instr.parameter_number();
+        assert!(param_no >= 0 && (param_no as usize) < parameter_count);
+
+        instance.param_instructions.insert(
+          param_no as usize, instr.clone());
+      }
+      root_found |= instr == &instance.root_instruction;
+      instance.add_instruction_internal(instr.clone(),
+        preserve_instruction_ids);
+    }
+    assert!(root_found);
+    instance.root_instruction.mark_as_root();
+    instance
+  }
 
   // Add an instruction to the computation.
   // The computation takes ownership of the instruction.
   pub fn add_instruction(
     &mut self,
     mut instruction: HloInstruction,
-    name: String) -> &mut HloInstruction
+    name: &String) -> &mut HloInstruction
   {
     assert!(instruction.opcode() != HloOpcode::Parameter,
       "Parameter insstructions cannot be added to a computation after it has been built.");
     if !name.is_empty() { instruction.set_and_sanitize_name(name); }
-    self.add_instruction_internal(instruction);
+    self.add_instruction_internal(instruction, false);
 
     // TODO
     unimplemented!()
@@ -57,10 +154,16 @@ impl HloComputation {
     metadata: OpMetadata) -> &mut HloInstruction
   {
     instruction.set_metadata(metadata);
-    self.add_instruction(instruction, "".to_string())
+    self.add_instruction(instruction, &"".to_string())
   }
 
-  fn add_instruction_internal(&mut self, _instruction: HloInstruction) {}
+  fn add_instruction_internal(
+    &mut self,
+    _instruction: HloInstruction,
+    _preserve_unique_id: bool)
+  {
+    unimplemented!();
+  }
 
   pub fn replace_parameter() {}
   pub fn remove_parameter() {}
@@ -77,7 +180,7 @@ impl HloComputation {
     // TODO
     //instruction.set_parent(self);
     //self.param_instructions.push(instruction);
-    self.add_instruction_internal(instruction);
+    self.add_instruction_internal(instruction, false);
   }
 
   pub fn add_entry_computation_parameter() {}
@@ -141,7 +244,15 @@ impl HloComputation {
     self.name.clone()
   }
 
-  pub fn uniquify_name() {}
+  // Use the given NameUniquer to select a unique name for the computation based
+  // on the computation's existing name.
+  //
+  // See also HloModule::SetAndUniquifyComputationName(), which does this plus
+  // SetAndSanitizeName().
+  pub fn uniquify_name(&mut self, name_uniquer: &mut NameUniquer) {
+    self.name = name_uniquer.get_unique_name(&self.name);
+  }
+
   pub fn print() {}
 
   pub fn to_string(&self) -> String { "".to_string() }
@@ -183,7 +294,19 @@ impl HloComputation {
   pub fn create_async_instructions() {}
   pub fn deep_copy_instruction() {}
   pub fn deep_copy_instruction_with_custom_copier() {}
-  pub fn compute_program_shape() {}
+
+  // Computes and returns the ProgramShape of this computation (shape of
+  // parameters and result with layout).
+  pub fn compute_program_shape(&self, include_ids: bool) -> ProgramShape {
+    let mut program_shape = ProgramShape::default();
+    for param_instr in &self.param_instructions {
+      program_shape.add_parameter(
+        param_instr.shape().clone(),
+        print_name(param_instr.name(), include_ids));
+    }
+    *program_shape.mutable_result() = self.root_instruction.shape().clone();
+    program_shape
+  }
 
   pub fn replace_with_new_instruction(
     &self,
@@ -207,7 +330,10 @@ impl HloComputation {
   }
 
   pub fn replace_instruction_with_defferent_shape() {}
-  pub fn set_parent() {}
+
+  pub fn set_parent(&mut self, _parent: &HloModule) {
+    unimplemented!()
+  }
 
   pub fn parent(&self) -> Option<&HloModule> {
     unimplemented!()
@@ -321,6 +447,8 @@ impl HloComputation {
     self.is_fusion_computation() || self.is_custom_call_computation()
   }
 
+  // Clear the unique ID of the computation so that it can be re-assigned, such
+  // as for the purpose of compacting the unique IDs.
   pub fn clear_unique_id_internal(&mut self) {
     self.unique_id = -1;
   }
@@ -389,20 +517,40 @@ impl HloComputation {
 
 pub struct HloComputationBuilder {
   name: String,
-  instructions: Vec<HloInstruction>
+  instructions: Vec<HloInstruction>,
+  parameter_numbers: HashSet<i64>,
 }
 
 impl HloComputationBuilder {
   pub fn new(name: String) -> Self {
-    HloComputationBuilder { name: name, instructions: Vec::new() }
+    HloComputationBuilder {
+      name: name,
+      instructions: Vec::new(),
+      parameter_numbers: HashSet::new()
+    }
   }
 
   // Build and return an HloComputation. The parameter root_instruction
   // specifies the already-added instruction to use as the root. If
   // root_instruction is nullptr then use the last added instruction as the
   // root.
-  pub fn build(&self, _root_instruction: Option<&HloInstruction>) -> HloComputation {
-    unimplemented!()
+  pub fn build(
+    &self, root_instruction: Option<&HloInstruction>) -> HloComputation
+  {
+    let mut parameter_count = 0;
+    for instr in &self.instructions {
+      if instr.opcode() == HloOpcode::Parameter {
+        parameter_count += 1;
+      }
+    }
+    // If root_instruction is not specified use the last added instruction.
+    let mut root = self.last_added_instruction();
+    if root_instruction.is_some() {
+      root = root_instruction;
+    }
+    assert!(root.is_some());
+    HloComputation::new(&self.name, parameter_count, &self.instructions,
+      root.unwrap().clone(), false)
   }
 
   // Add the instruction to be part of this computation.
@@ -411,5 +559,23 @@ impl HloComputationBuilder {
   pub fn add_instruction(&mut self, instruction: HloInstruction) -> &HloInstruction {
     self.instructions.push(instruction);
     self.instructions.last().unwrap()
+  }
+
+  pub fn add_parameter(
+    &mut self, parameter: HloInstruction) -> Result<&HloInstruction, String>
+  {
+    if !self.parameter_numbers.insert(parameter.parameter_number()) {
+      let mut err_msg = "duplicate parameter number ".to_string();
+      err_msg.push_str(&parameter.parameter_number().to_string());
+      return Err(err_msg);
+    }
+    Ok(self.add_instruction(parameter))
+  }
+
+  pub fn last_added_instruction(&self) -> Option<&HloInstruction> {
+    if !self.instructions.is_empty() {
+      return self.instructions.last();
+    }
+    None
   }
 }

@@ -192,7 +192,7 @@ impl ConcatGroup {
     }
     let instruction = HloInstruction::create_concatenate(
       &self.get_concat_shape(), input_elements, self.concat_dim);
-    comp.add_instruction(instruction, "".to_string());
+    comp.add_instruction(instruction, &"".to_string());
   }
 }
 

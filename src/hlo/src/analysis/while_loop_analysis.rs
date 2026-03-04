@@ -9,7 +9,8 @@ use crate::{collective_ops_utils::is_collective,
   evaluator::hlo_evaluator::{HloEvaluator, PrecomputedAnalysis},
   hlo_extractor::{extract_module, ReplaceType}, hlo_instruction::HloInstruction,
   hlo_module::HloModule, hlo_module_config::HloModuleConfig,
-  hlo_opcode::HloOpcode, utils::hlo_query::get_unique_gte_instruction};
+  hlo_opcode::HloOpcode, //utils::hlo_query::get_unique_gte_instruction
+};
 
 // Returns the precise trip count of the loop if it's statically known,
 // nullopt otherwise.
@@ -19,8 +20,9 @@ use crate::{collective_ops_utils::is_collective,
 // max_brute_force_iters may be returned if we can pattern-match the loop
 // condition.
 pub fn compute_while_loop_trip_count(
-  while_op: &HloInstruction, max_brute_force_iters: usize) -> Option<i64>
+  _while_op: &HloInstruction, _max_brute_force_iters: usize) -> Option<i64>
 {
+  /*
   println!("Getting trip count for loop {:?}", while_op.to_string_default());
 
   // The loop's induction variable is found at
@@ -98,6 +100,7 @@ pub fn compute_while_loop_trip_count(
   }
 
   println!("Loop has unknown trip count.");
+  */
   None
 }
 
@@ -162,14 +165,14 @@ pub fn compute_while_loop_trip_count_upper_bound(
     HloInstruction::create_get_tuple_element(&new_param, 0));
   replacements.insert(while_cond_param.clone(), new_param);
   let mut new_module = HloModule::new("temp_mod".to_string(),
-  HloModuleConfig::new_default());
+  HloModuleConfig::default());
   let new_computation = new_module.add_embedded_computation(
     while_cond.clone_with_replacements(
       &replacements, &vec![], None,
       "clone".to_string(), None));
 
   // We have a constant. Evaluate the condition on this constant.
-  let evaluator: HloEvaluator<bool> = HloEvaluator::new(0);
+  let evaluator: HloEvaluator = HloEvaluator::new(0);
   let mut fake_input = Literal::create_from_shape(
     new_computation.parameter_instruction(0).unwrap().shape());
   let result = fake_input.copy_from(
@@ -194,11 +197,11 @@ pub fn compute_while_loop_trip_count_upper_bound(
 
   // Per the explanation above, if the evaluated condition returns false, the
   // loop executes at most once.
-  let cond_returns_true = cond_result_pred.get_first_element();
-  if !*cond_returns_true {
-    println!("Upper bound on the trip count is 1");
-    return Some(1);
-  }
+  //let cond_returns_true = cond_result_pred.get_first_element();
+  //if !*cond_returns_true {
+    //println!("Upper bound on the trip count is 1");
+    //return Some(1);
+  //}
 
   println!("Loop has no known upper bound on the trip count.");
   None
@@ -267,7 +270,7 @@ fn get_loop_induction_var_tuple_idx_with_known_values(
 pub fn match_trivial_loop_trip_count(
   _while_op: &HloInstruction,
   _indvar_tuple_idx: i64,
-  _indvar_init: &Literal<i64>) -> Option<i64>
+  _indvar_init: &Literal) -> Option<i64>
 {
   //let indvar_init_val = LiteralUtil::lite
   unimplemented!()    
@@ -502,7 +505,7 @@ fn checked_subtract(a: i64, b: i64) -> Option<i64> {
 
 fn evaluate_indvar_init(
   while_op: &HloInstruction,
-  indvar_tuple_idx: i64) -> Result<Literal<i64>, String>
+  indvar_tuple_idx: i64) -> Result<Literal, String>
 {
   let evaluator = HloEvaluator::new(0);
   let while_init = while_op.operand(0);

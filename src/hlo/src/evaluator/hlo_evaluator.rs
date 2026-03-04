@@ -1,20 +1,19 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-
 use common::literal::Literal;
-
-use crate::{hlo_computation::HloComputation, hlo_instruction::HloInstruction, hlo_module::HloModule};
+use crate::{hlo_computation::HloComputation, hlo_instruction::HloInstruction,
+  hlo_module::HloModule};
 
 // Responsible for evaluating HLO and obtain literal as the evaluation results.
 // This class is not thread-safe.
-pub struct HloEvaluator<T> where T: Clone + Default + PartialEq + 'static {
-  arg_literals: Vec<Literal<T>>,
+pub struct HloEvaluator {
+  arg_literals: Vec<Literal>,
   max_loop_iterations: i64,
   seed: u64
 }
 
-impl<T> HloEvaluator<T> where T: Clone + Default + PartialEq + 'static {
+impl HloEvaluator {
   pub fn default() -> Self {
     HloEvaluator {
       arg_literals: Vec::new(),
@@ -56,12 +55,12 @@ impl<T> HloEvaluator<T> where T: Clone + Default + PartialEq + 'static {
     _instruction: &HloInstruction,
     _precomputed_analysis: &PrecomputedAnalysis,
     _recursively_evaluate_nonconstant_operands: bool,
-    _substitutions: &HashMap<HloInstruction, Literal<T>>) -> Result<Literal<T>, String>
+    _substitutions: &HashMap<HloInstruction, Literal>) -> Result<Literal, String>
   {
     unimplemented!()
   }
 
-  pub fn evaluate_module(&self, _module: &HloModule) -> Result<Literal<T>, String> {
+  pub fn evaluate_module(&self, _module: &HloModule) -> Result<Literal, String> {
     unimplemented!()
   }
 
@@ -87,7 +86,7 @@ impl<T> HloEvaluator<T> where T: Clone + Default + PartialEq + 'static {
   pub fn evaluate_computation(
     &self,
     _computation: &HloComputation,
-    _arg_literals: &Vec<Literal<T>>) -> Result<Literal<T>, String>
+    _arg_literals: &Vec<Literal>) -> Result<Literal, String>
   {
     unimplemented!()    
   }
@@ -102,7 +101,7 @@ impl<T> HloEvaluator<T> where T: Clone + Default + PartialEq + 'static {
   pub fn evaluate_with_substitutions(
     &self,
     _instruction: &HloInstruction,
-    _substitutions: HashMap<HloInstruction, Literal<T>>) -> Result<Literal<T>, String>
+    _substitutions: HashMap<HloInstruction, Literal>) -> Result<Literal, String>
   {
     unimplemented!()
   }

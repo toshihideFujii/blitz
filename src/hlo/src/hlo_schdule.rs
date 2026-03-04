@@ -19,7 +19,7 @@ impl HloInstructionSequence {
   }
 
   // Adds the instruction to the end of the sequence.
-  pub fn push_pack(&mut self, instruction: HloInstruction) {
+  pub fn push_back(&mut self, instruction: HloInstruction) {
     let id = instruction.unique_id();
     self.instruction_sequence.push(instruction);
     self.id_sequence.push(id);

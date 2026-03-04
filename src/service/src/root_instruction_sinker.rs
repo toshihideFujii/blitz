@@ -61,7 +61,7 @@ fn sink_nontuple_root(_module: &HloModule, computation: &mut HloComputation) {
   let bitcast = HloInstruction::create_bitcast(root.shape(), root);
 
   let _new_root =
-    computation.add_instruction(bitcast, "".to_string());
+    computation.add_instruction(bitcast, &"".to_string());
 
   //let sequence =
     //computation.mutable_parent().as_mut().unwrap()

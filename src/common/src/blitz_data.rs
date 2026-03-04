@@ -362,6 +362,7 @@ impl DotDimensionNumbers {
 
 // Describes whether all data-parallelism replicas will receive the same
 // parameter data at each buffer.
+#[derive(Debug, Clone)]
 pub struct ParameterReplication {
   replicated_at_leaf_buffers: Vec<bool>
 }
@@ -2400,10 +2401,27 @@ impl SliceDimensions {
   }
 }
 
-pub struct ResultAccuracy {}
+// Describes the types of accuracy the user can request for unary ops with
+// multiple implementations.
+#[derive(Debug, Clone)]
+pub struct ResultAccuracy {
+  mode: ResultAccuracyMode
+}
 
 impl ResultAccuracy {
-    
+  pub fn default() -> Self {
+    ResultAccuracy { mode: ResultAccuracyMode::Default }
+  }
+
+  pub fn set_mode(&mut self, mode: ResultAccuracyMode) {
+    self.mode = mode;
+  }
+}
+
+#[derive(Debug, Clone)]
+pub enum ResultAccuracyMode {
+  Default,
+  Highest,
 }
 
 // A trace of a HeapSimulator run.
@@ -2419,5 +2437,109 @@ pub struct LogicalBuffer {
 impl LogicalBuffer {
   pub fn color(&self) -> i64 {
     self.color
+  }
+}
+
+// Serialization of frame.
+#[derive(Clone, PartialEq)]
+pub struct StackFrame {
+  file_location_id: i64,
+  parent_frame_id: i64,
+}
+
+impl StackFrame {
+  pub fn new(file_location_id: i64, parent_frame_id: i64) -> Self {
+    StackFrame {
+      file_location_id: file_location_id,
+      parent_frame_id: parent_frame_id
+    }
+  }
+}
+
+// Serialization of file position.
+#[derive(Clone, PartialEq)]
+pub struct FileLocation {
+  file_name_id: i64,
+  function_name_id: i64,
+  line: i64,
+  end_line: i64,
+  column: i64,
+  end_column: i64,
+}
+
+impl FileLocation {
+  pub fn default() -> Self {
+    FileLocation {
+      file_name_id: 0, function_name_id: 0, line: 0,
+      end_line: 0, column: 0, end_column: 0
+    }
+  }
+
+  pub fn set_file_name_id(&mut self, file_name_id: i64) {
+    self.file_name_id = file_name_id;
+  }
+
+  pub fn set_function_name_id(&mut self, function_name_id: i64) {
+    self.function_name_id = function_name_id;
+  }
+
+  pub fn set_line(&mut self, line: i64) {
+    self.line = line;
+  }
+
+  pub fn set_end_line(&mut self, end_line: i64) {
+    self.end_line = end_line;
+  }
+
+  pub fn set_column(&mut self, column: i64) {
+    self.column = column;
+  }
+
+  pub fn set_end_column(&mut self, end_column: i64) {
+    self.end_column = end_column;
+  }
+}
+
+// Serialization of stack frames index representations.
+// Stack frames index presented in four flat arrays:
+// 1. File names array.
+// 2. Function names array.
+// 3. File location array.
+// 4. Frame array.
+// All reference ids in sub-protos are 1-based positions of the
+// entity in the flat array.
+// Ids are 1-based to keep 0 value as representation of non-set property.
+#[derive(Clone, PartialEq)]
+pub struct StackFrameIndex {
+  file_names: Vec<String>,
+  function_names: Vec<String>,
+  file_locations: Vec<FileLocation>,
+  stack_frams: Vec<StackFrame>
+}
+
+impl StackFrameIndex {
+  pub fn default() -> Self {
+    StackFrameIndex {
+      file_names: Vec::new(),
+      function_names: Vec::new(),
+      file_locations: Vec::new(),
+      stack_frams: Vec::new()
+    }
+  }
+
+  pub fn add_file_name(&mut self, file_name: String) {
+    self.file_names.push(file_name);
+  }
+
+  pub fn add_function_name(&mut self, function_name: String) {
+    self.function_names.push(function_name);
+  }
+
+  pub fn add_file_location(&mut self, file_location: FileLocation) {
+    self.file_locations.push(file_location);
+  }
+
+  pub fn add_stack_frame(&mut self, stack_frame: StackFrame) {
+    self.stack_frams.push(stack_frame);
   }
 }

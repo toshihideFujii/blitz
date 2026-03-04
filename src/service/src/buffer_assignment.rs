@@ -782,7 +782,7 @@ impl<'module> BufferAssignment<'module> {
       |_module: &HloModule| -> Result<(Vec<Shape>, Shape), String> {
         Ok((vec![], Shape::new()))
       };
-    for computation in self.module.computations(callback) {
+    for computation in self.module.computations_with_cb(callback) {
       if !computation.is_fusion_computation() {
         let sequence =
           self.hlo_ordering().sequential_order(computation);

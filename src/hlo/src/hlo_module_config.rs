@@ -15,6 +15,10 @@ pub enum FusionConfigCollection {
 
 #[derive(Clone, PartialEq)]
 pub struct HloModuleConfig {
+  // If you add new members, be sure to update compilation_cache_key and the
+  // HloModuleConfigProto.
+  // LINT.IfChange
+  entry_computation_layout: Option<ComputationLayout>,
   seed: u64,
   launch_id: i32,
   replica_count: i64,
@@ -49,8 +53,34 @@ impl HloModuleConfig {
   // ProgramShape creates a computation layout using this shape.
   // The layouts in the ProgramShape will be reset to default unless
   // ignore_layouts is set to false.
-  pub fn new_default() -> Self {
-    unimplemented!()
+  pub fn default() -> Self {
+    HloModuleConfig {
+      entry_computation_layout: None,
+      seed: 0,
+      launch_id: 0,
+      replica_count: 0,
+      num_partitions: 0,
+      param_requires_broadcast_via_collectives: Vec::new(),
+      use_spmd_partitioning: false,
+      use_auto_spmd_partitioning: false,
+      auto_spmd_partitioning_mesh_shape: Vec::new(),
+      auto_spmd_partitioning_mesh_ids: Vec::new(),
+      deduplicate_hlo: false,
+      intra_op_parallelism_threads: 0,
+      device_type: "".to_string(),
+      allow_separate_sharding_programs: false,
+      alias_passthrough_params: false,
+      content_aware_computation_sorting: false,
+      fusion_config: Vec::new(),
+      layout_config: Vec::new(),
+      memory_space_assignment_config: Vec::new(),
+      phase_ordering_config: Vec::new(),
+      phase_index: 0,
+      analysis_allowance_map: HashMap::new(),
+      matrix_unit_operand_precision: Precision::Default,
+      fdo_profile: "".to_string(),
+      device_memory_size: 0
+    }
   }
 
   pub fn new(_program_shape: &ProgramShape) -> Self {
@@ -59,9 +89,26 @@ impl HloModuleConfig {
 
   pub fn to_proto() {}
   pub fn assign_proto_shardable_value_update_pairs() {}
-  pub fn has_entry_computation_layout() {}
-  pub fn set_default_computation_layout() {}
-  pub fn set_computation_layout_if_exists() {}
+
+  // Checks if this config has an entry computation layout already.
+  pub fn has_entry_computation_layout(&self) -> bool {
+    self.entry_computation_layout.is_some()
+  }
+
+  // Sets the entry_computation_layout's parameter and result shapes for this
+  // config, according to the given program shape. The parameters and result
+  // are set to default layout.
+  pub fn set_default_computation_layout(&mut self, program_shape: ProgramShape) {
+    self.entry_computation_layout = Some(ComputationLayout::new_from_program_shape(
+      program_shape, true));
+  }
+
+  // Same as above but if the given program contains layout for parameters or
+  // result, the entry_computation_layout's layout is updated accordingly.
+  pub fn set_computation_layout_if_exists(&mut self, program_shape: ProgramShape) {
+    self.entry_computation_layout = Some(ComputationLayout::new_from_program_shape(
+      program_shape, false));
+  }
 
   // Returns a constant reference to the layout of the entry computation.
   // Assumes the layout was set.
@@ -69,9 +116,10 @@ impl HloModuleConfig {
     unimplemented!()
   }
 
-  pub fn mutable_entry_computation_layout(&mut self) {
-      
+  pub fn mutable_entry_computation_layout(&mut self) -> &mut ComputationLayout {
+    self.entry_computation_layout.as_mut().unwrap()
   }
+
   pub fn clear_entry_computation_layout() {}
   pub fn hlo_profiling_enabled() {}
   pub fn cpu_traceme_enabled() {}

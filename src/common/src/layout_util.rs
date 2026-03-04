@@ -2,9 +2,7 @@
 
 use std::result::Result;
 use crate::{
-  blitz_data::{DimLevelType, PrimitiveType},
-  layout::{Tile, Layout, LayoutEqual},
-  shape::Shape, util::DimensionVector, printer::Printer, shape_util::ShapeUtil, primitive_util
+  blitz_data::{DimLevelType, PrimitiveType}, layout::{Layout, LayoutEqual, SplitConfig, Tile}, primitive_util, printer::Printer, shape::Shape, shape_util::ShapeUtil, util::DimensionVector
 };
 
 pub fn set_default_layout_to_container(minor_to_major: &mut Vec<i64>) {
@@ -14,20 +12,21 @@ pub fn set_default_layout_to_container(minor_to_major: &mut Vec<i64>) {
   }
 }
 
+// Namespaced collection of (static) Layout utilities.
 pub struct LayoutUtil {}
 
 impl LayoutUtil {
+  // Creates a layout with the given minor-to-major dimension order. (This is a
+  // convenience function for protobuf construction.)
   pub fn make_layout(
     minor_to_major: &Vec<i64>,
-    dim_level_types: Vec<DimLevelType>,
-    dim_unique: Vec<bool>,
-    dim_ordered: Vec<bool>,
     tiles: Vec<Tile>,
     tail_padding_alignment_in_elements: i64,
     index_primitive_type: PrimitiveType,
     pointer_primitive_type: PrimitiveType,
     element_size_in_bits: i64,
     memory_space: i64,
+    split_configs: Vec<SplitConfig>,
     physical_shape: Option<Shape>,
     dynamic_shape_metadata_prefix_bytes: i64,
   ) -> Layout
@@ -36,19 +35,11 @@ impl LayoutUtil {
     for dimension_number in minor_to_major {
       layout.add_minor_to_major(*dimension_number);
     }
-    for dim_level_type in dim_level_types {
-      layout.add_dim_level_type(dim_level_type);
-    }
-    for unique in dim_unique {
-      layout.add_dim_unique(unique);
-    }
-    for ordered in dim_ordered {
-      layout.add_dim_ordered(ordered);
-    }
     for tile in tiles {
       for dim in tile.dimensions() {
         if *dim < 0 && *dim != Tile::COMBINE_DIMENSION {
-          unreachable!("Tile dimension size needs to be minimum i64 value if it's negative.")
+          unreachable!("Tile dimension size needs to be minimum i64 value
+            if it's negative.");
         }
       }
       layout.add_tiles(tile);
@@ -58,6 +49,9 @@ impl LayoutUtil {
     layout.set_pointer_primitive_type(pointer_primitive_type);
     layout.set_element_size_in_bits(element_size_in_bits);
     layout.set_memory_space(memory_space);
+    for sc in &split_configs {
+      layout.add_split_config(sc.clone());
+    }
     if physical_shape.is_some() {
       layout.set_physical_shape(physical_shape.unwrap());
     }
@@ -76,12 +70,11 @@ impl LayoutUtil {
         i -= 1;
       }
     }
-    LayoutUtil::make_layout(&layout, vec![],
-      vec![], vec![], vec![],
-      1,
+    LayoutUtil::make_layout(
+      &layout, vec![], 1,
       PrimitiveType::Invalid,
       PrimitiveType::Invalid,
-      0, 0, 
+      0, 0, vec![],
       None, 0)
   }
 
@@ -91,12 +84,11 @@ impl LayoutUtil {
     for i in 0..rank {
       layout.push(i);
     }
-    LayoutUtil::make_layout(&layout, vec![],
-      vec![], vec![], vec![],
-      1,
+    LayoutUtil::make_layout(
+      &layout, vec![], 1,
       PrimitiveType::Invalid,
       PrimitiveType::Invalid,
-      0, 0, 
+      0, 0, vec![],
       None, 0)
   }
 
@@ -633,18 +625,16 @@ mod tests {
   fn make_shape_with_layout(
     elt_t: PrimitiveType,
     dimensions: Vec<i64>,
-    minor_to_major: Vec<i64>,
-    dim_level_types: Vec<DimLevelType>
+    minor_to_major: Vec<i64>
   ) -> Shape
   {
     let mut shape = ShapeUtil::make_shape(&elt_t, dimensions);
     let layout = LayoutUtil::make_layout(
-      &minor_to_major, dim_level_types, Vec::new(),
-      Vec::new(), Vec::new(),
-      1,
+      &minor_to_major, vec![], 1,
       PrimitiveType::Invalid,
-      PrimitiveType::Invalid, 0,
-      0, None, 0);
+      PrimitiveType::Invalid,
+      0, 0, vec![],
+      None, 0);
     shape.set_layout(layout);
     shape
   }
@@ -653,11 +643,11 @@ mod tests {
   fn test_tuple_layout_comparison() {
     let shape = ShapeUtil::make_tuple_shape(
       vec![make_shape_with_layout(
-        PrimitiveType::F32, vec![2, 3], vec![0, 1], vec![])]
+        PrimitiveType::F32, vec![2, 3], vec![0, 1])]
     );
     let other_shape = ShapeUtil::make_tuple_shape(
       vec![make_shape_with_layout(
-        PrimitiveType::F32, vec![2, 2], vec![0, 1], vec![])]
+        PrimitiveType::F32, vec![2, 2], vec![0, 1])]
     );
 
     let tuple0 = ShapeUtil::make_tuple_shape(vec![]);
@@ -686,12 +676,12 @@ mod tests {
     let mut src = make_shape_with_layout(
       PrimitiveType::F32,
       vec![2, 3],
-      vec![0, 1], vec![]);
+      vec![0, 1]);
 
     let mut dst = make_shape_with_layout(
       PrimitiveType::F32,
       vec![2, 3],
-      vec![1, 0], vec![]);
+      vec![1, 0]);
 
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), false);
     LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
@@ -712,55 +702,38 @@ mod tests {
     assert_eq!(dst.has_layout(), false);
   }
 
-  #[test] // TODO
-  fn test_copy_csr_array() {
-    let src = make_shape_with_layout(
-      PrimitiveType::F32, vec![2, 3], vec![1, 0], 
-      vec![DimLevelType::Dense, DimLevelType::Compressed]);
-    
-    let dst = make_shape_with_layout(
-      PrimitiveType::F32, vec![2, 3], vec![0, 1],
-      vec![]);
-
-    assert_eq!(LayoutUtil::is_sparse_array(&src), true);
-    assert_eq!(LayoutUtil::is_sparse_array(&dst), false);
-
-    //assert_eq!(LayoutUtil::is_csr_array(&src), true);
-    //assert_eq!(LayoutUtil::is_csr_array(&dst), false);
-  }
-
   #[test]
   fn test_copy_layout_tuple() {
     let s1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3], 
-      vec![0, 1], vec![]);
+      vec![0, 1]);
     let s2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123], 
-      vec![1, 0], vec![]);
+      vec![1, 0]);
 
     let s3 = make_shape_with_layout(
       PrimitiveType::F32, vec![], 
-      vec![], vec![]);
+      vec![]);
     let s4 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3], 
-      vec![0, 2, 1], vec![]);
+      vec![0, 2, 1]);
     let s5 = ShapeUtil::make_tuple_shape(vec![s3, s4]);
 
     let src = ShapeUtil::make_tuple_shape(vec![s1, s2, s5]);
 
     let d1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3], 
-      vec![1, 0], vec![]);
+      vec![1, 0]);
     let d2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123], 
-      vec![1, 0], vec![]);
+      vec![1, 0]);
 
     let d3 = make_shape_with_layout(
       PrimitiveType::F32, vec![], 
-      vec![], vec![]);
+      vec![]);
     let d4 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3], 
-      vec![1, 2, 0], vec![]);
+      vec![1, 2, 0]);
     let d5 = ShapeUtil::make_tuple_shape(vec![d3, d4]);
 
     let mut dst = ShapeUtil::make_tuple_shape(vec![d1, d2, d5]);
@@ -774,11 +747,11 @@ mod tests {
   fn test_copy_layout_not_compatible_same_rank() {
     let src = make_shape_with_layout(
       PrimitiveType::F32, vec![123, 42, 7], 
-      vec![2, 0, 1], vec![]);
+      vec![2, 0, 1]);
 
     let mut dst = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3, 5], 
-      vec![1, 0], vec![]);
+      vec![1, 0]);
 
     LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), true);
@@ -812,38 +785,38 @@ mod tests {
   fn test_copy_tuple_layout_with_token_and_opaque() {
     let s1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3],
-      vec![0, 1], vec![]);
+      vec![0, 1]);
     let s2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123],
-      vec![1, 0], vec![]);
+      vec![1, 0]);
     let s3 = ShapeUtil::make_token_shape();
 
     let s4 = ShapeUtil::make_opaque_shape();
     let s5 = make_shape_with_layout(
       PrimitiveType::F32, vec![],
-      vec![], vec![]);
+      vec![]);
     let s6 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3],
-      vec![0, 2, 1], vec![]);
+      vec![0, 2, 1]);
     let s7 = ShapeUtil::make_tuple_shape(vec![s4, s5, s6]);
 
     let src = ShapeUtil::make_tuple_shape(vec![s1, s2, s3, s7]);
 
     let d1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3],
-      vec![1, 0], vec![]);
+      vec![1, 0]);
     let d2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123],
-      vec![1, 0], vec![]);
+      vec![1, 0]);
     let d3 = ShapeUtil::make_token_shape();
 
     let d4 = ShapeUtil::make_opaque_shape();
     let d5 = make_shape_with_layout(
       PrimitiveType::F32, vec![],
-      vec![], vec![]);
+      vec![]);
     let d6 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3],
-      vec![1, 2, 0], vec![]);
+      vec![1, 2, 0]);
     let d7 = ShapeUtil::make_tuple_shape(vec![d4, d5, d6]);
 
     let mut dst = ShapeUtil::make_tuple_shape(vec![d1, d2, d3, d7]);
@@ -857,17 +830,17 @@ mod tests {
   fn test_clear_layout_tuple() {
     let s1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3],
-      vec![1, 0], vec![]);
+      vec![1, 0]);
     let s2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123],
-      vec![1, 0], vec![]);
+      vec![1, 0]);
 
     let s3 = make_shape_with_layout(
       PrimitiveType::F32, vec![],
-      vec![], vec![]);
+      vec![]);
     let s4 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3],
-      vec![1, 2, 0], vec![]);
+      vec![1, 2, 0]);
     let s5 = ShapeUtil::make_tuple_shape(vec![s3, s4]);
 
     let mut shape = ShapeUtil::make_tuple_shape(vec![s1, s2, s5]);
@@ -899,17 +872,17 @@ mod tests {
   fn test_set_to_default_layout_tuple() {
     let s1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3, 4],
-      vec![1, 0, 2], vec![]);
+      vec![1, 0, 2]);
     let s2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123, 7],
-      vec![1, 2, 0], vec![]);
+      vec![1, 2, 0]);
 
     let s3 = make_shape_with_layout(
       PrimitiveType::F32, vec![],
-      vec![], vec![]);
+      vec![]);
     let s4 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3, 4],
-      vec![3, 1, 2, 0], vec![]);
+      vec![3, 1, 2, 0]);
     let s5 = ShapeUtil::make_tuple_shape(vec![s3, s4]);
 
     let mut shape = ShapeUtil::make_tuple_shape(vec![s1, s2, s5]);
@@ -934,38 +907,38 @@ mod tests {
   #[test]
   fn test_default_layout_getter_major_to_minor() {
     let layout_r2 = LayoutUtil::make_layout(
-      &vec![1, 0], vec![], vec![],
-      vec![], vec![], 1,
+      &vec![1, 0], vec![], 1,
       PrimitiveType::Invalid,
-      PrimitiveType::Invalid,0,
-      0, None, 0);
+      PrimitiveType::Invalid,
+      0, 0, vec![],
+      None, 0);
     assert_eq!(LayoutEqual::new().equal(
       &layout_r2, &LayoutUtil::get_default_layout_for_r2()), true);
 
     let layout_r3 = LayoutUtil::make_layout(
-      &vec![2, 1, 0], vec![], vec![],
-      vec![], vec![], 1,
+      &vec![2, 1, 0], vec![], 1,
       PrimitiveType::Invalid,
-      PrimitiveType::Invalid,0,
-      0, None, 0);
+      PrimitiveType::Invalid,
+      0, 0, vec![],
+      None, 0);
     assert_eq!(LayoutEqual::new().equal(
       &layout_r3, &LayoutUtil::get_default_layout_for_r3()), true);
 
     let layout_r4 = LayoutUtil::make_layout(
-      &vec![3, 2, 1, 0], vec![], vec![],
-      vec![], vec![], 1,
+      &vec![3, 2, 1, 0], vec![], 1,
       PrimitiveType::Invalid,
-      PrimitiveType::Invalid,0,
-      0, None, 0);
+      PrimitiveType::Invalid,
+      0,0, vec![],
+      None, 0);
     assert_eq!(LayoutEqual::new().equal(
       &layout_r4, &LayoutUtil::get_default_layout_for_r4()), true);
 
     let layout_r5 = LayoutUtil::make_layout(
-      &vec![4, 3, 2, 1, 0], vec![], vec![],
-      vec![], vec![], 1,
+      &vec![4, 3, 2, 1, 0], vec![], 1,
       PrimitiveType::Invalid,
-      PrimitiveType::Invalid,0,
-      0, None, 0);
+      PrimitiveType::Invalid,
+      0,0, vec![],
+      None, 0);
     assert_eq!(LayoutEqual::new().equal(
       &layout_r5,
       &LayoutUtil::get_default_layout_for_shape(
@@ -977,20 +950,23 @@ mod tests {
   fn test_make_descending() {
     assert_eq!(LayoutEqual::new().equal(
       &LayoutUtil::make_descending_layout(5),
-      &LayoutUtil::make_layout(&vec![4, 3, 2, 1, 0], vec![], vec![], vec![],
-        vec![], 1, PrimitiveType::Invalid, PrimitiveType::Invalid, 0, 0, None, 0)),
+      &LayoutUtil::make_layout(&vec![4, 3, 2, 1, 0], vec![], 1,
+        PrimitiveType::Invalid, PrimitiveType::Invalid,
+        0, 0, vec![], None, 0)),
       true);
 
     assert_eq!(LayoutEqual::new().equal(
       &LayoutUtil::make_descending_layout(1),
-      &LayoutUtil::make_layout(&vec![0], vec![], vec![], vec![],
-        vec![], 1, PrimitiveType::Invalid, PrimitiveType::Invalid, 0, 0, None, 0)),
+      &LayoutUtil::make_layout(&vec![0], vec![], 1,
+        PrimitiveType::Invalid, PrimitiveType::Invalid,
+        0, 0, vec![], None, 0)),
       true);
 
     assert_eq!(LayoutEqual::new().equal(
       &LayoutUtil::make_descending_layout(0),
-      &LayoutUtil::make_layout(&vec![], vec![], vec![], vec![],
-        vec![], 1, PrimitiveType::Invalid, PrimitiveType::Invalid, 0, 0, None, 0)),
+      &LayoutUtil::make_layout(&vec![], vec![], 1,
+        PrimitiveType::Invalid, PrimitiveType::Invalid,
+        0, 0, vec![], None, 0)),
       true);
   }
 
@@ -998,20 +974,23 @@ mod tests {
   fn test_make_ascending() {
     assert_eq!(LayoutEqual::new().equal(
       &LayoutUtil::make_ascending_layout(5),
-      &LayoutUtil::make_layout(&vec![0, 1, 2, 3, 4], vec![], vec![], vec![],
-        vec![], 1, PrimitiveType::Invalid, PrimitiveType::Invalid, 0, 0, None, 0)),
+      &LayoutUtil::make_layout(&vec![0, 1, 2, 3, 4], vec![], 1,
+        PrimitiveType::Invalid, PrimitiveType::Invalid,
+        0, 0, vec![], None, 0)),
       true);
 
     assert_eq!(LayoutEqual::new().equal(
       &LayoutUtil::make_ascending_layout(1),
-      &LayoutUtil::make_layout(&vec![0], vec![], vec![], vec![],
-        vec![], 1, PrimitiveType::Invalid, PrimitiveType::Invalid, 0, 0, None, 0)),
+      &LayoutUtil::make_layout(&vec![0], vec![], 1,
+        PrimitiveType::Invalid, PrimitiveType::Invalid,
+        0, 0, vec![], None, 0)),
       true);
 
     assert_eq!(LayoutEqual::new().equal(
       &LayoutUtil::make_ascending_layout(0),
-      &LayoutUtil::make_layout(&vec![], vec![], vec![], vec![],
-        vec![], 1, PrimitiveType::Invalid, PrimitiveType::Invalid, 0, 0, None, 0)),
+      &LayoutUtil::make_layout(&vec![], vec![], 1,
+        PrimitiveType::Invalid, PrimitiveType::Invalid,
+        0, 0, vec![], None, 0)),
       true);
   }
 
@@ -1033,11 +1012,10 @@ mod tests {
     let mut shape =
       ShapeUtil::make_shape(&PrimitiveType::F32, vec![2, 3]);
     let layout = LayoutUtil::make_layout(
-      &vec![0, 1, 2], vec![], vec![],
-      vec![], vec![], 1,
+      &vec![0, 1, 2], vec![], 1,
       PrimitiveType::Invalid,
       PrimitiveType::Invalid,
-      0, 0,
+      0, 0, vec![],
       None, 0);
 
     shape.set_layout(layout);
@@ -1057,11 +1035,10 @@ mod tests {
     let mut shape =
       ShapeUtil::make_shape(&PrimitiveType::F32, vec![2, 3]);
     let layout = LayoutUtil::make_layout(
-      &vec![0, 1], vec![], vec![],
-      vec![], vec![], 1,
+      &vec![0, 1], vec![], 1,
       PrimitiveType::Invalid,
       PrimitiveType::Invalid,
-      0, 0,
+      0, 0, vec![],
       None, 0);
     
     shape.set_layout(layout);
@@ -1097,71 +1074,6 @@ mod tests {
   }
 
   #[test]
-  fn test_validate_layout_sparse() {
-    let mut shape =
-      ShapeUtil::make_shape(&PrimitiveType::F32, vec![2, 3]);
-    let layout =
-      LayoutUtil::make_layout(&vec![1, 0],
-      vec![DimLevelType::Dense, DimLevelType::Compressed],
-      vec![], vec![],
-      vec![Tile::new(vec![10, 10])], 1, 
-      PrimitiveType::Invalid, 
-      PrimitiveType::Invalid,
-      0, 0,
-      None, 0);
-    shape.set_layout(layout);
-    
-    let result =
-      LayoutUtil::validate_layout_in_shape(&shape, false);
-    assert_eq!(result.err(),
-      Some("Layout has tiles, but the shape is a sparse array.".to_string()));
-    shape.mutable_layout().as_mut().unwrap()
-      .clear_tiles();
-    assert_eq!(LayoutUtil::validate_layout_in_shape(&shape, false), Ok(()));
-
-    let s1 = ShapeUtil::make_shape(&PrimitiveType::F32, vec![6]);
-    shape.mutable_layout().as_mut().unwrap()
-      .set_physical_shape(s1);
-    assert_eq!(LayoutUtil::validate_layout_in_shape(&shape, false), Ok(()));
-
-    let s2 = ShapeUtil::make_shape(&PrimitiveType::S32, vec![10]);
-    shape.mutable_layout().as_mut().unwrap()
-      .mutable_physical_shape().as_mut().unwrap()
-      .mutable_layout().as_mut().unwrap()
-      .set_physical_shape(s2);
-    let result =
-      LayoutUtil::validate_layout_in_shape(&shape, false);
-    assert_eq!(result.err(),
-      Some("Layout has a physical_shape, but is not a sparse array.".to_string()));
-
-    shape.mutable_layout().as_mut().unwrap()
-      .mutable_physical_shape().as_mut().unwrap()
-      .clear_layout();
-    shape.mutable_layout().as_mut().unwrap()
-      .clear_dim_level_types();
-    let result =
-    LayoutUtil::validate_layout_in_shape(&shape, false);
-    assert_eq!(result.err(),
-      Some("Layout has a physical_shape, but is not a sparse array.".to_string()));
-
-    let layout2 =
-      LayoutUtil::make_layout(&vec![1, 0],
-      vec![DimLevelType::Dense, DimLevelType::Dense],
-      vec![true, false], vec![],
-      vec![], 1, 
-      PrimitiveType::Invalid, 
-      PrimitiveType::Invalid,
-      0, 0,
-      None, 0);
-    shape.set_layout(layout2);
-
-    let result =
-    LayoutUtil::validate_layout_in_shape(&shape, false);
-    assert_eq!(result.err(),
-      Some("Layout dimension has invalid level encoding.".to_string()));
-  }
-
-  #[test]
   fn test_validate_layout_tuple_subshapes_with_missing_layouts() {
     let sub_1_1_1 =
       ShapeUtil::make_shape(&PrimitiveType::F32, vec![1, 2]);
@@ -1185,11 +1097,10 @@ mod tests {
 
     shape.mutable_tuple_shapes(1).mutable_tuple_shapes(0)
       .set_layout(LayoutUtil::make_layout(&vec![0, 2, 3],
-        vec![], vec![], vec![],
         vec![], 1,
         PrimitiveType::Invalid,
         PrimitiveType::Invalid,
-        0, 0,
+        0, 0, vec![],
         None, 0));
 
     result = LayoutUtil::validate_layout_in_shape(&shape, true);
@@ -1199,12 +1110,11 @@ mod tests {
 
   #[test]
   fn test_move_dim_to_major() {
-    let mut layout = LayoutUtil::make_layout(&vec![2, 1, 0],
-      vec![], vec![], vec![],
-      vec![], 1, 
+    let mut layout = LayoutUtil::make_layout(
+      &vec![2, 1, 0], vec![], 1, 
       PrimitiveType::Invalid, 
       PrimitiveType::Invalid,
-      0, 0,
+      0, 0, vec![],
       None, 0);
     let layout_clone = layout.clone();
 
@@ -1215,9 +1125,9 @@ mod tests {
     assert_eq!(LayoutEqual::new().equal(
       &new_layout2,
       &LayoutUtil::make_layout(&vec![2, 0, 1],
-        vec![], vec![], vec![], vec![], 1, 
+        vec![], 1, 
         PrimitiveType::Invalid, PrimitiveType::Invalid,
-        0, 0, None, 0)),
+        0, 0, vec![], None, 0)),
         true);
   }
 

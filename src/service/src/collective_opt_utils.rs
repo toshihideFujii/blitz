@@ -341,7 +341,7 @@ pub fn extract_split_dim_spec(
     // Skip trivial (1) dimensions or if the index is a constant 0.
     if shape.dimensions(dim) == 1 ||
       (offset.opcode() == HloOpcode::Constant &&
-      offset.literal::<i64>().is_zero_i64(&vec![]))
+      offset.literal::<i64>().is_zero(&vec![]))
     {
       continue;
     }

@@ -88,6 +88,10 @@ impl Array {
     &self.values
   }
 
+  pub fn set_values(&mut self, values: &Vec<i64>) {
+    self.values.clone_from(values);
+  }
+
   // Invokes a callback with the (indices, value) for each cell in the array.
   pub fn each<F>(&mut self, func: &mut F) where F: FnMut(&Vec<i64>, &mut i64) {
     for i in 0..self.num_elements() {

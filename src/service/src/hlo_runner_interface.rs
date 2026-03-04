@@ -4,13 +4,13 @@ use common::{blitz_data::DebugOptions, literal::Literal, shape::Shape};
 use hlo::hlo_module::HloModule;
 
 // The options used to configure an execute_replicated() call.
-struct ReplicatedExecuteOptions<T> where T: Clone + Default + PartialEq + 'static {
+struct ReplicatedExecuteOptions {
   numm_replicas: i64,
-  arguments: Vec<Literal<T>>,
-  infeed_values: Vec<Literal<T>>,
+  arguments: Vec<Literal>,
+  infeed_values: Vec<Literal>,
   infeed_steps: i64,
   outfeed_shape: Shape,
-  outfeed_values: Vec<Literal<T>>,
+  outfeed_values: Vec<Literal>,
   run_hlo_passes: bool,
   use_threads: bool,
 }

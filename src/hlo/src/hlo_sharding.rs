@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
+
 use common::{
-  blitz_data::{OpMetadata, OpSharding, OpShardingType}, printer::{Printer, StringPrinter},
-  shape::Shape, shape_tree::ShapeTree, shape_util::ShapeUtil
+  array::Array, blitz_data::{OpMetadata, OpSharding, OpShardingType}, printer::{Printer, StringPrinter}, shape::Shape, shape_tree::ShapeTree, shape_util::ShapeUtil
 };
 
 use crate::{hlo_op_metadata::{op_metadata_to_string}, tile_assignment::TileAssignment};
@@ -43,14 +44,14 @@ pub struct HloSharding {
   tile_assignment: TileAssignment,
   tuple_elements: Vec<HloSharding>,
   metadata: Vec<OpMetadata>,
-  subgroup_types: Vec<OpShardingType>,
+  pub subgroup_types: Vec<OpShardingType>,
   replicated: bool,
   maximal: bool,
   tuple: bool,
   manual: bool,
   unknown: bool,
   unreduced: bool,
-  replicate_on_last_tile_dim: bool,
+  pub replicate_on_last_tile_dim: bool,
   shard_group: ShardGroup,
 }
 
@@ -123,6 +124,48 @@ impl HloSharding {
     }
   }
 
+  pub fn new_from_tile_assignment(
+    tile_assignment: TileAssignment,
+    replicate_on_last_tile_dim: bool,
+    metadata: Vec<OpMetadata>) -> Self
+  {
+    HloSharding {
+      tile_assignment: tile_assignment,
+      tuple_elements: Vec::new(),
+      metadata: metadata,
+      subgroup_types: Vec::new(),
+      replicated: false,
+      maximal: false,
+      tuple: false,
+      manual: false,
+      unknown: false,
+      unreduced: false,
+      replicate_on_last_tile_dim: replicate_on_last_tile_dim,
+      shard_group: ShardGroup::new(-1, false, false)
+    }    
+  }
+
+  pub fn new_from_tile_assignment_with_type(
+    tile_assignment: TileAssignment,
+    subgroup_types: Vec<OpShardingType>,
+    metadata: Vec<OpMetadata>) -> Self
+  {
+    HloSharding {
+      tile_assignment: tile_assignment,
+      tuple_elements: Vec::new(),
+      metadata: metadata,
+      subgroup_types: subgroup_types,
+      replicated: false,
+      maximal: false,
+      tuple: false,
+      manual: false,
+      unknown: false,
+      unreduced: false,
+      replicate_on_last_tile_dim: false,
+      shard_group: ShardGroup::new(-1, false, false)
+    }    
+  }
+
   // Creates a trivial sharding that replicates a maximal tile scross all
   // devices.
   pub fn replicate(metadata: Vec<OpMetadata>) -> Self {
@@ -174,17 +217,175 @@ impl HloSharding {
     unimplemented!()
   }
 
-  pub fn partial_tile() {}
+  // Creates a partially replicated tiled sharding with device-level tile
+  // assignment, where the last dimension is the additional replication
+  // dimension. Replication group members will be sorted.
+  pub fn partial_tile(
+    tile_assignment_last_dim_replicate: TileAssignment,
+    metadata: Vec<OpMetadata>) -> Self
+  {
+    let num_elements =  tile_assignment_last_dim_replicate.num_elements();
+    if tile_assignment_last_dim_replicate.num_dimensions() == 1 ||
+      tile_assignment_last_dim_replicate.dimensions().last() == Some(&num_elements)
+    {
+      return HloSharding::replicate(metadata);
+    }
+    if tile_assignment_last_dim_replicate.dimensions().last() == Some(&1) {
+      let mut new_tile_dims = vec![];
+      new_tile_dims.clone_from(tile_assignment_last_dim_replicate.dimensions());
+      //new_tile_dims.remove_suffix() // TODO
+      return HloSharding::new_from_tile_assignment(
+        tile_assignment_last_dim_replicate.reshape(&new_tile_dims),
+        false, metadata);
+    }
+    let group_size =
+      *tile_assignment_last_dim_replicate.dimensions().last().unwrap();
+    if tile_assignment_last_dim_replicate.iota().is_some() {
+      // Iota tile assignments are always sorted in the minor dimension.
+      // Additionally if the minor most dimension is the combination multiple
+      // dimensions in the transposed iota, these dimensions can be folded into
+      // one.
+      let iota =
+        tile_assignment_last_dim_replicate.iota().as_ref().unwrap();
+      let index = *iota.transpose_perm().last().unwrap();
+      if iota.reshape_dims()[index as usize] == group_size {
+        return HloSharding::new_from_tile_assignment(
+          tile_assignment_last_dim_replicate, true, metadata);
+      }
+      let mut new_reshape_dims = vec![];
+      let mut new_transpose_perm = vec![];
+      if group_minor_iota_dim_sorted(iota.reshape_dims(), iota.transpose_perm(),
+        group_size, &mut new_reshape_dims, &mut new_transpose_perm)
+      {
+        let tile = TileAssignment::new_from_vecs(
+          iota.dims(), &new_reshape_dims, &new_transpose_perm);
+        return HloSharding::new_from_tile_assignment(
+          tile, true, metadata);
+      }
+    }
+
+    let sorted_array = tile_assignment_last_dim_replicate.array().clone();
+    // TODO: sort
+    HloSharding::new_from_tile_assignment(TileAssignment::new_from_array(sorted_array),
+      true, metadata)
+  }
 
   // Creates a subgroup sharding with device-level tile assignment, the
   // sharding type of each subgroup is defined by subgroup_types. When creating
   // the HloSharding, subgroup dims of the same type will be merged.
   pub fn subgroup(
-    _tile_assignment: TileAssignment,
-    _subgroup_types: &Vec<OpShardingType>,
-    _metadata: &Vec<OpMetadata>) -> Self
+    tile_assignment: TileAssignment,
+    subgroup_types: Vec<OpShardingType>,
+    metadata: Vec<OpMetadata>) -> Self
   {
-    unimplemented!()
+    if subgroup_types.is_empty() {
+      return HloSharding::new_from_tile_assignment(tile_assignment.clone(),
+        false, metadata);
+    }
+    // If there is only one type of subgrouping and there is no tiling on data
+    // dimensions, it can be canonicalized to a simple manual/replicated/unreduced
+    // sharding.
+    for t in &subgroup_types {
+      if *t == subgroup_types[0] {
+        let len = tile_assignment.dimensions().len() - subgroup_types.len();
+        let mut product = 1;
+        for i in 0..len {
+          product *= tile_assignment.dimensions()[i];
+        }
+        if product == 1 {
+          if subgroup_types[0] == OpShardingType::Manual {
+            return HloSharding::manual(metadata);
+          }
+          if subgroup_types[0] == OpShardingType::Replicated {
+            return HloSharding::replicate(metadata);
+          }
+          if subgroup_types[0] == OpShardingType::Unreduced {
+            return HloSharding::unreduced(metadata);
+          }
+        }
+      }
+    }
+    // Normalize the subgroups to simplify two cases:
+    //   - Remove trivial dims of size 1.
+    //   - Merge dims of the same type.
+    //   - Sort types.
+    let data_dims = tile_assignment.num_dimensions() - subgroup_types.len();
+    //let perm = vec![];
+    let mut type_to_dims: HashMap<OpShardingType, Vec<i64>> = HashMap::new();
+    type_to_dims.insert(OpShardingType::Manual, vec![]);
+    type_to_dims.insert(OpShardingType::Maximal, vec![]);
+    type_to_dims.insert(OpShardingType::Other, vec![]);
+    type_to_dims.insert(OpShardingType::Replicated, vec![]);
+    type_to_dims.insert(OpShardingType::Tuple, vec![]);
+    type_to_dims.insert(OpShardingType::Unknown, vec![]);
+    type_to_dims.insert(OpShardingType::Unreduced, vec![]);
+
+    let mut subgroup_count = 0;
+    let mut needs_merging = false;
+    let mut removed_dims = vec![];
+    for i in 0..subgroup_types.len() {
+      if tile_assignment.dim((i + data_dims) as i64) == 1 {
+        removed_dims.push(i + data_dims);
+        needs_merging = true;
+        continue;
+      }
+      let dims = type_to_dims.get_mut(&subgroup_types[i]).unwrap();
+      if !dims.is_empty() {
+        needs_merging = true;
+      } else {
+        subgroup_count += 1;
+      }
+      needs_merging |= !dims.is_empty();
+      dims.push((i + data_dims) as i64);
+    }
+    needs_merging |= subgroup_count > 1;
+    // Make sure the replicate dims are at the end so that we can leverage
+    // PartialTile() to sort the elements.
+    let create_sharding =
+      |tiles: TileAssignment,
+        types: Vec<OpShardingType>,
+        metadata: Vec<OpMetadata>| -> HloSharding
+    {
+      if types.len() == 1 && types.last() == Some(&OpShardingType::Replicated) {
+        // Normalize to partial tile.
+        return HloSharding::partial_tile(
+          tiles, metadata);
+      }
+      if types.len() == 1 && types.last() == Some(&OpShardingType::Manual) &&
+        tiles.num_elements() == *tiles.dimensions().last().unwrap()
+      {
+        // Normalize to manual.
+        return HloSharding::manual(metadata); 
+      }
+      if !types.is_empty() && types.last() == Some(&OpShardingType::Replicated) {
+        // If the last type is REPLICATED, we first create a partially replicated
+        // sharding without other subgroups so that the elements are sorted. Then
+        // we fix the subgroup types.
+        let mut sharding = HloSharding::partial_tile(
+          tiles, metadata);
+        sharding.replicate_on_last_tile_dim = false;
+        for t in &types {
+          sharding.subgroup_types.push(t.clone());
+        }
+        return sharding;
+      }
+      HloSharding::new_from_tile_assignment_with_type(
+        tiles, types, metadata)
+    };
+
+    if needs_merging {
+
+    }
+    create_sharding(tile_assignment, subgroup_types, metadata)
+  }
+
+  pub fn subgroup_from_array(
+    tile_assignment: Array,
+    subgroup_types: Vec<OpShardingType>,
+    metadata: Vec<OpMetadata>) -> Self
+  {
+    HloSharding::subgroup(
+      TileAssignment::new_from_array(tile_assignment), subgroup_types, metadata)
   }
 
   pub fn tile_id() {}
@@ -320,41 +521,36 @@ impl HloSharding {
     let print_last_tile_dims =
       |printer: &mut dyn Printer|
     {
-      printer.append(&" last_tile_dims={".to_string());
-      printer.append(&"}".to_string());
+      if !self.subgroup_types.is_empty() {
+        let op_sharding_type_to_string =
+          |t: OpShardingType| -> String
+        {
+          match t {
+            OpShardingType::Manual => return "manual".to_string(),
+            OpShardingType::Maximal => return "maximal".to_string(),
+            OpShardingType::Replicated => return "replicated".to_string(),
+            OpShardingType::Unreduced => return "unreduced".to_string(),
+            _ => return "error_type".to_string(),
+          }
+        };
+        printer.append(&" last_tile_dims={".to_string());
+        let mut count = 0;
+        let subg_len = self.subgroup_types.len();
+        for subg_t in &self.subgroup_types {
+          printer.append(&op_sharding_type_to_string(subg_t.clone()));
+          count += 1;
+          if count != subg_len {
+            printer.append(&", ".to_string());
+          }
+        }
+        printer.append(&"}".to_string());
+      }
     };
 
     printer.append(&"{".to_string());
     self.tile_assignment.print(printer);
     if self.replicate_on_last_tile_dim {
-      let op_sharding_type_to_string =
-        |t: OpShardingType| -> String
-      {
-        match t {
-          OpShardingType::Manual => return "manual".to_string(),
-          OpShardingType::Maximal => return "maximal".to_string(),
-          OpShardingType::Replicated => return "replicated".to_string(),
-          OpShardingType::Unreduced => return "unreduced".to_string(),
-          _ => return "error_type".to_string(),
-        }
-      };
-      printer.append(&"last_tile_dim_replicate".to_string());
-      let mut count = 0;
-      let subg_len = self.subgroup_types.len();
-      for subg_t in &self.subgroup_types {
-        printer.append(&op_sharding_type_to_string(subg_t.clone()));
-        count += 1;
-        if count != subg_len {
-          printer.append(&", ".to_string());
-        }
-      }
-      printer.append(&"}".to_string());
-    }
-
-    printer.append(&"{".to_string());
-    self.tile_assignment.print(printer);
-    if self.replicate_on_last_tile_dim {
-      printer.append(&"last_tile_dim_replicate".to_string());
+      printer.append(&" last_tile_dim_replicate".to_string());
     }
     print_last_tile_dims(printer);
     print_shard_group(printer);
@@ -740,8 +936,9 @@ impl HloSharding {
     ShardGroup::new(shard_group_id, false, true)
   }
 
-  pub fn set_shard_group(&mut self, shard_group: ShardGroup) {
+  pub fn set_shard_group(&mut self, shard_group: ShardGroup) -> &HloSharding {
     self.shard_group = shard_group;
+    self
   }
 
   pub fn clear_shard_group(&mut self) {
@@ -751,4 +948,92 @@ impl HloSharding {
   pub fn get_shard_group(&self) -> &ShardGroup {
     &self.shard_group
   }
+}
+
+// Helper to group minor dimensions totaling a given group size while preserving
+// V2 format. Returns true if such grouping is successful, otherwise returns
+// false and will need to fallback to V1 sharding.
+fn group_minor_iota_dim_sorted(
+  dims: &Vec<i64>, perm: &Vec<i64>, mut group_size: i64,
+  new_dims: &mut Vec<i64>, new_perm: &mut Vec<i64>) -> bool
+{
+  debug_assert!(group_size >= 1);
+  let mut grouped_dims = 0;
+  let mut split_dim_and_size: Option<(i64, i64)> = None;
+
+  for i in (0..perm.len()).rev() {
+    let dim = perm[i];
+    let dim_size = dims[dim as usize];
+    if dim_size <= group_size {
+      if group_size % dim_size != 0 {
+        return false;
+      }
+      group_size /= dim_size;
+      grouped_dims += 1;
+    } else {
+      if dim_size % group_size != 0 {
+        return false;
+      }
+      split_dim_and_size = Some((dim, dim_size / group_size));
+      grouped_dims += 1;
+      //group_size = 1; // TODO
+      break;
+    }
+  }
+
+  if split_dim_and_size.is_none() {
+    new_dims.clone_from(dims);
+    new_perm.clone_from(perm);
+    let new_perm_len = new_perm.len();
+    let (left, right) =
+      new_perm.split_at_mut(new_perm_len - grouped_dims);
+    right.sort();
+    let merged = vec![left, right];
+    *new_perm = merged.concat();
+    return true;
+  }
+
+  new_dims.resize(dims.len() + 1,0);
+  new_perm.resize(perm.len() + 1, 0);
+  let split_i = split_dim_and_size.unwrap().0;
+  for i in 0..split_i {
+    new_dims[i as usize] = dims[i as usize];
+  }
+  new_dims[split_i as usize] = split_dim_and_size.unwrap().1;
+  new_dims[(split_i + 1) as usize] =
+    dims[split_i as usize] / split_dim_and_size.unwrap().1;
+  for i in (split_i + 2)..new_perm.len() as i64 {
+    new_dims[i as usize] = dims[(i - 1) as usize];
+  }
+
+  let mut perm_split = 0;
+  for i in 0..perm.len() {
+    let perm_dim = perm[i];
+    if perm_dim <= split_i {
+      new_perm[i] = perm_dim
+    } else {
+      new_perm[i] = perm_dim + 1;
+    }
+    if perm_dim == split_i {
+      perm_split = i;
+      break;
+    }
+  }
+  new_perm[perm_split + 1] = new_perm[perm_split] + 1;
+  for i in (perm_split + 2)..new_perm.len() {
+    let perm_dim = perm[i - 1];
+    if perm_dim <= split_i {
+      new_perm[i] = perm_dim;
+    } else {
+      new_perm[i] = perm_dim + 1;
+    }
+  }
+
+  let new_perm_len = new_perm.len();
+  let (left, right) =
+    new_perm.split_at_mut(new_perm_len - grouped_dims);
+  right.sort();
+  let merged = vec![left, right];
+  *new_perm = merged.concat();
+  true
 }

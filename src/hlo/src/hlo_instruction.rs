@@ -4,7 +4,12 @@ use std::collections::{HashMap, HashSet};
 
 use common::{
   blitz_data::{
-    Algorithm, CholeskyOptions, ConvolutionDimensionNumbers, DotDimensionNumbers, FftType, FrontendAttributes, GatherDimensionNumbers, OpMetadata, PaddingConfig, PaddingType, ParameterReplication, Precision, PrecisionConfig, PrimitiveType, RandomAlgorithm, RandomDistribution, ReplicaGroup, ResultAccuracy, ScatterDimensionNummbers, SliceDimensions, SparsityDescriptor, Statisitic, StatisticsViz, TriangularSolveOptions, WhileLoopBackendConfig, Window
+    Algorithm, CholeskyOptions, ConvolutionDimensionNumbers, DotDimensionNumbers,
+    FftType, FrontendAttributes, GatherDimensionNumbers, OpMetadata, PaddingConfig,
+    PaddingType, ParameterReplication, Precision, PrecisionConfig, PrimitiveType,
+    RandomAlgorithm, RandomDistribution, ReplicaGroup, ResultAccuracy,
+    ScatterDimensionNummbers, SliceDimensions, SparsityDescriptor, Statisitic,
+    StatisticsViz, TriangularSolveOptions, WhileLoopBackendConfig, Window
   },
   comparison_util::{ComparisonDirection, ComparisonType},
   literal::Literal,
@@ -13,7 +18,10 @@ use common::{
 };
 
 use crate::{
-  collective_device_list::CollectiveDeviceList, dfs_hlo_visitor_with_default::{DfsHloVisitor, DfsHloVisitorWithDefault}, hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata, hlo_instructions::{
+  collective_device_list::CollectiveDeviceList,
+  dfs_hlo_visitor_with_default::{DfsHloVisitor, DfsHloVisitorWithDefault},
+  hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata,
+  hlo_instructions::{
     HloAsyncInstruction,
     HloAsyncStartInstruction,
     HloBatchNormGradInstruction,
@@ -31,7 +39,7 @@ use crate::{
     //HloDynamicUpdateSliceInstruction,
     //HloGetTupleElementInstruction,
     HloInfeedInstruction,
-    HloIotaInstruction,
+    //HloIotaInstruction,
     HloMapInstruction,
     HloOutfeedInstruction,
     //HloParameterInstruction,
@@ -46,7 +54,9 @@ use crate::{
     HloSortInstruction,
     HloTopKInstruction,
     HloTransposeInstruction
-  }, hlo_module::HloModule, hlo_opcode::HloOpcode, hlo_sharding::HloSharding
+  },
+  hlo_module::HloModule, hlo_opcode::HloOpcode, hlo_original_value::OriginalValue,
+  hlo_sharding::HloSharding, name_uniquer::NameUniquer
 };
 
 #[derive(Clone, PartialEq)]
@@ -482,6 +492,7 @@ pub struct HloInstruction {
   name: String,
   metadata: Option<OpMetadata>,
   collective_instruction: Option<HloCollectiveInstruction>,
+  is_root: bool,
 }
 
 impl HloInstruction {
@@ -501,7 +512,8 @@ impl HloInstruction {
       shape: Shape::new(),
       name: "".to_string(),
       metadata: None,
-      collective_instruction: None
+      collective_instruction: None,
+      is_root: false,
     }
   }
 
@@ -518,16 +530,15 @@ impl HloInstruction {
   }
 
   // Creates a literal constant instruction.
-  pub fn create_constant<T>(_literal: Literal<T>) -> HloInstruction
-    where T: Clone + Default + PartialEq
-  {
+  pub fn create_constant(_literal: Literal) -> HloInstruction {
     //HloConstantInstruction::new(literal)
     unimplemented!()
   }
 
   // Creates an iota instruction.
-  pub fn create_iota(shape: &Shape, iota_dimension: i64) -> HloIotaInstruction {
-    HloIotaInstruction::new(shape, iota_dimension)
+  pub fn create_iota(_shape: &Shape, _iota_dimension: i64) -> HloInstruction {
+    //HloIotaInstruction::new(shape, iota_dimension)
+    unimplemented!()
   }
 
   // Creates a top-k instruction returning the top k values along the last
@@ -570,8 +581,9 @@ impl HloInstruction {
   // Precondition: opcode must be a legitimate unary operation.
   pub fn create_unary(
     _shape: &Shape,
-    _opcode: HloOpcode,
-    _operand: &HloInstruction) -> HloInstruction
+    _opcode: &HloOpcode,
+    _operand: &HloInstruction,
+    _result_accuracy: Option<ResultAccuracy>) -> HloInstruction
   {
     unimplemented!()
   }
@@ -580,14 +592,24 @@ impl HloInstruction {
   // Precondition: opcode must be a legitimate binary operation.
   pub fn create_binary(
     _shape: &Shape,
-    _opcode: HloOpcode,
+    _opcode: &HloOpcode,
     _lhs: &HloInstruction,
     _rhs: &HloInstruction) -> HloInstruction
   {
     unimplemented!()
   }
 
-  pub fn create_ternary() {}
+  // Creates a ternary instruction (three operands).
+  // Precondition: opcode must be a legitimate ternary operation.
+  pub fn create_ternary(
+    _shape: &Shape,
+    _opcode: &HloOpcode,
+    _lhs: &HloInstruction,
+    _rhs: &HloInstruction,
+    _ehs: &HloInstruction) -> HloInstruction
+  {
+    unimplemented!()
+  }
 
   pub fn create_variadic(
     _shape: &Shape,
@@ -714,11 +736,14 @@ impl HloInstruction {
 
   // Creates a conversion instruction, where operand is the data to convert and
   // shape is the target shape for the conversion.
-  pub fn create_convert(shape: Shape, operand: HloInstruction) -> HloInstruction {
+  pub fn create_convert(
+    shape: &Shape,
+    operand: &HloInstruction) -> HloInstruction
+  {
     let mut instruction = HloInstruction::default();
     instruction.set_opcode(HloOpcode::Convert);
-    instruction.set_shape(shape);
-    instruction.append_operand(operand);
+    instruction.set_shape(shape.clone());
+    instruction.append_operand(operand.clone());
     instruction
   }
 
@@ -728,7 +753,15 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn create_bitcast_convert() {}
+  // Creates a bitcast conversion instruction, where operand is the data to
+  // convert and shape is the target shape for the conversion.
+  pub fn create_bitcast_convert(
+    _shape: &Shape,
+    _operand: &HloInstruction) -> HloInstruction
+  {
+    unimplemented!()
+  }
+
   pub fn create_stochastic_convert() {}
 
   // Creates an infeed instruction, which reads data of the given shape
@@ -1002,6 +1035,14 @@ impl HloInstruction {
     false
   }
 
+  pub fn mark_as_root(&mut self) {
+    self.is_root = true;
+  }
+
+  pub fn mark_as_non_root(&mut self) {
+    self.is_root = false;
+  }
+
   // Does this instruction have no users.
   pub fn is_dead(&self) -> bool {
     self.users.empty() && !self.is_root()
@@ -1120,7 +1161,21 @@ impl HloInstruction {
     instruction.users.contains(self)
   }
 
-  pub fn add_control_dependency_to() {}
+  // Adds a control dependency from this instruction to the given
+  // instruction. This instruction becomes a control predecessor of
+  // 'instruction', and 'instruction' becomes a control successor of this
+  // instruction. Returns an error status if either of the given instructions
+  // does not belong to the same computation.
+  //
+  // This is used to enforce an additional ordering requirement that is not
+  // captured by normal data dependencies, such as ordering among Send or Recv
+  // operations to avoid deadlock.
+  pub fn add_control_dependency_to(
+    &mut self, _instruction: &HloInstruction) -> Result<(), String>
+  {
+    unimplemented!()
+  }
+
   pub fn remove_control_dependency_to() {}
 
   // Drops all control predecessors and successors from this HLO instruction.
@@ -1729,11 +1784,18 @@ impl HloInstruction {
 
   // Sets the string identifier for this instruction. Name will be sanitized to
   // match the regexp "[a-zA-Z_][a-zA-Z0-9.-]*".
-  pub fn set_and_sanitize_name(&mut self, _name: String) {
-      
+  pub fn set_and_sanitize_name(&mut self, name: &String) {
+    self.name = NameUniquer::get_sanitized_name(name);
   }
 
-  pub fn uniquify_name() {}
+  // Use the given NameUniquer to select a unique name for the instruction based
+  // on the instruction's existing name.
+  //
+  // See also HloModule::SetAndUniquifyInstrName(), which does this plus
+  // SetAndSanitizeName().
+  pub fn uniquify_name(&mut self, name_uniquer: &mut NameUniquer) {
+    self.name = name_uniquer.get_unique_name(&self.name);
+  }
 
   // Clear the unique ID of the instruction so that it can be re-assigned, such
   // as for the purpose of compacting the instruction unique IDs.
@@ -1751,6 +1813,10 @@ impl HloInstruction {
   // Returns the unique ID assigned to this node.
   pub fn unique_id(&self) -> i64 {
     self.unique_id
+  }
+
+  pub fn local_id(&self) -> i64 {
+    unimplemented!()
   }
 
   pub fn backend_config() {}
@@ -1837,7 +1903,9 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn set_raw_backend_config_string() {}
+  pub fn set_raw_backend_config_string(&mut self, _config_str: String) {
+    unimplemented!()
+  }
 
   pub fn is_default_config(&self) -> bool {
     self.is_default_config
@@ -2026,21 +2094,15 @@ impl HloInstruction {
   }
 
   // ##### HloFusionInstruction : start #####
-  pub fn literal<T>(&self) -> &Literal<T>
-    where T: Clone + Default + PartialEq
-  {
+  pub fn literal<T>(&self) -> &Literal {
     unimplemented!()
   }
 
-  pub fn mutable_literal<T>(&self) -> &mut Literal<T>
-    where T: Clone + Default + PartialEq
-  {
+  pub fn mutable_literal(&self) -> &mut Literal {
     unimplemented!()
   }
 
-  pub fn set_literal<T>(&mut self, _literal: Literal<T>)
-    where T: Clone + Default + PartialEq
-  {
+  pub fn set_literal(&mut self, _literal: Literal) {
     unimplemented!()
   }
 
@@ -2108,7 +2170,11 @@ impl HloInstruction {
     unimplemented!()
   }
 
-  pub fn set_parameter_replicated_at_leaf_buffers() {}
+  // Sets and gets the whether all replicas will receive the same parameter data
+  // for each leaf buffer in data parallelism.
+  pub fn set_parameter_replicated_at_leaf_buffers(&mut self, _replicated: Vec<bool>) {
+    unimplemented!()
+  }
 
   pub fn parameter_replicated_at_leaf_byffers(&self) -> Option<&Vec<bool>> {
     unimplemented!()
@@ -2294,6 +2360,10 @@ impl HloInstruction {
   }
 
   pub fn async_wrapped_instruction(&self) -> &HloInstruction {
+    unimplemented!()
+  }
+
+  pub fn async_wrapped_mutable_instruction(&mut self) -> &mut HloInstruction {
     unimplemented!()
   }
 
@@ -2500,6 +2570,10 @@ impl HloInstruction {
     self.unique_indices()
   }
 
+  pub fn set_original_value(&mut self, _original_value: OriginalValue) {
+    unimplemented!()
+  }
+
   fn is_elementwise_impl(&self, _operand_idx: Option<i64>) -> bool {
     false
   }
@@ -2568,4 +2642,11 @@ pub fn string_to_precision(_name: &String) -> Result<Precision, String> {
 
 pub fn string_to_algorithm(_name: &String) -> Result<Algorithm, String> {
   unimplemented!()
+}
+
+pub fn print_name(name: String, print_ids: bool) -> String {
+  if print_ids { return name; }
+  let dot_pos = name.find('.');
+  let splitted = name.split_at(dot_pos.unwrap());
+  splitted.0.to_string()
 }

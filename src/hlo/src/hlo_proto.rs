@@ -91,9 +91,7 @@ impl HloSnapshot {
   pub fn clear_arguments(&mut self) {
   }
 
-  pub fn add_arguments<T>(&mut self, _argument: Literal<T>)
-    where T: Default + Clone + PartialEq
-  {
+  pub fn add_arguments<T>(&mut self, _argument: Literal) {
     unimplemented!()
   }
 

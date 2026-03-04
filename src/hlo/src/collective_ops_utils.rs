@@ -61,23 +61,23 @@ pub fn match_reduction_computation(
 // Returns the reduction identity value for a certain ReductionKind and
 // PrimitiveType.
 pub fn get_reduction_identity<T>(
-  kind: &ReductionKind, t: &PrimitiveType) -> Option<Literal<T>>
-  where  T: Default + Clone + PartialEq
+  kind: &ReductionKind, t: &PrimitiveType) -> Option<Literal>
+  where  T: Clone
 {
   match kind {
-    ReductionKind::Sum => Some(LiteralUtil::zero(t)),
-    ReductionKind::Product => Some(LiteralUtil::one(t)),
+    ReductionKind::Sum => Some(LiteralUtil::zero::<T>(t)),
+    ReductionKind::Product => Some(LiteralUtil::one::<T>(t)),
     ReductionKind::Min => {
       if is_complex_type(t) {
         return None;
       }
-      return Some(LiteralUtil::max_value(t));
+      return Some(LiteralUtil::max_value::<T>(t));
     }
     ReductionKind::Max => {
       if is_complex_type(t) {
         return None;
       }
-      return Some(LiteralUtil::min_value(t));
+      return Some(LiteralUtil::min_value::<T>(t));
     }
   }
 }

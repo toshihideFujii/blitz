@@ -117,6 +117,7 @@ pub struct Layout {
   tiles: Vec<Tile>,
   physical_shape: Option<Box<Shape>>,
   tail_padding_alignment_in_elements: i64,
+  split_configs: Vec<SplitConfig>,
 }
 
 impl Layout {
@@ -137,6 +138,7 @@ impl Layout {
       tiles: Vec::new(),
       physical_shape: None,
       tail_padding_alignment_in_elements: 1,
+      split_configs: Vec::new()
     }
   }
 
@@ -155,6 +157,7 @@ impl Layout {
       tiles: Vec::new(),
       physical_shape: None,
       tail_padding_alignment_in_elements: 1,
+      split_configs: Vec::new()
     }
   }
 
@@ -186,7 +189,8 @@ impl Layout {
       minor_to_major: minor_to_major,
       tiles: tiles,
       physical_shape: physical_shape,
-      tail_padding_alignment_in_elements: tail_padding_alignment_in_elements
+      tail_padding_alignment_in_elements: tail_padding_alignment_in_elements,
+      split_configs: vec![]
     };
 
     let n_attributes = max(result.n_dim_level_types, 
@@ -479,6 +483,22 @@ impl Layout {
     self.dynamic_shape_metadata_prefix_bytes = bytes;
   }
 
+  pub fn split_config(&self, index: usize) -> &SplitConfig {
+    &self.split_configs[index]
+  }
+
+  pub fn mutable_split_config(&mut self, index: usize) -> &mut SplitConfig {
+    &mut self.split_configs[index]
+  }
+
+  pub fn add_split_config(&mut self, split_config: SplitConfig) {
+    self.split_configs.push(split_config);
+  }
+
+  pub fn clear_split_configs(&mut self) {
+    self.split_configs.clear();
+  }
+
   pub fn swap() {}
   pub fn clear() {}
   pub fn absl_hash_value() {}
@@ -649,6 +669,23 @@ impl LayoutEqual {
     self.ignore_tail_padding_alignment_in_elements = true;
     self
   }
+}
+
+// Describes how data is split between different memories. Each SplitConfig
+// object represents a split in one dimension. Each SplitConfig is associated
+// with a vector of split indices which point to the points in the iteration
+// where the splits occur. For example, if the dimension contains 1024 elements,
+// a split indices value of {512} indicates splitting this dimension into two
+// right through the middle. The dimension here refers to the physical dimension
+// such that 0 is the majormost dimension and (number of dimensions - 1) is the
+// minormost dimension.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SplitConfig {
+
+}
+
+impl SplitConfig {
+    
 }
 
 #[cfg(test)]

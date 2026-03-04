@@ -12,7 +12,9 @@ impl IndexUtil {
     shape: &Shape, multi_index: &Vec<i64>) -> i64
   {
     IndexUtil::multi_dimensional_index_to_linear_index_minor_to_major(
-      shape, LayoutUtil::minor_to_major_from_shape(shape), multi_index)
+      shape,
+      LayoutUtil::minor_to_major_from_shape(shape),
+      multi_index)
   }
 
   // Converts a multidimensional index (eg {x, y, z}) into a linear index based
@@ -21,7 +23,9 @@ impl IndexUtil {
   // This version can be used when the caller already has the minor_to_major
   // array for shape available (and can therefore be faster).
   pub fn multi_dimensional_index_to_linear_index_minor_to_major(
-    shape: &Shape, minor_to_major: &Vec<i64>,  multi_index: &Vec<i64>) -> i64
+    shape: &Shape,
+    minor_to_major: &Vec<i64>, 
+    multi_index: &Vec<i64>) -> i64
   {
     // Let the array be sized like so for dimensions i from 0 to n-1:
     //

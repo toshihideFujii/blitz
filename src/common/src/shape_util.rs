@@ -375,23 +375,22 @@ impl ShapeUtil {
   // In contrast, (F32, (F32, F32)) is structurally different from
   // ((F32, F32), F32) as the former has structure (,(,)) while the latter has
   // ((,),)
-  pub fn equal_structure(_lhs: &Shape, _rhs: &Shape) -> bool {
-    /*
+  pub fn equal_structure(lhs: &Shape, rhs: &Shape) -> bool {
     let mut equal = true;
 
-    let func_rhs = |subshape: &Shape, index_vec: &Vec<usize>| {
+    let mut func_rhs =
+      |_subshape: &Shape, index_vec: &Vec<i64>| {
       equal = equal & ShapeUtil::index_is_valid(rhs, index_vec);
     };
-    ShapeUtil::for_each_mutable_subshape(lhs, &mut func_rhs);
+    ShapeUtil::for_each_subshape(lhs, &mut func_rhs);
 
-    let func_lhs = |subshape: &Shape, index_vec: &Vec<usize>| {
+    let mut func_lhs =
+      |_subshape: &Shape, index_vec: &Vec<i64>| {
       equal = equal & ShapeUtil::index_is_valid(lhs, index_vec);
     };
-    ShapeUtil::for_each_mutable_subshape(rhs, &mut func);
+    ShapeUtil::for_each_subshape(rhs, &mut func_lhs);
 
     equal
-    */
-    unimplemented!()
   }
 
   pub fn true_rank(shape: &Shape) -> i64 {
@@ -544,7 +543,7 @@ impl ShapeUtil {
       let rank = shape.rank() as i64;
       shape.mutable_layout().as_mut().unwrap().add_minor_to_major(rank);
     }
-    shape.add_dimensions(bound);
+    shape.add_dimensions(bound, false);
     let err = ShapeUtil::validate_shape(shape);
     if !err.is_ok() {
       assert!(false, "validate_shape() failed.");
@@ -555,7 +554,7 @@ impl ShapeUtil {
 
   pub fn append_minor_dimension(bound: i64, shape: &mut Shape) {
     assert!(LayoutUtil::is_dense_array(shape));
-    shape.add_dimensions(bound);
+    shape.add_dimensions(bound, false);
     if shape.has_layout() {
       let rank = shape.rank() as i64;
       let layout = shape.mutable_layout().as_mut().unwrap();
@@ -673,9 +672,9 @@ impl ShapeUtil {
     elt_t: &PrimitiveType,
     dimensions: &Vec<i64>,
     minor_to_major: &Vec<i64>,
-    dim_level_types: Vec<DimLevelType>,
-    dim_unique: Vec<bool>,
-    dim_ordered: Vec<bool>,
+    _dim_level_types: Vec<DimLevelType>,
+    _dim_unique: Vec<bool>,
+    _dim_ordered: Vec<bool>,
     tiles: Vec<Tile>,
     tail_padding_alignment_in_elements: i64,
     index_primitive_t: &PrimitiveType,
@@ -698,15 +697,13 @@ impl ShapeUtil {
     }
     let layout = LayoutUtil::make_layout(
       minor_to_major,
-      dim_level_types,
-      dim_unique,
-      dim_ordered,
       tiles,
       tail_padding_alignment_in_elements,
       index_primitive_t.clone(),
       pointer_primitive_t.clone(),
       elt_size_in_bits,
       memory_space,
+      vec![],
       physical_shape,
       0
     );
@@ -761,7 +758,7 @@ impl ShapeUtil {
     shape.clear();
     shape.set_element_type(elt_t.clone());
     for dimension in dimensions {
-      shape.add_dimensions(dimension);
+      shape.add_dimensions(dimension, false);
     }
     LayoutUtil::set_to_default_layout(shape);
     ShapeUtil::validate_shape(shape)
@@ -862,13 +859,13 @@ impl ShapeUtil {
   pub fn slice_tuple() {}
   pub fn complex_component_shape() {}
 
-  pub fn index_is_valid(shape: &Shape, index_vec: &Vec<usize>) -> bool {
+  pub fn index_is_valid(shape: &Shape, index_vec: &Vec<i64>) -> bool {
     let mut subshape: &Shape = shape;
     for i in index_vec {
-      if !subshape.is_tuple() || *i >= subshape.tuple_shapes_size() /*|| *i < 0*/ {
+      if !subshape.is_tuple() || *i as usize >= subshape.tuple_shapes_size() /*|| *i < 0*/ {
         return false;
       }
-      subshape = subshape.tuple_shapes(*i);
+      subshape = subshape.tuple_shapes(*i as usize);
     }
     true
   }
@@ -1293,7 +1290,7 @@ impl ShapeUtil {
           overflow_safe_multiply(static_extent_product, d);
         any_overflows |= overflow;
       }
-      shape.add_dimensions(d);
+      shape.add_dimensions(d, false);
       shape.add_minor_to_major((ndims as i64)- 1 - (i as i64));
     }
 

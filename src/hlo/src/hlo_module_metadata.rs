@@ -7,6 +7,10 @@ pub struct HloModuleMetadata {
 }
 
 impl HloModuleMetadata {
+  pub fn default() -> Self {
+    HloModuleMetadata { next_pass_id: 0 }    
+  }
+  
   pub fn new() {}
   pub fn proto() {}
   pub fn record_pass_start() {}

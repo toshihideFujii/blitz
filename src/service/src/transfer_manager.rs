@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
 use common::{literal::Literal, shape::Shape};
-use stream_executor::{device_memory_allocator::DeviceMemoryAllocator, stream::Stream, stream_executor::StreamExecutor};
+use stream_executor::{device_memory_allocator::DeviceMemoryAllocator,
+  stream::Stream, stream_executor::StreamExecutor};
 use crate::shaped_buffer::{ScopedShapedBuffer, ShapedBuffer};
 
 pub struct TransferMetadata {}
@@ -25,12 +26,11 @@ impl TransferManager {
   //
   // Optionally caller can specify platform-specific transfer metadata that
   // tells the actual implementation to do something special.
-  pub fn transfer_literal_from_device<T>(
+  pub fn transfer_literal_from_device(
     &self,
     _stream: &Stream,
     _device_buffer: &ShapedBuffer,
-    _transfer_metadata: Option<&TransferMetadata>) -> Result<Literal<T>, String>
-    where T: Default + Clone + PartialEq
+    _transfer_metadata: Option<&TransferMetadata>) -> Result<Literal, String>
   {
     unimplemented!()
   }
@@ -46,13 +46,12 @@ impl TransferManager {
   //
   // Optionally caller can specify platform-specific transfer metadata that
   // tells the actual implementation to do something special.
-  pub fn transfer_literal_to_device<T>(
+  pub fn transfer_literal_to_device(
     &self,
     _stream: &Stream,
-    _literal: &Literal<T>,
+    _literal: &Literal,
     _device_buffer: &ShapedBuffer,
     _transfer_metadata: Option<&TransferMetadata>) -> Result<(), String>
-    where T: Default + Clone + PartialEq
   {
     unimplemented!()
   }
@@ -65,9 +64,8 @@ impl TransferManager {
 
   // Transfers the given literal into the Infeed interface of the device,
   // using the given executor.
-  pub fn transfer_literal_to_infeed<T>(
-    &self, _executor: &StreamExecutor, _literal: &Literal<T>) -> Result<(), String>
-    where T: Clone + Default + PartialEq
+  pub fn transfer_literal_to_infeed(
+    &self, _executor: &StreamExecutor, _literal: &Literal) -> Result<(), String>
   {
     unimplemented!()
   }
@@ -75,9 +73,8 @@ impl TransferManager {
   // Transfers the given literal from the Outfeed interface of the device,
   // using the given executor. The shape and layout are determined by the
   // shape and layout of `literal`.
-  pub fn transfer_literal_from_outfeed<T>(
-    &self, _executor: &StreamExecutor, _literal: &Literal<T>) -> Result<(), String>
-    where T: Clone + Default + PartialEq
+  pub fn transfer_literal_from_outfeed(
+    &self, _executor: &StreamExecutor, _literal: &Literal) -> Result<(), String>
   {
     unimplemented!()
   }

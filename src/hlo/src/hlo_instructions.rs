@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
 use common::{
-  blitz_data::FftType, comparison_util::{ComparisonType, ComparisonDirection}, literal::Literal, shape::Shape
+  blitz_data::FftType, comparison_util::{ComparisonType, ComparisonDirection},
+  literal::Literal, shape::Shape
 };
 
 use crate::{
@@ -29,13 +30,13 @@ impl HloTopKInstruction {
   }
 }
 
-pub struct HloConstantInstruction<T> where T: Clone + Default + PartialEq + 'static {
+pub struct HloConstantInstruction {
   pub base: HloInstruction,
-  literal: Literal<T>
+  literal: Literal
 }
 
-impl<T> HloConstantInstruction<T> where T: Clone + Default + PartialEq {
-  pub fn new(literal: Literal<T>) -> Self {
+impl HloConstantInstruction {
+  pub fn new(literal: Literal) -> Self {
     HloConstantInstruction {
       base: HloInstruction::default(),
       literal: literal
@@ -43,13 +44,13 @@ impl<T> HloConstantInstruction<T> where T: Clone + Default + PartialEq {
   }
 
   // Returns the literal associated with this instruction.
-  pub fn literal(&self) -> &Literal<T> {
+  pub fn literal(&self) -> &Literal {
     &self.literal
   }
 
   pub fn mutable_lietral() {}
 
-  pub fn set_literal(&mut self, literal: Literal<T>) {
+  pub fn set_literal(&mut self, literal: Literal) {
     self.literal = literal;
   }
 

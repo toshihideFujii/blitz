@@ -121,8 +121,8 @@ impl TokKind {
 const EOF: i64 = -1;
 const ERROR: i64 = -2;
 
-pub fn tok_kind_to_string(_kind: &TokKind) -> String {
-  unimplemented!()
+pub fn tok_kind_to_string(kind: &TokKind) -> String {
+  kind.to_string()
 }
 
 fn tok_kind_to_int(kind: &TokKind) -> i64 {
@@ -280,6 +280,7 @@ impl HloLexer {
     let mut line_no = 1;
     let start = 0;
     let mut ptr = 0;
+
     if self.line_no_cache.last_query.is_some() && 
       self.can_dereference(self.line_no_cache.last_query.unwrap()) &&
       self.line_no_cache.last_query.unwrap() <= location
@@ -287,13 +288,14 @@ impl HloLexer {
       ptr = self.line_no_cache.last_query.unwrap();
       line_no = self.line_no_cache.line_no_of_query;
     }
-    for i in 0..location {
+    for i in ptr..location {
       debug_assert!(i < self.buf.len());
       if self.buf.chars().nth(i) == Some('\n') {
         line_no += 1;
       }
       ptr = i;
     }
+
     // Update the line number cache.
     self.line_no_cache.last_query = Some(ptr);
     self.line_no_cache.line_no_of_query = line_no;
@@ -402,6 +404,9 @@ impl HloLexer {
 
   // Creates string with the given begin and end.
   fn string_from_pointers(&self, begin: usize, end: usize) -> String {
+    if begin == 0 && end == 0 {
+      return "".to_string();
+    }
     assert!(begin <= end);
     assert!(self.can_dereference(begin));
     assert!(self.can_dereference(end - 1));
@@ -534,9 +539,8 @@ impl HloLexer {
     if self.peek_current_char().is_some() &&
       self.peek_current_char().unwrap() == ':'
     {
-      let str = self.token_state.str_val.as_str();
-      let str_val =
-        String::from(&str[self.token_state.token_start..self.current_ptr]);
+      let str_val = String::from(
+        &self.buf[self.token_state.token_start..self.current_ptr]);
       self.token_state.str_val = str_val;
       self.current_ptr += 1; // skip ':'
       return TokKind::Name;
@@ -546,10 +550,8 @@ impl HloLexer {
     if self.peek_current_char().is_some() &&
       self.peek_current_char().unwrap() == '='
     {
-      //let str = self.token_state.str_val.as_str();
-      //let str_val =
-        //String::from(&str[self.token_state.token_start..self.current_ptr]);
-      let str_val = String::from(&self.buf[self.token_state.token_start..self.current_ptr]);
+      let str_val = String::from(
+        &self.buf[self.token_state.token_start..self.current_ptr]);
       self.token_state.str_val = str_val;
       self.current_ptr += 1; // skip '='
       return TokKind::AttributeName;
@@ -606,6 +608,27 @@ impl HloLexer {
     if identifier.as_str() == "maximal" {
       return TokKind::Maximal;
     }
+    if identifier.as_str() == "replicated" {
+      return TokKind::Replicated;
+    }
+    if identifier.as_str() == "manual" {
+      return TokKind::Manual;
+    }
+    if identifier.as_str() == "last_tile_dim_replicate" {
+      return TokKind::LastTileDimReplicate;
+    }
+    if identifier.as_str() == "shard_as" {
+      return TokKind::ShardAs;
+    }
+    if identifier.as_str() == "shard_like" {
+      return TokKind::ShardLike;
+    }
+    if identifier.as_str() == "unknown" {
+      return TokKind::Unknown;
+    }
+    if identifier.as_str() == "unreduced" {
+      return TokKind::Unreduced;
+    }
 
     let consumable =
       self.string_from_pointers(self.token_state.token_start, self.buf.len());
@@ -632,8 +655,7 @@ impl HloLexer {
       while is_identifier_char(self.peek_current_char().as_ref().unwrap()) {
         self.current_ptr += 1;
       }
-      let str = self.token_state.str_val.as_str();
-      let str_val = String::from(&str[name_start..self.current_ptr]);
+      let str_val = String::from(&self.buf[name_start..self.current_ptr]);
       self.token_state.str_val = str_val;
       return TokKind::Name;
     }

@@ -274,10 +274,9 @@ fn are_compatible(
 // all-reduces we want to reassociate. Making sure the chain only has 1 user
 // throughout. Also check for possible reduce-scatter patterns (all-reduce +
 // dynamic-slice).
-fn look_through_for_all_reduce<T>(
+fn look_through_for_all_reduce(
   mut instr: &mut HloInstruction,
-  reduction_identuty: &Literal<T>) -> Option<HloInstruction>
-  where T: Default + Clone + PartialEq
+  _reduction_identuty: &Literal) -> Option<HloInstruction>
 {
   if instr.opcode() == HloOpcode::DynamicSlice {
     if instr.operand(0).opcode() != HloOpcode::AllReduce ||
@@ -298,7 +297,7 @@ fn look_through_for_all_reduce<T>(
     }
     if instr.opcode() == HloOpcode::Pad {
       if !instr.operand(1).is_constant() { return None; }
-      if instr.operand(1).literal() != reduction_identuty { return None; }
+      //if instr.operand(1).literal() != reduction_identuty { return None; }
     }
     instr = instr.mutable_operand(0).unwrap();
   }

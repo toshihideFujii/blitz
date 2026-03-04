@@ -356,11 +356,10 @@ impl<'backend> Service<'backend> {
   }
 
   // Requests that global data be transferred to the client in literal form.
-  pub fn transfer_to_client<T>(
+  pub fn transfer_to_client(
     &self,
     data: &GlobalData,
-    shape_with_layout: Option<Shape>) -> Result<Literal<T>, String>
-    where T: Clone + Default + PartialEq
+    shape_with_layout: Option<Shape>) -> Result<Literal, String>
   {
     let shaped_buffer_wrapper =
       self.allocation_tracker.resolve_for_replica(data.handle(), 0);
@@ -400,7 +399,7 @@ impl<'backend> Service<'backend> {
 
     let stream = stream_wrapper.unwrap();
     let result_literal_wrapper = 
-      self.execute_backend.unwrap().transfer_manager().transfer_literal_from_device::<T>(
+      self.execute_backend.unwrap().transfer_manager().transfer_literal_from_device(
         &stream, &shaped_buffer, None);
     check_error(&result_literal_wrapper);
 
@@ -414,11 +413,10 @@ impl<'backend> Service<'backend> {
   }
 
   // Transfers data from a literal provided by the client, into device memory.
-  pub fn transfer_to_server<T>(
+  pub fn transfer_to_server(
     &mut self,
-    literal: &Literal<T>,
+    literal: &Literal,
     device_handle: Option<&DeviceHandle>) -> Result<GlobalData, String>
-    where T: Clone + Default + PartialEq
   {
     let shape = literal.shape();
     #[allow(unused_assignments)]
@@ -479,12 +477,11 @@ impl<'backend> Service<'backend> {
 
   // Transfers data from a literal provided by the client, into the Infeed
   // buffer of the device.
-  pub fn transfer_to_infeed<T>(
+  pub fn transfer_to_infeed(
     &self,
-    literal: &Literal<T>,
+    literal: &Literal,
     replica_id: i64,
     device_handle: Option<&DeviceHandle>) -> Result<(), String>
-    where T: Clone + Default + PartialEq
   {
     let replica_count = self.options.number_of_replicas();
     if replica_id < 0 || replica_id >= replica_count {
@@ -519,12 +516,11 @@ impl<'backend> Service<'backend> {
 
   // Transfers data from the Outfeed othe device to the literal provided by the
   // client.
-  pub fn transfer_from_outfeed<T>(
+  pub fn transfer_from_outfeed(
     &self,
     shape_with_layout: &Shape,
     replica_id: i64,
-    device_handle: Option<&DeviceHandle>) -> Result<Literal<T>, String>
-    where T: Clone + Default + PartialEq
+    device_handle: Option<&DeviceHandle>) -> Result<Literal, String>
   {
     let replica_count = self.options.number_of_replicas();
     if replica_id < 0 || replica_id >= replica_count {
@@ -552,7 +548,7 @@ impl<'backend> Service<'backend> {
       executor = &replicas[replica_id as usize];
     }
 
-    let literal: Literal<T> = Literal::create_from_shape(shape_with_layout);
+    let literal: Literal = Literal::create_from_shape(shape_with_layout);
     let result = self.execute_backend.unwrap()
       .transfer_manager().transfer_literal_from_outfeed(executor, &literal);
     check_error(&result);
@@ -574,11 +570,10 @@ impl<'backend> Service<'backend> {
     self.execute_backend.unwrap().reset_devices()
   }
 
-  pub fn compute_constant_graph<T>(
+  pub fn compute_constant_graph(
     &self,
     computation: &BlitzComputation,
-    output_layout: Option<&Layout>) -> Result<Literal<T>, String>
-    where T: Default + Clone + PartialEq
+    output_layout: Option<&Layout>) -> Result<Literal, String>
   {
     if computation.has_host_program_shape() {
       let err_msg = "program shape may not be empty".to_string();
@@ -609,7 +604,7 @@ impl<'backend> Service<'backend> {
       DynamicDimensionInference::run(&module); // TODO
     check_error(&dynamic_dimension_inference);
 
-    let mut evaluator: HloEvaluator<T> = HloEvaluator::default();
+    let mut evaluator: HloEvaluator = HloEvaluator::default();
     evaluator.set_dynamic_dimension_inference(); // TODO
     let result_literal_wrapper =
       evaluator.evaluate_module(&module);
@@ -1005,7 +1000,7 @@ fn record_arguments(
   module.clear_arguments();
   for arg in arguments {
     let literal =
-      transfer_manager.transfer_literal_from_device::<i64>( // TODO
+      transfer_manager.transfer_literal_from_device( // TODO
         stream, arg, None);
     check_error(&literal);
     module.add_arguments::<i64>(literal.unwrap());

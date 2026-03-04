@@ -85,7 +85,7 @@ impl<'module> HloAliasAnalysis<'module> {
       |_module: &HloModule| -> Result<(Vec<Shape>, Shape), String> {
       unimplemented!()
     };
-    for comp in self.module.computations(func) {
+    for comp in self.module.computations_with_cb(func) {
       for inst in comp.instructions() {
         out.push_str("    ");
         out.push_str(&inst.name());
