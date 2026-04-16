@@ -113,7 +113,9 @@ pub fn native_to_primitive_type<T>(v: &T) -> PrimitiveType {
     return PrimitiveType::C128;
   }
   // Vec
-  else if std::any::type_name_of_val(v) == "alloc::vec::Vec<i32>" {
+  else if std::any::type_name_of_val(v) == "alloc::vec::Vec<bool>" {
+    return PrimitiveType::Pred;
+  } else if std::any::type_name_of_val(v) == "alloc::vec::Vec<i32>" {
     return PrimitiveType::S32;
   } else if std::any::type_name_of_val(v) == "alloc::vec::Vec<u32>" {
     return PrimitiveType::U32;
@@ -434,8 +436,11 @@ impl PrimitiveTypeNameGenerator {
       lowercase_name: HashMap::new()
     };
     generator.lowercase_name.insert(PrimitiveType::S32, "s32".to_string());
+    generator.lowercase_name.insert(PrimitiveType::S64, "s64".to_string());
     generator.lowercase_name.insert(PrimitiveType::U32, "u32".to_string());
     generator.lowercase_name.insert(PrimitiveType::F32, "f32".to_string());
+    generator.lowercase_name.insert(PrimitiveType::F64, "f64".to_string());
+    generator.lowercase_name.insert(PrimitiveType::C64, "c64".to_string());
     generator.lowercase_name.insert(PrimitiveType::Pred, "pred".to_string());
     generator.lowercase_name.insert(PrimitiveType::OpaqueType, "opaque".to_string());
     generator.lowercase_name.insert(PrimitiveType::Token, "token".to_string());

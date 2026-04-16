@@ -167,7 +167,8 @@ impl ShapeUtil {
 
   pub fn print_human_string(printer: &mut dyn Printer, shape: &Shape) {
     if shape.is_tuple() {
-      ShapeUtil::print_tuple_shapes(printer, &shape.tuple_shapes_vec(), false);
+      ShapeUtil::print_tuple_shapes(printer,
+        &shape.tuple_shapes_vec(), false);
       return;
     }
     let primtive_type_name =
@@ -177,8 +178,12 @@ impl ShapeUtil {
       printer.append(&"[]".to_string());
       return;
     }
+    // Now we are in array shape with at least one dimension.
     printer.append(&"[".to_string());
-    let print_one = |printer: &mut dyn Printer, i| {
+    // Prints the i-th dimension of the array shape.
+    let print_dimension =
+      |printer: &mut dyn Printer, i|
+    {
       if shape.is_dynamic_dimension(i) {
         if shape.dimensions(i as usize) != Shape::UNBOUNDED_SIZE {
           let mut str = "<=".to_string();
@@ -191,10 +196,10 @@ impl ShapeUtil {
         printer.append(&shape.dimensions(i as usize).to_string())
       }
     };
-    print_one(printer, 0);
+    print_dimension(printer, 0);
     for i in 1..shape.dimensions_vec().len() {
       printer.append(&",".to_string());
-      print_one(printer, i as i64);
+      print_dimension(printer, i as i64);
     }
     printer.append(&"]".to_string());
   }
@@ -480,6 +485,21 @@ impl ShapeUtil {
     result.tuple_shapes_vec_mut().reserve(shapes.len());
     for shape in shapes {
       ShapeUtil::append_shape_to_tuple(shape, &mut result)
+    }
+    let err =
+      ShapeUtil::validate_shape_with_optional_layout(&result);
+    if !err.is_ok() {
+      assert!(false, "validate_shape_with_optional_layout() failed.");
+    }
+    result
+  }
+
+  pub fn make_tuple_shape_with_ptrs(shapes: Vec<&Shape>) -> Shape {
+    let mut result = Shape::new();
+    result.set_element_type(PrimitiveType::Tuple);
+    result.tuple_shapes_vec_mut().reserve(shapes.len());
+    for shape in shapes {
+      ShapeUtil::append_shape_to_tuple(shape.clone(), &mut result)
     }
     let err =
       ShapeUtil::validate_shape_with_optional_layout(&result);

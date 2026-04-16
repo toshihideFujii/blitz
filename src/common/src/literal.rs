@@ -7,7 +7,10 @@ use num::{complex::Complex64, Complex};
 use crate::{
   array3d::Array3D, blitz_data::PrimitiveType, index_util::IndexUtil, layout::Layout,
   layout_util::LayoutUtil, permutation_util::{inverse_permutation, is_permutation},
-  primitive_util::{self, array_type_switch, complex_type_switch, floating_point_type_switch, integral_type_switch, is_array_type, is_complex_type, is_floating_point_type, is_integral_type, is_predicate_type, native_to_primitive_type, primitive_type_switch
+  primitive_util::{
+    self, array_type_switch, complex_type_switch, floating_point_type_switch,
+    integral_type_switch, is_array_type, is_complex_type, is_floating_point_type,
+    is_integral_type, is_predicate_type, native_to_primitive_type, primitive_type_switch
   }, printer::{Printer, StringPrinter}, shape::{Shape, ShapeEqual}, shape_util::ShapeUtil
 };
 
@@ -24,8 +27,10 @@ fn scalar_shape(t: &PrimitiveType) -> Shape {
   primitive_util::array_type_switch(&mut f, t)
 }
 
+// Create a nullary tuple.
 fn nil_shape() -> Shape {
-  Shape::new()
+  //Shape::new()
+  ShapeUtil::make_nil()
 }
 
 fn try_intern_shape(shape: &Shape) -> Option<Shape> {
@@ -42,15 +47,189 @@ fn try_intern_shape(shape: &Shape) -> Option<Shape> {
 }
 
 //#[derive(Debug, Clone, PartialEq)]
-pub struct LiteralBase {
+pub struct Literal {
   root_piece: Piece,
 }
 
-impl LiteralBase {
-  pub fn new() -> Self {
-    LiteralBase {
-      root_piece: Piece::new(),
+impl Literal {
+  pub fn default() -> Self {
+    //Literal { root_piece: Piece::new() }
+    Literal::new(
+      &nil_shape(),
+      true,
+      ArrayValueState::Known)
+  }
+
+  // 'allocate_arrays' indicates whether to allocate memory for the arrays in
+  // the shape. If false, buffer pointers inside of the Literal::Pieces are set
+  // to nullptr.
+  pub fn new(
+    shape: &Shape,
+    allocate_arrays: bool,
+    leaf_array_value_state: ArrayValueState) -> Self
+  {
+    let mut literal = Literal { root_piece: Piece::new() };
+    assert!(leaf_array_value_state != ArrayValueState::Known ||
+      LayoutUtil::has_layout(literal.shape()));
+
+    let root_piece = literal.mutable_root_piece();
+    root_piece.set_subshape(shape.clone());
+    Literal::set_piece(shape, root_piece,
+      allocate_arrays, leaf_array_value_state);
+
+    literal
+  }
+
+  fn set_piece(
+    shape: &Shape,
+    piece: &mut Piece,
+    allocate_arrays: bool,
+    leaf_array_value_state: ArrayValueState)
+  {
+    if shape.is_tuple() {
+      for subshape in shape.tuple_shapes_vec() {
+        let mut child_piece: Piece = Piece::new();
+        child_piece.set_subshape(subshape.clone());
+        Literal::set_piece(subshape, &mut child_piece, allocate_arrays,
+          leaf_array_value_state.clone());
+        piece.emplace_back(child_piece);
+      }
+    } else if shape.is_array() {
+      assert!(LayoutUtil::is_dense_array(shape),
+        "Literal array storage is currently only supported for dense array.");
+      piece.set_array_value_state(leaf_array_value_state.clone());
+      if leaf_array_value_state == ArrayValueState::Known && allocate_arrays {
+        // TODO
+      }
+    }   
+  }
+
+  // Create a literal of the given shape. The literal is allocated sufficient
+  // memory to hold the shape. Memory is uninitialized.
+  pub fn new_from_shape(shape: &Shape) -> Self {
+    Literal::new(
+      shape,
+      true,
+      ArrayValueState::Known)
+  }
+
+  // Copy values from 'src_literal' rooted at 'src_shape_index' into this
+  // literal rooted at 'dest_shape_index'. The subshape of this literal rooted
+  // at 'dest_shape_index' must be compatible with the subshape of 'src_literal'
+  // rooted at 'src_shape_index', but need not be arrays. If only_dynamic_bound
+  // is true, only elements within dynamic bounds will be copied.
+  pub fn copy_from(
+    &mut self,
+    src_literal: &Literal,
+    dest_shape_index: &Vec<i64>,
+    src_shape_index: &Vec<i64>,
+    only_dynamic_bound: bool) -> Result<(), String>
+  {
+    let dest_subshape =
+      ShapeUtil::get_subshape(self.shape(), dest_shape_index);
+    let src_subshape =
+      ShapeUtil::get_subshape(src_literal.shape(), src_shape_index);
+
+    if only_dynamic_bound {
+      let mut bound_shape = &dest_subshape;
+      if dest_subshape.is_static() {
+        bound_shape = &src_subshape;
+      }
+      let mut compact_shape = &src_subshape;
+      if dest_subshape.is_static() {
+        compact_shape = &dest_subshape;
+      }
+      assert!(ShapeUtil::dynamic_shape_is_compatible(compact_shape, bound_shape));
+    } else {
+      if !ShapeUtil::compatible(&dest_subshape, &src_subshape) {
+        return Err("Destination subshape incompatible with source subshape.".to_string());
+      }
     }
+
+    let mut f =
+      |index: &Vec<i64>, piece: &mut Piece| -> Result<(), String>
+    {
+      if !piece.subshape().is_array() {
+        return Ok(());
+      }
+      // Determine if this index is in the part of this literal that we want
+      // to copy over from src_literal.
+      let mut in_subtree_to_copy = true;
+      if index.len() > 0 && dest_shape_index.len() > 0 {
+        for i in 0..dest_shape_index.len() {
+          if index[i] != dest_shape_index[i] {
+            in_subtree_to_copy = false;
+            break;
+          }
+        }
+      }
+      if !in_subtree_to_copy {
+        return Ok(());
+      }
+      // Construct the index of the corresponding piece in the source literal.
+      let mut src_piece_index = vec![];
+      src_piece_index.clone_from(src_shape_index);
+      for i in dest_shape_index.len()..index.len() {
+        src_piece_index.push(index[i]);
+      }
+      let result = piece.copy_from(
+        src_literal.piece(&src_piece_index), only_dynamic_bound);
+      if result.is_err() {
+        return result;
+      }
+      Ok(())
+    };
+    self.mutable_root_piece().for_each_subpiece_with_status(&mut f)
+  }
+
+  pub fn copy_slice_from(
+    &self,
+    src_literal: &Literal,
+    src_base: &Vec<i64>,
+    dest_base: &Vec<i64>,
+    _copy_size: &Vec<i64>) -> Result<(), String>
+  {
+    debug_assert!(self.shape().is_array());
+    debug_assert!(src_literal.shape().is_array());
+    debug_assert!(ShapeUtil::same_element_type(src_literal.shape(), self.shape()));
+    debug_assert!(src_literal.shape().dimensions_vec().len() == src_base.len());
+    debug_assert!(self.shape().dimensions_vec().len() == dest_base.len());
+
+    let mut func = |_t: PrimitiveType| -> Result<(), String> {
+      Ok(())
+    };
+    array_type_switch(&mut func, &self.shape().element_type())
+  }
+
+  fn copy_slice_from_internal(
+    &self,
+    _src_literal: &Literal,
+    _src_base: &Vec<i64>,
+    _dest_base: &Vec<i64>,
+    _copy_size: &Vec<i64>) -> Result<(), String>
+  {
+    /*
+    let linear_index =
+      |shape: &Shape, multi_index: &Vec<i64>| -> i64
+    {
+      IndexUtil::multi_dimensional_index_to_linear_index(shape, multi_index)
+    };
+    let dest_data = self.mutable_data(&vec![]);
+    let src_data = src_literal.data(&vec![]);
+    if src_literal.shape().dimensions_vec().len() == 0 ||
+      self.shape().dimensions_vec().len() == 0
+    {
+      // If any of the two shapes are scalars, just assign the value once.
+      debug_assert!(copy_size.is_empty());
+      //dest_data[linear_index(self.shape(), dest_base) as usize] =
+        //src_data[linear_index(src_literal.shape(), src_base) as usize];
+    } else if !ShapeUtil::is_zero_element_array(self.shape()) &&
+      !ShapeUtil::is_zero_element_array(src_literal.shape())
+    {
+      
+    }
+    */
+    Ok(())
   }
 
   // Returns the shape of the literal.
@@ -60,6 +239,11 @@ impl LiteralBase {
 
   pub fn mutable_shape(&mut self) -> &mut Shape {
     &mut self.mutable_root_piece().subshape
+  }
+
+  pub fn mutable_shape_do_not_use(&mut self) -> &mut Shape {
+    //&mut self.shape
+    self.mutable_shape()
   }
 
   pub fn set_shape(&mut self, shape: Shape) {
@@ -241,6 +425,14 @@ impl LiteralBase {
     self.piece(shape_index).get::<NativeT>(multi_index)
   }
 
+  pub fn get_linear<NativeT>(
+    &self,
+    linear_index: &Vec<i64>) -> Option<&NativeT>
+    where NativeT: 'static
+  {
+    self.root_piece().get::<NativeT>(linear_index)
+  }
+
   // Sets an element in the literal at the given index. The multi_index is
   // CHECKed against the dimension sizes.
   pub fn set<NativeT>(
@@ -269,8 +461,20 @@ impl LiteralBase {
     self.piece(shape_index).get_dynamic_size(dim_index)
   }
 
-  pub fn set_dynamic_size(&self, _dim_index: usize, _size: i32) {
-    unimplemented!()
+  pub fn set_dynamic_size(
+    &mut self, dim_index: i64, shape_index: &Vec<i64>, size: i64)
+  {
+    let mut shape_index_clone = vec![];
+    shape_index_clone.clone_from(shape_index);
+    let subshape = ShapeUtil::get_mutable_subshape(
+      self.mutable_shape_do_not_use(), shape_index_clone);
+
+    assert!(LayoutUtil::is_dense_array(subshape));
+    assert!(subshape.dimensions(dim_index as usize) >= size);
+    subshape.set_dynamic_dimension(dim_index as usize, true);
+
+    //assert_eq!(self.piece(shape_index).subshape(), subshape);
+    self.mutable_piece(shape_index).set_dynamic_size(dim_index, size);
   }
 
   // Returns the element value at index (0, ..., 0), however many zeroes are
@@ -319,17 +523,25 @@ impl LiteralBase {
         }
       }
       if is_floating_point_type(&t) {
-        //let value = *self.get::<f64>(multi_index, shape_index);
-        //return value.to_string();
+        let value = self.get::<f32>(multi_index, shape_index);
+        if value.is_some() {
+          return value.unwrap().to_string();
+        }
+        let value = self.get::<f64>(multi_index, shape_index);
+        if value.is_some() {
+          return value.unwrap().to_string();
+        }
       }
       if is_complex_type(&t) {
-        //let value = self.get::<Complex<f64>>(multi_index, shape_index);
-        let mut str = "(".to_string();
-        //str.push_str(&value.re().to_string());
-        str.push_str(",");
-        //str.push_str(&value.im().to_string());
-        str.push_str(")");
+        let value = self.get::<Complex64>(multi_index, shape_index);
+        if value.is_some() {
+          let mut str = "(".to_string();
+          str.push_str(&value.unwrap().re.to_string());
+          str.push_str(", ");
+          str.push_str(&value.unwrap().im.to_string());
+          str.push_str(")");
         return str;
+        }
       }
       if t == PrimitiveType::Pred {
         let value = *self.get::<bool>(multi_index, shape_index).unwrap();
@@ -343,6 +555,45 @@ impl LiteralBase {
       unreachable!();
     };
     array_type_switch(&mut f, &subshape.element_type())
+  }
+
+  pub fn equal(&self, other: &Literal, layout_sensitive: bool) -> bool {
+    // Checking the structure of tuple literals. Checks for dense arrays are
+    // performed below.
+    if !ShapeUtil::equal_structure(self.shape(), other.shape()) {
+      return false;
+    }
+    let mut f =
+      |index: &Vec<i64>, piece: &Piece| -> bool
+    {
+      let other_piece = other.piece(index);
+      let subshape = piece.subshape();
+      let other_subshape = other_piece.subshape();
+      if subshape.element_type() != other_subshape.element_type() {
+        return false;
+      }
+      if !piece.subshape().is_array() {
+        return true;
+      }
+      if subshape.dimensions_size() != other_subshape.dimensions_size() {
+        return false;
+      }
+      if layout_sensitive && (subshape.layout() != other_subshape.layout()) {
+        return false;
+      }
+      for i in 0..subshape.dimensions_size() {
+        if piece.get_dynamic_size(i as i64) !=
+          other_piece.get_dynamic_size(i as i64)
+        {
+          return false;
+        }
+      }
+      if !piece.equal_elements(other_piece) {
+        return false;
+      }
+      true
+    };
+    self.root_piece().for_each_subpiece_with_bool(&mut f)
   }
 
   // Return whether the value at the specified index is equal to the provided
@@ -641,7 +892,17 @@ impl LiteralBase {
     let start_indices = vec![0; self.shape().rank()];
     let end_indices = vec![1; self.shape().rank()];
     let first: Literal = self.slice(&start_indices, &end_indices);
-    self.is_all(&first.base.reshape(&vec![]).unwrap())
+    self.is_all(&first.reshape(&vec![]).unwrap())
+  }
+
+  // Returns the count of the elements in the array at the given shape index in
+  // this literal.
+  pub fn element_count(&self, index: &Vec<i64>) -> i64 {
+    if index.is_empty() {
+      // Common case, avoid GetSubshape().
+      return ShapeUtil::elements_in(self.shape());
+    }
+    ShapeUtil::elements_in(&ShapeUtil::get_subshape(self.shape(), index))
   }
 
   // Returns the number of elements that have value equal to the given complex
@@ -754,16 +1015,6 @@ impl LiteralBase {
       false
     };
     array_type_switch(&mut f, &self.shape().element_type())
-  }
-
-  // Returns the count of the elements in the array at the given shape index
-  // in this literal.
-  pub fn element_count(&self, index_vec: &Vec<i64>) -> i64 {
-    if index_vec.is_empty() {
-      return ShapeUtil::elements_in(self.shape());
-    }
-    ShapeUtil::elements_in(
-      &ShapeUtil::get_subshape(self.shape(), index_vec))
   }
 
   // Converts this literal to the given shape. Returns an error is the
@@ -948,7 +1199,7 @@ impl LiteralBase {
   }
 
   pub fn set_mutable_shape_do_not_use(&mut self, shape: &Shape) {
-    LiteralBase::set_piece_shapes(shape, self.mutable_root_piece());
+    Literal::set_piece_shapes(shape, self.mutable_root_piece());
   }
 
   fn set_piece_shapes(shape: &Shape, piece: &mut Piece) {
@@ -956,19 +1207,97 @@ impl LiteralBase {
     if shape.is_tuple() {
       for i in 0..ShapeUtil::tuple_element_count(shape) {
         let subshape = shape.tuple_shapes(i);
-        LiteralBase::set_piece_shapes(
+        Literal::set_piece_shapes(
           subshape, piece.mutable_child(i).unwrap());
       }
     }
   }
+
   // Creates a new literal by broadcasting this literal with `dimensions` to
   // yield a literal of shape `result_shape`.
   pub fn broadcast(
     &self,
-    _result_shape: &Shape,
-    _dimensions: &Vec<i64>) -> Result<Literal, String>
+    result_shape: &Shape,
+    dimensions: &Vec<i64>) -> Result<Literal, String>
   {
-    unimplemented!()
+    let src_shape = self.shape();
+    if !src_shape.is_array() {
+      return Err("Broadcast only support arrays.".to_string());
+    }
+    let primitive_size =
+      ShapeUtil::byte_size_of_primitive_type(&src_shape.element_type());
+    
+    match primitive_size {
+      0 => return Literal::broadcast_helper(
+        0, self, src_shape, result_shape, dimensions),
+      1 => return Literal::broadcast_helper(
+        1, self, src_shape, result_shape, dimensions),
+      2 => return Literal::broadcast_helper(
+        2, self, src_shape, result_shape, dimensions),
+      4 => return Literal::broadcast_helper(
+        4, self, src_shape, result_shape, dimensions),
+      8 => return Literal::broadcast_helper(
+        8, self, src_shape, result_shape, dimensions),
+      16 => return Literal::broadcast_helper(
+        16, self, src_shape, result_shape, dimensions),
+      _ => return Err("Unhandled primitive size".to_string())
+    }
+  }
+
+  fn broadcast_helper(
+    _primitive_size: i64,
+    src: &Literal,
+    src_shape: &Shape,
+    result_shape: &Shape,
+    dimensions: &Vec<i64>) -> Result<Literal, String>
+  {
+    for i in 0..dimensions.len() {
+      if src_shape.dimensions(i) !=
+        result_shape.dimensions(dimensions[i] as usize)
+      {
+        return Err("src_shape dimension != result_shape dimension".to_string());
+      }
+    }
+    if src_shape.element_type() != result_shape.element_type() {
+      return Err("src_shape element_type != result_shape element_type".to_string());
+    }
+    let mut result = Literal::new_from_shape(result_shape);
+    if src_shape.is_dynamic() {
+      for i in 0..dimensions.len() {
+        if src_shape.is_dynamic_dimension(i as i64) {
+          // Set any dynamic sizes in the new literal.
+          let dynamic_size =
+            src.get_dynamic_size(i as i64, &vec![]);
+          result.set_dynamic_size(
+            dimensions[i], &vec![], dynamic_size);
+        }
+      }
+    }
+    if ShapeUtil::elements_in(result_shape) == 0 {
+      // Nothing to do.
+      return Ok(result);
+    }
+    let _src_data = src.untyped_data(&vec![]);
+    let _result_data = result.untyped_data(&vec![]);
+
+    // Fast path for broadcasting a scalar to a result shape.
+    if ShapeUtil::elements_in(src_shape) == 1 {
+      let e = ShapeUtil::elements_in(result_shape);
+      for _i in 0..e {
+        // TODO
+      }
+      return Ok(result);
+    }
+
+    let _src_minor_to_mmajor =
+      LayoutUtil::minor_to_major_from_shape(src_shape);
+    let _result_minor_to_major =
+      LayoutUtil::minor_to_major_from_shape(result_shape);
+
+    //let func = |src_index: &Vec<i64>| -> bool {
+      //true
+    //};
+    Ok(result)
   }
 
   // Creates a new literal by reordering the dimensions of this literal.
@@ -1060,10 +1389,13 @@ impl LiteralBase {
     let mut f = |t: PrimitiveType| {
       // TODO
       if is_integral_type(&t) {
-        LiteralBase::slice_internal::<i64>(
+        Literal::slice_internal::<i64>(
           &self, start_indices, &mut result_literal);
       } else if is_floating_point_type(&t) {
-        LiteralBase::slice_internal::<f64>(
+        Literal::slice_internal::<f64>(
+          &self, start_indices, &mut result_literal);
+      } else if is_predicate_type(&t) {
+        Literal::slice_internal::<bool>(
           &self, start_indices, &mut result_literal);
       }
     };
@@ -1072,22 +1404,22 @@ impl LiteralBase {
   }
 
   fn slice_internal<NativeT>(
-    src_literal: &LiteralBase,
+    src_literal: &Literal,
     start_indices: &Vec<i64>,
     result_literal: &mut Literal)
     where NativeT: 'static + Clone
   {
     let result_shape = &result_literal.shape().clone();    
-    let mut new_indices = vec![0; result_shape.rank()];
+    let mut new_indices = vec![0; result_shape.dimensions_vec().len()];
     let mut f = |indices: &Vec<i64>| -> NativeT {
-      for i in 0..result_shape.rank() {
+      for i in 0..result_shape.dimensions_vec().len() {
         new_indices[i] = indices[i] + start_indices[i];
       }
       src_literal.get::<NativeT>(
         &new_indices, &vec![]).unwrap().clone()
     };
     let _ = result_literal.populate(&mut f);
-    for dnum in 0..src_literal.shape().rank() {
+    for dnum in 0..src_literal.shape().dimensions_vec().len() {
       if src_literal.shape().is_dynamic_dimension(dnum as i64) {
         let mut dynamic_size =
           src_literal.get_dynamic_size(dnum as i64, &vec![])
@@ -1201,545 +1533,6 @@ impl LiteralBase {
       ArrayValueState::Undetermined)
   }
 
-  fn piece(&self, shape_index: &Vec<i64>) -> &Piece {
-    let mut piece = self.root_piece();
-    for i in  shape_index {
-      assert!(*i >= 0);
-      assert!((*i as usize) < piece.children_size());
-      piece = piece.child(*i as usize).unwrap();
-    }
-    piece
-  }
-
-  fn mutable_piece(&mut self, shape_index: &Vec<i64>) -> &mut Piece {
-    let mut piece = self.mutable_root_piece();
-    for i in  shape_index {
-      assert!(*i >= 0);
-      assert!((*i as usize) < piece.children_size());
-      piece = piece.mutable_child(*i as usize).unwrap();
-    }
-    piece
-  }
-
-  // Returns the piece at the root of the shape.
-  fn root_piece(&self) -> &Piece {
-    &self.root_piece
-  }
-
-  fn mutable_root_piece(&mut self) -> &mut Piece {
-    &mut self.root_piece
-  }
-
-  fn print_shape(print_layout: bool, shape: &Shape, printer: &mut dyn Printer) {
-    if print_layout {
-      ShapeUtil::print_human_string_with_layout(printer, shape);
-    } else {
-      ShapeUtil::print_human_string(printer, shape);
-    }
-  }
-
-  fn tuple_print_helper(
-    &self,
-    _shape_index: &Vec<i64>,
-    _print_shape: bool,
-    _print_layout: bool,
-    _one_line: bool,
-    _printer: &mut dyn Printer)
-  {
-      
-  }
-
-  fn dense_array_print_helper(
-    &self,
-    shape_index: &Vec<i64>,
-    print_shape: bool,
-    print_layout: bool,
-    oneline: bool,
-    printer: &mut dyn Printer)
-  {
-    let subshape =
-      ShapeUtil::get_subshape(self.shape(), shape_index);
-    let rank = subshape.rank();
-    let mut linebreak = " ";
-    if !oneline { linebreak = "\n"; }
-
-    if print_shape {
-      LiteralBase::print_shape(print_layout, &subshape, printer);
-      if subshape.is_dynamic() {
-        printer.append(&"(".to_string());
-        for i in 0..subshape.rank() {
-          printer.append(&self.get_dynamic_size(
-            i as i64, shape_index).to_string());
-          if i < subshape.rank() - 1 {
-            printer.append(&",".to_string());
-          }
-        }
-        printer.append(&")".to_string());
-      }
-      printer.append(&" ".to_string());
-    }
-
-    let mut indices: Vec<i64> = vec![];
-    let mut dimensions: Vec<i64> = vec![];
-    for i in 0..subshape.rank() {
-      dimensions.push(self.get_dynamic_size(i as i64, shape_index));
-    }
-    self.print_recursive(
-      shape_index,
-      &dimensions,
-      &mut indices,
-      oneline,
-      linebreak,
-      &subshape,
-      printer,
-      rank);
-  }
-
-  fn brace_to_string(
-    brace: &String,
-    dimensions: &Vec<i64>,
-    accum_indices: &mut Vec<i64>,
-    oneline: bool,
-    linebreak: &str,
-    rank: usize) -> String
-  {
-    // Handle 1D tensor
-    if rank == 1 { return brace.clone(); }
-
-    // Handle the innermost tensor of a 2D+ tensor.
-    if dimensions.len() == 1 && brace == &"{".to_string() {
-      let mut result = "".to_string();
-      if !oneline { result.push_str(&" ".to_string()); }
-      result.push_str(&brace);
-      if dimensions[0] > 1 { result.push_str(&" ".to_string()); }
-      return result;
-    }
-    if dimensions.len() == 1 && brace == &"}".to_string() {
-      let mut result = "".to_string();
-      if dimensions[0] > 1 { result = " ".to_string(); }
-      result.push_str(&brace);
-      return result;
-    }
-
-    // Handle the non-innermost tensors of a 2D+ tensor.
-    if brace == &"{".to_string() {
-      if rank > 3 && !accum_indices.is_empty() && accum_indices.len() < rank {
-        let index = accum_indices.len() - 1;
-        let value = accum_indices.last().unwrap(); // CHECK
-        let size = dimensions.first().unwrap(); // CHECK
-        let mut result = brace.clone();
-        result.push_str(" /*i");
-        result.push_str(index.to_string().as_str());
-        result.push_str("=");
-        result.push_str(value.to_string().as_str());
-        result.push_str("*/");
-        if *size > 0 { result.push_str(linebreak.to_string().as_str()); }
-        return result;
-      }
-      let mut result = brace.clone();
-      result.push_str(linebreak);
-      return result;
-    }
-
-    let mut result = linebreak.to_string();
-    result.push_str(brace);
-    result
-  }
-
-  fn print_recursive(
-    &self,
-    shape_index: &Vec<i64>,
-    dimensions: &Vec<i64>,
-    accum_indices: &mut Vec<i64>,
-    oneline: bool,
-    linebreak: &str,
-    subshape: &Shape,
-    printer: &mut dyn Printer,
-    rank: usize)
-  {
-    // dimensions.size() decreases by 1 at each recursive call,
-    // and accum_indices->size() increases by 1.
-    // Their sum is equal to the rank of the tensor.
-    assert_eq!(dimensions.len() + accum_indices.len(), rank);
-
-    if dimensions.is_empty() {
-      // Display predicates as 0s and 1s so that the string is more dense.
-      let mut elem = "".to_string();
-      if subshape.element_type() == PrimitiveType::Pred && rank > 0 {
-        // TODO
-      } else {
-        elem = self.get_as_string(&accum_indices, shape_index);
-      }
-      printer.append(&elem);
-    } else {
-      printer.append(&LiteralBase::brace_to_string(
-        &"{".to_string(), dimensions, accum_indices, oneline, linebreak, rank));
-      for i in 0..dimensions[0] {
-        accum_indices.push(i);
-        let mut span: Vec<i64> = vec![];
-        if !dimensions.is_empty() {
-          let mut dim_clone: Vec<i64> = vec![];
-          dim_clone.clone_from(&dimensions);
-          span = dim_clone.drain(1..).collect();
-        }
-        self.print_recursive(shape_index, &span, accum_indices, // CHECK: dimensions ??
-            oneline, linebreak, subshape, printer, rank);
-        accum_indices.pop();
-        if i < dimensions[0] - 1 {
-          printer.append(&",".to_string());
-          if dimensions.len() > 1 {
-            printer.append(&linebreak.to_string());
-          } else {
-            printer.append(&" ".to_string());
-          }
-        }
-      }
-      printer.append(&LiteralBase::brace_to_string(
-        &"}".to_string(), dimensions, accum_indices, oneline, linebreak, rank));
-    }
-  }
-
-  fn print_helper(
-    &self,
-    shape_index: &Vec<i64>,
-    print_shape: bool,
-    print_layout: bool,
-    oneline: bool,
-    printer: &mut dyn Printer)
-  {
-    let subshape =
-      ShapeUtil::get_subshape(self.shape(), shape_index);
-    assert!(LayoutUtil::has_layout(self.shape()));
-    assert!(LayoutUtil::has_layout(&subshape));
-
-    if subshape.is_tuple() {
-      self.tuple_print_helper(shape_index, print_shape,
-        print_layout, oneline, printer);
-    } else if subshape.is_token() {
-      printer.append(&"token".to_string());
-    } else {
-      assert!(LayoutUtil::is_dense_array(&subshape));
-      if self.is_known(shape_index) {
-        self.dense_array_print_helper(shape_index, print_shape,
-          print_layout, oneline, printer);
-      } else {
-        LiteralBase::print_shape(print_layout, &subshape, printer);
-        printer.append(&" ".to_string());
-        if self.is_determined(shape_index) {
-          printer.append(&"unknown".to_string());
-        } else {
-          printer.append(&"undetermined".to_string());
-        }
-      }
-    }
-  }
-}
-
-//#[derive(Debug, Clone, PartialEq)]
-pub struct Literal {
-  pub base: LiteralBase
-}
-
-impl Literal {
-  pub fn default() -> Self {
-    Literal { base: LiteralBase::new() }
-  }
-
-  // Create a literal of the given shape. The literal is allocated sufficient
-  // memory to hold the shape. Memory is uninitialized.
-  pub fn new_from_shape(shape: &Shape) -> Self {
-    Literal::new(
-      shape,
-      true,
-      ArrayValueState::Known)
-  }
-
-  // 'allocate_arrays' indicates whether to allocate memory for the arrays in
-  // the shape. If false, buffer pointers inside of the Literal::Pieces are set
-  // to nullptr.
-  pub fn new(
-    shape: &Shape,
-    allocate_arrays: bool,
-    leaf_array_value_state: ArrayValueState) -> Self
-  {
-    let mut literal = Literal {
-      base: LiteralBase::new(),
-    };
-    assert!(leaf_array_value_state != ArrayValueState::Known ||
-      LayoutUtil::has_layout(literal.shape()));
-
-    let mut root_piece: Piece = Piece::new();
-    root_piece.set_subshape(shape.clone());
-    Literal::set_piece(shape, &mut root_piece,
-      allocate_arrays, leaf_array_value_state);
-
-    literal.base.root_piece = root_piece;
-    literal
-  }
-
-  pub fn create_from_shape(shape: &Shape) -> Literal {
-    LiteralBase::create_from_shape(shape)
-  }
-
-  pub fn create_from_shape_with_unknown_leaf_arrays(shape: &Shape) -> Literal {
-    LiteralBase::create_from_shape_with_unknown_leaf_arrays(shape)
-  }
-
-  pub fn shape(&self) -> &Shape {
-    self.base.shape()
-  }
-
-  pub fn set_shape(&mut self, shape: Shape) {
-    self.base.set_shape(shape);
-  }
-
-  pub fn root_piece(&self) -> &Piece {
-    self.base.root_piece()
-  }
-
-  pub fn mutable_root_piece(&mut self) -> &mut Piece {
-    self.base.mutable_root_piece()
-  }
-
-  pub fn data(&self, shape_index: &Vec<i64>) -> &Vec<Box<dyn Any>> {
-    self.base.data(shape_index)
-  }
-
-  pub fn mutable_data(
-    &mut self, shape_index: &Vec<i64>) -> &mut Vec<Box<dyn Any>> {
-    self.base.mutable_data(shape_index)
-  }
-
-  pub fn set_data(&mut self, shape_index: &Vec<i64>, data: Vec<Box<dyn Any>>) {
-    self.base.set_data(shape_index, data);
-  }
-
-  fn set_piece(
-    shape: &Shape,
-    piece: &mut Piece,
-    allocate_arrays: bool,
-    leaf_array_value_state: ArrayValueState)
-  {
-    if shape.is_tuple() {
-      for subshape in shape.tuple_shapes_vec() {
-        let mut child_piece: Piece = Piece::new();
-        child_piece.set_subshape(subshape.clone());
-        Literal::set_piece(subshape, &mut child_piece, allocate_arrays,
-          leaf_array_value_state.clone());
-        piece.emplace_back(child_piece);
-      }
-    } else if shape.is_array() {
-      assert!(LayoutUtil::is_dense_array(shape),
-        "Literal array storage is currently only supported for dense array.");
-      piece.set_array_value_state(leaf_array_value_state.clone());
-      if leaf_array_value_state == ArrayValueState::Known && allocate_arrays {
-        // TODO
-      }
-    }   
-  }
-
-  // Copy values from 'src_literal' rooted at 'src_shape_index' into this
-  // literal rooted at 'dest_shape_index'. The subshape of this literal rooted
-  // at 'dest_shape_index' must be compatible with the subshape of 'src_literal'
-  // rooted at 'src_shape_index', but need not be arrays. If only_dynamic_bound
-  // is true, only elements within dynamic bounds will be copied.
-  pub fn copy_from(
-    &mut self,
-    src_literal: &Literal,
-    dest_shape_index: &Vec<i64>,
-    src_shape_index: &Vec<i64>,
-    only_dynamic_bound: bool) -> Result<(), String>
-  {
-    let dest_subshape =
-      ShapeUtil::get_subshape(self.shape(), dest_shape_index);
-    let src_subshape =
-      ShapeUtil::get_subshape(src_literal.shape(), src_shape_index);
-
-    if only_dynamic_bound {
-      let mut bound_shape = &dest_subshape;
-      if dest_subshape.is_static() {
-        bound_shape = &src_subshape;
-      }
-      let mut compact_shape = &src_subshape;
-      if dest_subshape.is_static() {
-        compact_shape = &dest_subshape;
-      }
-      assert!(ShapeUtil::dynamic_shape_is_compatible(compact_shape, bound_shape));
-    } else {
-      if !ShapeUtil::compatible(&dest_subshape, &src_subshape) {
-        return Err("Destination subshape incompatible with source subshape.".to_string());
-      }
-    }
-
-    let mut f =
-      |index: &Vec<i64>, piece: &mut Piece| -> Result<(), String>
-    {
-      if !piece.subshape().is_array() {
-        return Ok(());
-      }
-      // Determine if this index is in the part of this literal that we want
-      // to copy over from src_literal.
-      let mut in_subtree_to_copy = true;
-      if index.len() > 0 && dest_shape_index.len() > 0 {
-        for i in 0..dest_shape_index.len() {
-          if index[i] != dest_shape_index[i] {
-            in_subtree_to_copy = false;
-            break;
-          }
-        }
-      }
-      if !in_subtree_to_copy {
-        return Ok(());
-      }
-      // Construct the index of the corresponding piece in the source literal.
-      let mut src_piece_index = vec![];
-      src_piece_index.clone_from(src_shape_index);
-      for i in dest_shape_index.len()..index.len() {
-        src_piece_index.push(index[i]);
-      }
-      let result = piece.copy_from(
-        src_literal.piece(&src_piece_index), only_dynamic_bound);
-      if result.is_err() {
-        return result;
-      }
-      Ok(())
-    };
-    self.mutable_root_piece().for_each_subpiece_with_status(&mut f)
-  }
-
-  // Returns the element value at index (0, ..., 0), however many zeroes are
-  // required for that index.
-  pub fn get_first_element(&self) -> &Box<dyn Any> {
-    assert!(self.shape().is_array(), "only supported for dense arrays");
-    &self.data(&vec![])[0]
-  }
-
-  pub fn is_all_int(&self, value: i64) -> bool {
-    self.base.is_all_int(value)
-  }
-
-  pub fn is_all_float(&self, value: f64) -> bool {
-    self.base.is_all_float(value)
-  }
-
-  pub fn is_all_complex(&self, value: Complex<f64>) -> bool {
-    self.base.is_all_complex(value)
-  }
-
-  pub fn is_all_first(&self) -> bool {
-    self.base.is_all_first()
-  }
-
-  pub fn is_zero(&self, indices: &Vec<i64>) -> bool {
-    self.base.is_zero(indices)
-  }
-
-  // Returns true if the leaf arrays of the literal within the given shape index
-  // are all known.
-  // See comments on ArrayValueState for detailed explanation.
-  pub fn is_known(&self, shape_index: &Vec<i64>) -> bool {
-    self.base.is_known(shape_index)
-  }
-
-  // Returns the count of the elements in the array at the given shape index in
-  // this literal.
-  pub fn element_count(&self, index: &Vec<i64>) -> i64 {
-    if index.is_empty() {
-      // Common case, avoid GetSubshape().
-      return ShapeUtil::elements_in(self.shape());
-    }
-    ShapeUtil::elements_in(&ShapeUtil::get_subshape(self.shape(), index))
-  }
-
-  pub fn count_equal<T>(&self, value: T) -> usize
-    where T: 'static + Clone
-  {
-    self.base.count_equal(value)
-  }
-
-  pub fn is_equal_at<S>(&self, multi_index: &Vec<i64>, value: &S) -> bool
-    where S: 'static
-  {
-    self.base.is_equal_at(multi_index, value)
-  }
-
-  pub fn get<NativeT>(
-    &self, multi_index: &Vec<i64>, shape_index: &Vec<i64>) -> Option<&NativeT>
-    where NativeT: 'static
-  {
-    self.base.get::<NativeT>(multi_index, shape_index)
-  }
-
-  pub fn set<NativeT>(
-    &mut self,
-    multi_index: &Vec<i64>,
-    shape_index: &Vec<i64>,
-    value: NativeT)
-    where NativeT: 'static
-  {
-    self.base.set::<NativeT>(multi_index, shape_index, value);
-  }
-
-  pub fn set_at_root<NativeT>(
-    &mut self, multi_index: &Vec<i64>, value: NativeT)
-    where NativeT: 'static
-  {
-    self.base.set_at_root(multi_index, value);
-  }
-
-  // As Get(), but determines the correct type, and converts the value into
-  // double. This literal must be an array.
-  pub fn get_as_double(&self, multi_index: &Vec<i64>) -> Option<f64> {
-    self.base.get_as_double(multi_index)
-  }
-
-  // Convert each element whose *linear* index is listed in "linear_indices"
-  // to a double and return the sum of all of these elements.
-  pub fn get_sum_as_double(&self, linear_indices: &Vec<i64>) -> Option<f64> {
-    self.base.get_sum_as_double(linear_indices)
-  }
-
-  pub fn get_as_complex_64(&self, multi_index: &Vec<i64>) -> Option<Complex<f64>> {
-    self.base.get_as_complex_64(multi_index)
-  }
-
-  pub fn get_dynamic_size(&self, dim_index: i64, shape_index: &Vec<i64>) -> i64 {
-    self.base.get_dynamic_size(dim_index, shape_index)
-  }
-
-  pub fn set_dynamic_size(
-    &mut self, dim_index: i64, shape_index: &Vec<i64>, size: i64)
-  {
-    let mut shape_index_clone = vec![];
-    shape_index_clone.clone_from(shape_index);
-    let subshape = ShapeUtil::get_mutable_subshape(
-      self.mutable_shape_do_not_use(), shape_index_clone);
-
-    assert!(LayoutUtil::is_dense_array(subshape));
-    assert!(subshape.dimensions(dim_index as usize) >= size);
-    subshape.set_dynamic_dimension(dim_index as usize, true);
-
-    //assert_eq!(self.piece(shape_index).subshape(), subshape);
-    self.mutable_piece(shape_index).set_dynamic_size(dim_index, size);
-  }
-
-  pub fn untyped_data(&self) -> &Vec<Box<dyn Any>> {
-    self.base.untyped_data(&vec![])
-  }
-
-  pub fn piece(&self, shape_index: &Vec<i64>) -> &Piece {
-    self.base.piece(shape_index)
-  }
-
-  pub fn mutable_piece(&mut self, shape_index: &Vec<i64>) -> &mut Piece {
-    self.base.mutable_piece(shape_index)
-  }
-
-  pub fn slice(
-    &self, start_indices: &Vec<i64>, limit_indices: &Vec<i64>) -> Literal {
-    self.base.slice(start_indices, limit_indices)
-  }
-
   pub fn populate<F, NativeT>(
     &self, generator: &mut F) -> Result<(), String>
     where F: FnMut(&Vec<i64>)->NativeT
@@ -1755,20 +1548,28 @@ impl Literal {
   }
 
   pub fn populate_internal<F, NativeT>(
-    &self, _generator: &mut F, _parallel: bool) -> Result<(), String>
+    &self, _generator: &mut F, parallel: bool) -> Result<(), String>
     where F: FnMut(&Vec<i64>)->NativeT
   {
     assert!(LayoutUtil::is_dense_array(self.shape()));
-    assert!(self.shape().element_type() ==
-      native_to_primitive_type(&self.data(&vec![])[0]));
+    if !self.data(&vec![]).is_empty() {
+      assert!(self.shape().element_type() ==
+        native_to_primitive_type(&self.data(&vec![])[0]));
+    }
     
+    let populator =
+      |_dest: &Vec<Box<dyn Any>>, _indices: &Vec<i64>, _thread_id: i64|
+    {
+      // TODO
+    };
+    self.populate_inplace_internal(populator, parallel);
     Ok(())
   }
 
   pub fn populate_inplace_internal<F>(&self, populator: F, parallel: bool)
-    where F: Fn(&Vec<i64>, &Vec<i64>, i64)
+    where F: Fn(&Vec<Box<dyn Any>>, &Vec<i64>, i64)
   {
-    let dest_base = self.untyped_data();
+    let dest_base = self.untyped_data(&vec![]);
     if self.shape().rank() > 0 {
       let mut stride_config = StrideConfig::new(
         self.shape(),
@@ -1795,7 +1596,7 @@ impl Literal {
       }
 
       let init_func =
-        |indexes: &Vec<i64>, thread_id: i64| -> Result<bool, String>
+        |indexes: &Vec<i64>, _thread_id: i64| -> Result<bool, String>
       {
         let index = IndexUtil::multi_dimensional_index_to_linear_index(
           self.shape(), indexes);
@@ -1808,7 +1609,7 @@ impl Literal {
           * primitive_size;
 
         while dest_ptr < dest_end {
-          populator(&vec![dest_ptr], &minor_scan_indexes, thread_id);
+          //populator(&vec![dest_ptr], &minor_scan_indexes, thread_id);
           let mut value =
             minor_scan_indexes[stride_config.minor_dimension as usize];
           value += 1;
@@ -1839,21 +1640,8 @@ impl Literal {
       }
     } else {
       // For scalars.
-      let mut vec = vec![];
-      for v in dest_base {
-        vec.push(v.downcast_ref::<i64>().unwrap().clone());
-      }
-      populator(&vec, &vec![], -1);
+      populator(&dest_base, &vec![], -1);
     }
-  }
-
-  pub fn mutable_shape_do_not_use(&mut self) -> &mut Shape {
-    //&mut self.shape
-    self.base.mutable_shape()
-  }
-
-  pub fn set_mutable_shape_do_not_use(&mut self, shape: &Shape) {
-    self.base.set_mutable_shape_do_not_use(shape);
   }
 
   pub fn populate_r1<NativeT>(&mut self, values: &Vec<NativeT>)
@@ -1964,71 +1752,364 @@ impl Literal {
     // TODO
   }
 
-  pub fn relayout(
-    &self, new_layout: &Layout, shape_index: &Vec<i64>) -> Literal {
-    self.base.relayout(new_layout, shape_index)
-  }
-
-  pub fn relayout_with_shape(&self, shape: &Shape) -> Literal {
-    self.base.relayout_with_shape(shape)
-  }
-
-  pub fn equal(&self, other: &Literal, layout_sensitive: bool) -> bool {
-    // Checking the structure of tuple literals. Checks for dense arrays are
-    // performed below.
-    if !ShapeUtil::equal_structure(self.shape(), other.shape()) {
-      return false;
+  // This operation is the inverse of DecomposeTuple. The given elements are
+  // moved into the tuple elements of a new tuple-shaped Literal which is
+  // returned. Upon return, each of the Literals in 'elements' is set to a nil
+  // shape (empty tuple).
+  pub fn move_into_tuple(elements: &mut Vec<Literal>) -> Literal {
+    let mut element_shapes = vec![];
+    for elt in &mut *elements {
+      element_shapes.push(elt.shape());
     }
-    let mut f =
-      |index: &Vec<i64>, piece: &Piece| -> bool
+    let mut literal = Literal::new_from_shape(
+      &ShapeUtil::make_tuple_shape_with_ptrs(element_shapes));
+    for i in 0..elements.len() {
+      let result = literal.move_from(
+        &mut elements[i], &vec![i as i64]);
+      if result.is_err() {
+        assert!(false);
+      }
+    }
+    literal
+  }
+
+  // Similar to CopyFrom, but with move semantics. The subshape of this literal
+  // rooted at 'dest_shape_index' must be *equal* to the shape 'src_literal'
+  // (layouts and shapes must match), but need not be arrays. The memory
+  // allocated in this literal for the subshape at dest_shape_index is
+  // deallocated, and the respective buffers are replaced with those in
+  // src_literal. Upon return, src_literal is set to a nil shape (empty tuple).
+  pub fn move_from(
+    &mut self,
+    src_literal: &mut Literal,
+    dest_shape_index: &Vec<i64>) -> Result<(), String>
+  {
+    let dest_subsgape =
+      ShapeUtil::get_subshape(self.shape(), dest_shape_index);
+    if !ShapeEqual::new().equal(&dest_subsgape, src_literal.shape()) {
+      let err_msg = "Destination subshape not equal to source shape".to_string();
+      return Err(err_msg);
+    }
+    let mut func =
+      |src_index: &Vec<i64>, src_piece: &mut Piece| -> Result<(), String>
     {
-      let other_piece = other.piece(index);
-      let subshape = piece.subshape();
-      let other_subshape = other_piece.subshape();
-      if subshape.element_type() != other_subshape.element_type() {
-        return false;
+      if !src_piece.subshape().is_array() {
+        return Ok(());
       }
-      if !piece.subshape().is_array() {
-        return true;
+      let mut dest_index = vec![];
+      dest_index.clone_from(dest_shape_index);
+      for i in src_index {
+        dest_index.push(*i);
       }
-      if subshape.dimensions_size() != other_subshape.dimensions_size() {
-        return false;
+      let dest_piece = self.mutable_piece(&dest_index);
+      dest_piece.deallocate_buffers();
+      dest_piece.move_data_from(src_piece);
+      Ok(())
+    };
+    src_literal.mutable_root_piece().for_each_mutable_subpiece(&mut func);
+
+    *src_literal.mutable_shape() = nil_shape();
+    *src_literal.mutable_root_piece() = Piece::new();
+    src_literal.mutable_root_piece().set_subshape(nil_shape());
+    Ok(())    
+  }
+
+  // Returns a vector containing the tuple elements of this Literal as separate
+  // Literals. This Literal must be tuple-shaped and can be a nested tuple. The
+  // elements are moved into the new Literals; no data is copied. Upon return
+  // this Literal is set to a nil shape (empty tuple)
+  pub fn decompose_tuple(&mut self) -> Vec<Literal> {
+    assert!(self.shape().is_tuple());
+    let mut elements = vec![];
+    let tuple_element_count = ShapeUtil::tuple_element_count(self.shape());
+    for i in 0..tuple_element_count {
+      let mut literal = Literal::new(
+        &ShapeUtil::get_subshape(self.shape(), &vec![i as i64]),
+        false,
+        ArrayValueState::Unknown);
+      let mut func =
+        |index: &Vec<i64>, dest_piece: &mut Piece| -> Result<(), String>
+      {
+        if dest_piece.subshape().is_tuple() {
+          return Ok(());
+        }
+        let mut src_index = vec![i as i64];
+        for j in index {
+          src_index.push(*j);
+        }
+        let src_piece = self.piece(&src_index);
+
+        // Move the respective buffer over to the element Literal.
+        dest_piece.move_data_from(src_piece);
+        Ok(())
+      };
+      literal.root_piece.for_each_mutable_subpiece(&mut func);
+      elements.push(literal);
+    }
+    // Set this literal to be nil-shaped.
+    *self = Literal::default();
+    elements
+  }
+
+  fn piece(&self, shape_index: &Vec<i64>) -> &Piece {
+    let mut piece = self.root_piece();
+    for i in  shape_index {
+      assert!(*i >= 0);
+      assert!((*i as usize) < piece.children_size());
+      piece = piece.child(*i as usize).unwrap();
+    }
+    piece
+  }
+
+  fn mutable_piece(&mut self, shape_index: &Vec<i64>) -> &mut Piece {
+    let mut piece = self.mutable_root_piece();
+    for i in  shape_index {
+      assert!(*i >= 0);
+      assert!((*i as usize) < piece.children_size());
+      piece = piece.mutable_child(*i as usize).unwrap();
+    }
+    piece
+  }
+
+  // Returns the piece at the root of the shape.
+  fn root_piece(&self) -> &Piece {
+    &self.root_piece
+  }
+
+  fn mutable_root_piece(&mut self) -> &mut Piece {
+    &mut self.root_piece
+  }
+
+  fn print_shape(print_layout: bool, shape: &Shape, printer: &mut dyn Printer) {
+    if print_layout {
+      ShapeUtil::print_human_string_with_layout(printer, shape);
+    } else {
+      ShapeUtil::print_human_string(printer, shape);
+    }
+  }
+
+  fn tuple_print_helper(
+    &self,
+    shape_index: &Vec<i64>,
+    print_shape: bool,
+    print_layout: bool,
+    one_line: bool,
+    printer: &mut dyn Printer)
+  {
+    let subshape =
+      ShapeUtil::get_subshape(self.shape(), shape_index);
+    let mut first_str = "(\n".to_string();
+    if one_line { first_str = "( ".to_string(); }
+    printer.append(&first_str);
+
+    for i in 0..ShapeUtil::tuple_element_count(&subshape) {
+      let mut element_index = vec![];
+      element_index.clone_from(shape_index);
+      element_index.push(i as i64);
+      let mut delim_str = ",\n".to_string();
+      if one_line { delim_str = ", ".to_string(); }
+      if i > 0 {
+        printer.append(&delim_str);
       }
-      if layout_sensitive && (subshape.layout() != other_subshape.layout()) {
-        return false;
+      self.print_helper(&element_index,
+        print_shape, print_layout, one_line, printer);
+    }
+
+    let mut last_str = "\n)".to_string();
+    if one_line { last_str = " )".to_string(); }
+    printer.append(&last_str);
+  }
+
+  fn dense_array_print_helper(
+    &self,
+    shape_index: &Vec<i64>,
+    print_shape: bool,
+    print_layout: bool,
+    oneline: bool,
+    printer: &mut dyn Printer)
+  {
+    let subshape =
+      ShapeUtil::get_subshape(self.shape(), shape_index);
+    let rank = subshape.rank();
+    let mut linebreak = " ";
+    if !oneline { linebreak = "\n"; }
+
+    if print_shape {
+      Literal::print_shape(print_layout, &subshape, printer);
+      if subshape.is_dynamic() {
+        printer.append(&"(".to_string());
+        for i in 0..subshape.rank() {
+          printer.append(&self.get_dynamic_size(
+            i as i64, shape_index).to_string());
+          if i < subshape.rank() - 1 {
+            printer.append(&",".to_string());
+          }
+        }
+        printer.append(&")".to_string());
       }
-      for i in 0..subshape.dimensions_size() {
-        if piece.get_dynamic_size(i as i64) !=
-          other_piece.get_dynamic_size(i as i64)
-        {
-          return false;
+      printer.append(&" ".to_string());
+    }
+
+    let mut indices: Vec<i64> = vec![];
+    let mut dimensions: Vec<i64> = vec![];
+    for i in 0..subshape.rank() {
+      dimensions.push(self.get_dynamic_size(i as i64, shape_index));
+    }
+    self.print_recursive(
+      shape_index,
+      &dimensions,
+      &mut indices,
+      oneline,
+      linebreak,
+      &subshape,
+      printer,
+      rank);
+  }
+
+  fn brace_to_string(
+    brace: &String,
+    dimensions: &Vec<i64>,
+    accum_indices: &mut Vec<i64>,
+    oneline: bool,
+    linebreak: &str,
+    rank: usize) -> String
+  {
+    // Handle 1D tensor
+    if rank == 1 { return brace.clone(); }
+
+    // Handle the innermost tensor of a 2D+ tensor.
+    if dimensions.len() == 1 && brace == &"{".to_string() {
+      let mut result = "".to_string();
+      if !oneline { result.push_str(&" ".to_string()); }
+      result.push_str(&brace);
+      if dimensions[0] > 1 { result.push_str(&" ".to_string()); }
+      return result;
+    }
+    if dimensions.len() == 1 && brace == &"}".to_string() {
+      let mut result = "".to_string();
+      if dimensions[0] > 1 { result = " ".to_string(); }
+      result.push_str(&brace);
+      return result;
+    }
+
+    // Handle the non-innermost tensors of a 2D+ tensor.
+    if brace == &"{".to_string() {
+      if rank > 3 && !accum_indices.is_empty() && accum_indices.len() < rank {
+        let index = accum_indices.len() - 1;
+        let value = accum_indices.last().unwrap(); // CHECK
+        let size = dimensions.first().unwrap(); // CHECK
+        let mut result = brace.clone();
+        result.push_str(" /*i");
+        result.push_str(index.to_string().as_str());
+        result.push_str("=");
+        result.push_str(value.to_string().as_str());
+        result.push_str("*/");
+        if *size > 0 { result.push_str(linebreak.to_string().as_str()); }
+        return result;
+      }
+      let mut result = brace.clone();
+      result.push_str(linebreak);
+      return result;
+    }
+
+    let mut result = linebreak.to_string();
+    result.push_str(brace);
+    result
+  }
+
+  fn print_recursive(
+    &self,
+    shape_index: &Vec<i64>,
+    dimensions: &Vec<i64>,
+    accum_indices: &mut Vec<i64>,
+    oneline: bool,
+    linebreak: &str,
+    subshape: &Shape,
+    printer: &mut dyn Printer,
+    rank: usize)
+  {
+    // dimensions.size() decreases by 1 at each recursive call,
+    // and accum_indices->size() increases by 1.
+    // Their sum is equal to the rank of the tensor.
+    assert_eq!(dimensions.len() + accum_indices.len(), rank);
+
+    if dimensions.is_empty() {
+      // Display predicates as 0s and 1s so that the string is more dense.
+      #[allow(unused_assignments)]
+      let mut elem = "".to_string();
+      if subshape.element_type() == PrimitiveType::Pred && rank > 0 {
+        if *self.get::<bool>(&accum_indices, shape_index).unwrap(){
+          elem = "1".to_string();
+        } else {
+          elem = "0".to_string();
+        }
+      } else {
+        elem = self.get_as_string(&accum_indices, shape_index);
+      }
+      printer.append(&elem);
+    } else {
+      printer.append(&Literal::brace_to_string(
+        &"{".to_string(), dimensions, accum_indices, oneline, linebreak, rank));
+      for i in 0..dimensions[0] {
+        accum_indices.push(i);
+        let mut span: Vec<i64> = vec![];
+        if !dimensions.is_empty() {
+          let mut dim_clone: Vec<i64> = vec![];
+          dim_clone.clone_from(&dimensions);
+          span = dim_clone.drain(1..).collect();
+        }
+        self.print_recursive(shape_index, &span, accum_indices, // CHECK: dimensions ??
+            oneline, linebreak, subshape, printer, rank);
+        accum_indices.pop();
+        if i < dimensions[0] - 1 {
+          printer.append(&",".to_string());
+          if dimensions.len() > 1 {
+            printer.append(&linebreak.to_string());
+          } else {
+            printer.append(&" ".to_string());
+          }
         }
       }
-      if !piece.equal_elements(other_piece) {
-        return false;
+      printer.append(&Literal::brace_to_string(
+        &"}".to_string(), dimensions, accum_indices, oneline, linebreak, rank));
+    }
+  }
+
+  fn print_helper(
+    &self,
+    shape_index: &Vec<i64>,
+    print_shape: bool,
+    print_layout: bool,
+    oneline: bool,
+    printer: &mut dyn Printer)
+  {
+    let subshape =
+      ShapeUtil::get_subshape(self.shape(), shape_index);
+    assert!(LayoutUtil::has_layout(self.shape()));
+    assert!(LayoutUtil::has_layout(&subshape));
+
+    if subshape.is_tuple() {
+      self.tuple_print_helper(shape_index, print_shape,
+        print_layout, oneline, printer);
+    } else if subshape.is_token() {
+      printer.append(&"token".to_string());
+    } else {
+      assert!(LayoutUtil::is_dense_array(&subshape));
+      if self.is_known(shape_index) {
+        self.dense_array_print_helper(shape_index, print_shape,
+          print_layout, oneline, printer);
+      } else {
+        Literal::print_shape(print_layout, &subshape, printer);
+        printer.append(&" ".to_string());
+        if self.is_determined(shape_index) {
+          printer.append(&"unknown".to_string());
+        } else {
+          printer.append(&"undetermined".to_string());
+        }
       }
-      true
-    };
-    self.root_piece().for_each_subpiece_with_bool(&mut f)
-  }
-
-  pub fn to_string(&self) -> String {
-    self.base.to_string()
+    }
   }
 }
-
-// A read-only view of a Literal. A LiteralSlice contains pointers to shape and
-// literal buffers always owned by others.
-/*
-pub struct LiteralSlice {
-  base: LiteralBase
-}
-
-impl LiteralSlice {
-  pub fn new() {}
-  fn root_piece() {}
-}
-*/
 
   // Array literals could be in one of the following three states:
   //   1) Known: we have evaluated and known the value of the array literal.
@@ -2055,6 +2136,7 @@ pub struct Piece {
   subshape: Shape,
   children: Option<Vec<Piece>>,
   data: Vec<Box<dyn Any>>,
+  storage: Storage,
   dynamic_size_buffer: Vec<i64>,
   array_value_state: ArrayValueState,
 }
@@ -2065,6 +2147,7 @@ impl Piece {
       subshape: Shape::new(),
       children: Some(Vec::new()), //None,
       data: Vec::new(),
+      storage: Storage::default(),
       dynamic_size_buffer: vec![0; 100], // Temp
       array_value_state: ArrayValueState::Undetermined
     };
@@ -2137,7 +2220,6 @@ impl Piece {
     assert!(self.subshape().is_array(), "only supported for dense arrays");
     let index = IndexUtil::multi_dimensional_index_to_linear_index(
       self.subshape(), multi_index);
-
     self.data.insert(index as usize, Box::new(value));
   }
 
@@ -2156,8 +2238,35 @@ impl Piece {
     self.mutable_dynamic_size_buffer()[dim_index as usize] = size;
   }
 
-  pub fn move_data_from(&self) {
-    unimplemented!()
+  pub fn move_data_from(&mut self, from: &Piece) {
+    debug_assert!(!self.storage.is_dense_rep());
+    debug_assert!(!self.storage.is_tuple_rep());
+
+    // TODO
+    let mut data = vec![];
+    for from_value in from.data() {
+      if from_value.downcast_ref::<bool>().is_some() {
+        let value = *from_value.downcast_ref::<bool>().unwrap();
+        let box_value: Box<dyn Any> = Box::new(value);
+        data.push(box_value);
+      } else if from_value.downcast_ref::<i32>().is_some() {
+        let value = *from_value.downcast_ref::<i32>().unwrap();
+        let box_value: Box<dyn Any> = Box::new(value);
+        data.push(box_value);
+      } else if from_value.downcast_ref::<i64>().is_some() {
+        let value = *from_value.downcast_ref::<i64>().unwrap();
+        let box_value: Box<dyn Any> = Box::new(value);
+        data.push(box_value);
+      } else if from_value.downcast_ref::<f64>().is_some() {
+        let value = *from_value.downcast_ref::<f64>().unwrap();
+        let box_value: Box<dyn Any> = Box::new(value);
+        data.push(box_value);
+      }
+    }
+    //self.storage.data = data;
+    self.data = data;
+
+
   }
 
   pub fn copy_from(
@@ -2189,6 +2298,27 @@ impl Piece {
     }
     if ShapeEqual::new().equal(self.subshape(), src.subshape()) {
       // If the layouts are equal it's faster just to memcpy.
+      let mut src_data = vec![];
+      for src_value in src.data() {
+        if src_value.downcast_ref::<bool>().is_some() {
+          let value = *src_value.downcast_ref::<bool>().unwrap();
+          let box_value: Box<dyn Any> = Box::new(value);
+          src_data.push(box_value);
+        } else if src_value.downcast_ref::<i32>().is_some() {
+          let value = *src_value.downcast_ref::<i32>().unwrap();
+          let box_value: Box<dyn Any> = Box::new(value);
+          src_data.push(box_value);
+        } else if src_value.downcast_ref::<i64>().is_some() {
+          let value = *src_value.downcast_ref::<i64>().unwrap();
+          let box_value: Box<dyn Any> = Box::new(value);
+          src_data.push(box_value);
+        } else if src_value.downcast_ref::<f64>().is_some() {
+          let value = *src_value.downcast_ref::<f64>().unwrap();
+          let box_value: Box<dyn Any> = Box::new(value);
+          src_data.push(box_value);
+        }
+      }
+      *self.mutable_data() = src_data;
     } else {
       let mut f = |_primitive_t: PrimitiveType| {
         if only_dynamic_bound {
@@ -2214,7 +2344,7 @@ impl Piece {
   }
 
   pub fn deallocate_buffers(&mut self) {
-    unimplemented!()
+    //unimplemented!() // TODO
   }
 
   pub fn buffer(&self) {
@@ -2465,6 +2595,14 @@ impl Piece {
       if orig_data.type_id() != other_data.type_id() {
         return false;
       }
+      // i32
+      if let (Some(orig_value), Some(other_value)) =
+        (orig_data.downcast_ref::<i32>(), other_data.downcast_ref::<i32>())
+      {
+        //println!("orig: {:?}. other: {:?}", *orig_value, *other_value);
+        if orig_value == other_value { continue; }
+        else { return false; }
+      }
       // i64
       if let (Some(orig_value), Some(other_value)) =
         (orig_data.downcast_ref::<i64>(), other_data.downcast_ref::<i64>())
@@ -2635,37 +2773,78 @@ impl Piece {
   }
 }
 
-pub struct Storage {
+// Uninitialized state representation.
+pub struct Uninitialized {}
 
+// Children pieces for tuple shaped pieces.
+pub struct TupleRep {
+  children: Vec<Piece>
+}
+
+// Out of line dense array storage.
+pub struct DenseRep {
+  data: Vec<Box<dyn Any>>,
+}
+
+// Inlined dense array storage.
+pub struct DenseInlinedRep {
+  data: Vec<Box<dyn Any>>,
+}
+
+// A wrapper around the piece representations with cached data pointer.
+pub struct Storage {
+  data: Vec<Box<dyn Any>>,
+  rep_uninitialized: Option<Uninitialized>,
+  rep_tuple: Option<TupleRep>,
+  rep_dense: Option<DenseRep>,
+  rep_dense_inlined: Option<DenseInlinedRep>,
 }
 
 impl Storage {
   pub fn default() -> Self {
-    Storage {  }
+    Storage {
+      data: Vec::new(),
+      rep_uninitialized: None,
+      rep_tuple: None,
+      rep_dense: None,
+      rep_dense_inlined: None,
+    }
   }
 
-  pub fn is_a(&self) -> bool {
-    unimplemented!()
+  pub fn is_uninitialized_rep(&self) -> bool {
+    self.rep_uninitialized.is_some()
+  }
+
+  pub fn is_dense_rep(&self) -> bool {
+    self.rep_dense.is_some()
+  }
+
+  pub fn is_dense_inlined_rep(&self) -> bool {
+    self.rep_dense_inlined.is_some()
+  }
+
+  pub fn is_tuple_rep(&self) -> bool {
+    self.rep_tuple.is_some()
   }
 
   pub fn emplace(&self) {
     unimplemented!()
   }
 
-  pub fn get_dense_inlined_rep(&self) {
-    unimplemented!()
+  pub fn get_dense_inlined_rep(&self) -> &Option<DenseInlinedRep>{
+    &self.rep_dense_inlined
   }
 
-  pub fn get_dense_rep(&self) {
-    unimplemented!()
+  pub fn get_dense_rep(&self) -> &Option<DenseRep> {
+    &self.rep_dense
   }
 
-  pub fn get_tuple_rep(&self) {
-    unimplemented!()
+  pub fn get_tuple_rep(&self) -> &Option<TupleRep> {
+    &self.rep_tuple
   }
 
-  pub fn data(&self) {
-    unimplemented!()
+  pub fn data(&self) -> &Vec<Box<dyn Any>> {
+    &self.data
   }
 }
 
@@ -2727,16 +2906,11 @@ impl StrideConfig {
   }
 }
 
+
 #[cfg(test)]
 mod tests {
-//use num::complex::Complex64;
-  use crate::{
-    //literal::Literal,
-    literal_util::LiteralUtil,
-    //shape_util::ShapeUtil
-  };
-  //use crate::blitz_data::PrimitiveType;
   use super::*;
+  use crate::literal_util::LiteralUtil;
 
   #[test]
   fn test_literal_scalar_to_string() {
@@ -2745,6 +2919,97 @@ mod tests {
 
     let false_lit = LiteralUtil::create_r0::<bool>(false);
     assert_eq!(false_lit.to_string(), "pred[] false".to_string());
+
+    let s32_lit = LiteralUtil::create_r0::<i32>(-999);
+    assert_eq!(s32_lit.to_string(), "s32[] -999".to_string());
+
+    let s64_lit = LiteralUtil::create_r0::<i64>(-128);
+    assert_eq!(s64_lit.to_string(), "s64[] -128".to_string());
+
+    let f32_lit = LiteralUtil::create_r0::<f32>(3.14);
+    assert_eq!(f32_lit.to_string(), "f32[] 3.14".to_string());
+
+    let f64_lit = LiteralUtil::create_r0::<f64>(3.14159);
+    assert_eq!(f64_lit.to_string(), "f64[] 3.14159".to_string());
+
+    let c64_lit = LiteralUtil::create_r0(Complex64::new(3.14, 2.78));
+    assert_eq!(c64_lit.to_string(), "c64[] (3.14, 2.78)".to_string());
+
+    // TODO
+  }
+
+  #[test]
+  fn test_literal_vector_to_string() {
+    let pred_vec = LiteralUtil::create_r1(&vec![true, false, true]);
+    assert_eq!(pred_vec.to_string(), "pred[3] {1, 0, 1}".to_string());
+  }
+
+  #[test]
+  fn test_literal_linear_indexing() {
+    let vec = LiteralUtil::create_r1(&vec![1.0, 2.0, 3.0]);
+    assert_eq!(vec.get_linear(&vec![0]), Some(&1.0));
+    assert_eq!(vec.get_linear(&vec![1]), Some(&2.0));
+    assert_eq!(vec.get_linear(&vec![2]), Some(&3.0));
+  }
+
+  #[test]
+  fn test_r2_to_string() {
+    let literal = LiteralUtil::create_r2(
+      &vec![vec![1, 2], vec![3, 4], vec![5, 6]]);
+    let expected = "s32[3,2] {
+ { 1, 2 },
+ { 3, 4 },
+ { 5, 6 }
+}".to_string();
+    assert_eq!(literal.to_string(), expected);
+  }
+
+  #[test]
+  fn test_r2_dynamic_to_string() {
+    let mut literal = LiteralUtil::create_r2(
+      &vec![vec![1, 2], vec![3, 4], vec![5, 6]]);
+    literal.set_dynamic_size(0, &vec![], 2);
+    let expected = "s32[<=3,2](2,2) {
+ { 1, 2 },
+ { 3, 4 }
+}".to_string();
+    assert_eq!(literal.to_string(), expected);
+    // A Less trivial case where the memory layout is not consecutive.
+    let mut literal2 = LiteralUtil::create_r2(
+      &vec![vec![1, 2, 3], vec![4, 5, 6]]);
+    literal2.set_dynamic_size(1, &vec![], 2);
+    let expected2 = "s32[2,<=3](2,2) {
+ { 1, 2 },
+ { 4, 5 }
+}".to_string();
+    assert_eq!(literal2.to_string(), expected2);
+  }
+
+  #[test]
+  fn test_r2_bool_dynamic_to_string() {
+    let mut literal = LiteralUtil::create_r2(
+      &vec![vec![true, true, true], vec![true, true, true], vec![true, true, true]]);
+    literal.set_dynamic_size(0, &vec![], 2);
+    let expected = "pred[<=3,3](2,3) {
+ { 1, 1, 1 },
+ { 1, 1, 1 }
+}".to_string();
+    assert_eq!(literal.to_string(), expected);
+  }
+
+  #[test]
+  fn test_tuple_to_string() {
+    let scalar = LiteralUtil::create_r0(1.0);
+    let matrix = LiteralUtil::create_r2(&vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    let tuple = LiteralUtil::make_tuple(&vec![&scalar, &matrix]);
+    let expected = "(
+f64[] 1,
+f64[2,2] {
+ { 1, 2 },
+ { 3, 4 }
+}
+)".to_string();
+    assert_eq!(tuple.to_string(), expected);
   }
 
   #[test]
@@ -2811,7 +3076,7 @@ mod tests {
   #[test] // FAIL
   fn test_different_layout_equality() {
     // Test equality with literals which have different layouts.
-    let mut col_major: Literal = Literal::new_from_shape(
+    let mut col_major = Literal::new_from_shape(
       &ShapeUtil::make_shape_with_dense_layout(
         &PrimitiveType::F64,
         &vec![2, 2],
@@ -2825,7 +3090,7 @@ mod tests {
     col_major.set_at_root(&vec![1, 0], 3.0);
     col_major.set_at_root(&vec![1, 1], 4.0);
 
-    let mut row_major: Literal = Literal::new_from_shape(
+    let mut row_major = Literal::new_from_shape(
       &ShapeUtil::make_shape_with_dense_layout(
         &PrimitiveType::F64,
         &vec![2, 2],
@@ -2842,7 +3107,7 @@ mod tests {
     assert!(row_major.equal(&col_major, false));
   }
 
-  #[test] // FAIL
+  #[test]
   fn test_tuple_equality() {
     // Test equality with tuples.
     let scalar = LiteralUtil::create_r0::<f64>(1.0);
@@ -2853,15 +3118,15 @@ mod tests {
 
     // Tuple with the same elements. One element is shared with the original
     // tuple, the other is a clone of the element in the original tuple.
-    //let scalar_clone = LiteralUtil::create_r0::<f64>(1.0);
-    //let tuple2 = LiteralUtil::make_tuple::<f64>(
-      //&vec![&scalar_clone, &matrix]);
-    //assert!(tuple1.equal(&tuple2, false));
+    let scalar_clone = LiteralUtil::create_r0::<f64>(1.0);
+    let tuple2 =
+      LiteralUtil::make_tuple(&vec![&scalar_clone, &matrix]);
+    assert!(tuple1.equal(&tuple2, false));
 
     // Tuple with elements reversed.
-    //let reserved_tuple = LiteralUtil::make_tuple::<f64>(
-      //&vec![&matrix, &scalar]);
-    //assert!(!tuple1.equal(&reserved_tuple, false));
+    let reversed_tuple =
+      LiteralUtil::make_tuple(&vec![&matrix, &scalar]);
+    assert!(!tuple1.equal(&reversed_tuple, false));
 
     // Tuple with different value.
     let scalar_42 = LiteralUtil::create_r0::<f64>(42.0);
@@ -2870,7 +3135,7 @@ mod tests {
     assert!(!tuple1.equal(&different_tuple, false));
   }
 
-  #[test] // FAI;
+  #[test] // FAIL
   fn test_dynamic_shape_equality() {
     let mut r1 = LiteralUtil::create_r1::<f64>(
       &vec![1.0, 2.0]);
@@ -3091,6 +3356,157 @@ mod tests {
   }
 
   #[test]
+  fn test_replicate_r2_u32() {
+    
+  }
+
+  #[test]
+  fn test_get_as_double() {
+    let m = LiteralUtil::create_r2(
+      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    assert_eq!(m.get_as_double(&vec![0, 0]), Some(1.0));
+    assert_eq!(m.get_as_double(&vec![1, 0]), Some(3.0));
+  }
+
+  #[test]
+  fn test_get_sum_as_double() {
+    let m = LiteralUtil::create_r2(
+      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    assert_eq!(m.get_sum_as_double(&vec![0, 3]), Some(1.0 + 4.0));
+    assert_eq!(m.get_sum_as_double(&vec![0, 1, 2, 3]), Some(1.0 + 2.0 + 3.0 + 4.0));
+
+    let vals = vec![1.0; 1024];
+    let v = LiteralUtil::create_r1(&vals);
+    let mut indices = vec![];
+    let mut i = 0;
+    while i < 1024 {
+      indices.push(i);
+      assert_eq!(v.get_sum_as_double(&indices), Some((i as f64 + 2.0) / 2.0));
+      i += 2;
+    };
+  }
+
+  #[test]
+  fn test_get_as_complex_64() {
+    let value = Complex64::new(1.0, 0.0);
+    let c1 = LiteralUtil::create_r0(value);
+    assert_eq!(c1.get_as_complex_64(&vec![]), Some(value));
+
+    let c2 = LiteralUtil::create_r0(1.0);
+    assert_eq!(c2.get_as_complex_64(&vec![]), Some(value));
+
+    let other_value = Complex64::new(1.0, 2.0);
+    let c5 = LiteralUtil::create_r0(other_value);
+    assert_eq!(c5.get_as_complex_64(&vec![]), Some(other_value));
+
+    let value_1 = Complex64::new(1.0, 0.0);
+    let c6 = LiteralUtil::create_r0(1);
+    assert_eq!(c6.get_as_complex_64(&vec![]), Some(value_1));
+  }
+
+  #[test] // FAIL
+  fn test_slice_on_bool() {
+    let c1 = LiteralUtil::create_r1(&vec![true, true, false]);
+    let slice_c1 = c1.slice(&vec![0], &vec![3]); 
+    assert!(c1.equal(&slice_c1, false));
+  }
+
+  #[test]
+  fn test_is_equal_at() {
+    let val_double = 4.0;
+    let val_integral: i64 = 4;
+    let c1 = LiteralUtil::create_r0(val_integral.clone());
+    assert_eq!(c1.is_equal_at(&vec![], &val_double), true);
+    assert_eq!(c1.is_equal_at(&vec![], &val_integral), true);
+
+    let c2 = LiteralUtil::create_r0(val_double.clone());
+    assert_eq!(c2.is_equal_at(&vec![], &val_double), true);
+    assert_eq!(c2.is_equal_at(&vec![], &val_integral), true);
+
+    let val_complex = Complex64::new(val_double, 0.0);
+    assert_eq!(c1.is_equal_at(&vec![], &val_complex), true);
+    assert_eq!(c2.is_equal_at(&vec![], &val_complex), true);
+
+    let c4 = LiteralUtil::create_r0(val_complex.clone());
+    assert_eq!(c4.is_equal_at(&vec![], &val_double), true);
+    assert_eq!(c4.is_equal_at(&vec![], &val_integral), true);
+    assert_eq!(c4.is_equal_at(&vec![], &val_complex), true);
+  }
+
+  #[test]
+  fn test_create_from_shape_with_unknown_leaf_arrays() {
+    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
+      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![4, 4]));
+    assert_eq!(c1.is_known(&vec![]), false);
+  }
+
+  #[test]
+  fn test_create_from_shape_with_unknown_leaf_arrays_s4_tuple() {
+    let mut inner_shape = ShapeUtil::make_shape(
+      &PrimitiveType::S4, vec![4, 4]);
+    inner_shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(4);
+
+    let c1 =
+      Literal::create_from_shape_with_unknown_leaf_arrays(&inner_shape);
+    assert_eq!(c1.is_known(&vec![]), false);
+  }
+
+  #[test]
+  fn test_create_partially_known_tuple() {
+    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
+      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![4, 4]));
+    let c2 = LiteralUtil::create_r0(10);
+    let c3 = LiteralUtil::make_tuple(&vec![&c1, &c2]);
+    let c4 = LiteralUtil::create_r0(100);
+    let c5 = LiteralUtil::make_tuple(&vec![&c4, &c3]);
+    assert_eq!(c5.is_known(&vec![]), false);
+  }
+
+  #[test]
+  fn test_copy_from_partially_known_tuple() {
+    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
+      &ShapeUtil::make_shape(&PrimitiveType::F64, vec![4, 4]));
+    let c2 = LiteralUtil::create_r0(10);
+    let c3 = LiteralUtil::make_tuple(&vec![&c1, &c2]);
+    let c4 = LiteralUtil::create_r0(100);
+    let c5 = LiteralUtil::make_tuple(&vec![&c4, &c3]);
+    let mut c6 = Literal::create_from_shape(c5.shape());
+    let result = c6.copy_from(
+      &c5, &vec![1], &vec![1], false);
+    assert!(result.is_ok());
+    assert!(!c6.is_known(&vec![]));
+  }
+
+  #[test]
+  fn test_copy_from_partially_known_tuple_unknown_tuple_element() {
+    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
+      &ShapeUtil::make_tuple_shape(vec![
+        ShapeUtil::make_shape(&PrimitiveType::F64, vec![4, 4]),
+        ShapeUtil::make_shape(&PrimitiveType::F64, vec![4, 4])]));
+    let c2 = LiteralUtil::create_r0(10);
+    let c3 = LiteralUtil::make_tuple(&vec![&c1, &c2]);
+    let c4 = LiteralUtil::create_r0(100);
+    let c5 = LiteralUtil::make_tuple(&vec![&c4, &c3]);
+    let mut c6 = Literal::create_from_shape(c5.shape());
+    let mut c1_copy = Literal::create_from_shape(c1.shape());
+    let mut c2_copy = Literal::create_from_shape(c2.shape());
+
+    let mut result = c6.copy_from(
+      &c5, &vec![1], &vec![1], false);
+    assert!(result.is_ok());
+    result = c1_copy.copy_from(
+      &c6, &vec![], &vec![1, 0], false);
+    assert!(result.is_ok());
+    result = c2_copy.copy_from(
+      &c6, &vec![], &vec![1, 1], false);
+    assert!(result.is_ok());
+
+    assert!(!c6.is_known(&vec![]));
+    assert!(!c1_copy.is_known(&vec![]));
+    assert!(c2_copy.is_known(&vec![]));
+  }
+
+    #[test]
   fn test_populate_r1_i64() {
     let shape = ShapeUtil::make_shape(
       &PrimitiveType::S64, vec![1]);
@@ -3179,117 +3595,179 @@ mod tests {
   }
 
   #[test]
-  fn test_replicate_r2_u32() {
+  fn test_copy_from_scalars() {
+    let mut zero = LiteralUtil::create_r0(0);
+    let nine = LiteralUtil::create_r0(9);
+    let result = zero.copy_from(
+      &nine, &vec![], &vec![], false);
+    assert!(result.is_ok());
+    assert!(zero.equal(&nine, false));
+
+    // TODO
+  }
+
+  #[test]
+  fn test_copy_from_nil_shape() {
+    let mut nil_literal_0 =
+      Literal::create_from_shape(&ShapeUtil::make_nil());
+    let nil_literal_1 =
+      Literal::create_from_shape(&ShapeUtil::make_nil());
+    // This doesn't actually do any copying, but it should succeed.
+    let result = nil_literal_0.copy_from(
+      &nil_literal_1, &vec![], &vec![], false);
+    assert!(result.is_ok());
+  }
+
+  #[test]
+  fn test_copy_from_arrays() {
+    let mut scalar_42 = LiteralUtil::create_r0(42.0);
+    let scalar_123 = LiteralUtil::create_r0(123.0);
+    assert!(!scalar_42.equal(&scalar_123, false));
+
+    let result = scalar_42.copy_from(
+      &scalar_123, &vec![], &vec![], false);
+    assert!(result.is_ok());
+    assert!(scalar_42.equal(&scalar_123, false));
+    assert_eq!(scalar_42.get::<f64>(&vec![], &vec![]).unwrap(), &123.0);
+
+    let mut matrix_1234 =
+      LiteralUtil::create_r2(&vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    let matric_5678 =
+      LiteralUtil::create_r2(&vec![vec![5.0, 6.0], vec![7.0, 8.0]]);
+    assert!(!matrix_1234.equal(&matric_5678, false));
+    assert_eq!(matrix_1234.get::<f64>(&vec![0, 0], &vec![]).unwrap(), &1.0);
+
+    let result = matrix_1234.copy_from(
+      &matric_5678, &vec![], &vec![], false);
+    assert!(result.is_ok());
+    assert!(matrix_1234.equal(&matric_5678, false));
+    assert_eq!(matrix_1234.get::<f64>(&vec![0, 0], &vec![]).unwrap(), &5.0);
+  }
+
+  #[test]
+  fn test_copy_from_tuples() {
+    let matrix =
+      LiteralUtil::create_r2(&vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    let nil_literal = Literal::create_from_shape(&ShapeUtil::make_nil());
+    let inner_elements = vec![
+      LiteralUtil::create_r0(42),
+      LiteralUtil::create_r1(&vec![23.0, 44.0]),
+    ];
+    let inner_tuple = LiteralUtil::make_tuple(
+      &vec![&inner_elements[0], &inner_elements[1], &nil_literal]);
+    let mut nested_tuple =
+      LiteralUtil::make_tuple(&vec![&matrix, &inner_tuple]);
     
-  }
+    // Create a tuple the same shape as the inner tuple of nested_tuple but with
+    // different values..
+    let i32_minus5 = LiteralUtil::create_r0(-5);
+    let double_2_4 = LiteralUtil::create_r1(&vec![2.0, 4.0]);
+    let tuple = LiteralUtil::make_tuple(
+      &vec![&i32_minus5, &double_2_4, &nil_literal]);
 
-  #[test] // FAIL
-  fn test_get_set_tuple() {
-    let r0 = LiteralUtil::create_r0(42.0);
-    let r2 = LiteralUtil::create_r2(
-      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
-    let tuple = LiteralUtil::make_tuple(&vec![&r0, &r2]);
+    assert_eq!(nested_tuple.get::<i32>(&vec![], &vec![1, 0]).unwrap(), &42);
+    assert_eq!(nested_tuple.get::<f64>(&vec![0], &vec![1, 1]).unwrap(), &23.0);
+    assert_eq!(nested_tuple.get::<f64>(&vec![1], &vec![1, 1]).unwrap(), &44.0);
 
-    assert_eq!(tuple.get::<f64>(&vec![], &vec![0]).unwrap(), &42.0);
-    //assert!(tuple.equal(other, layout_sensitive));
-  }
+    // Overwrite the inner tuple element of nested_tuple with the contents of
+    // 'tuple'.
+    let result = nested_tuple.copy_from(
+      &tuple, &vec![1], &vec![], false);
+    assert!(result.is_ok());
 
-  #[test]
-  fn test_get_as_double() {
-    let m = LiteralUtil::create_r2(
-      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
-    assert_eq!(m.get_as_double(&vec![0, 0]), Some(1.0));
-    assert_eq!(m.get_as_double(&vec![1, 0]), Some(3.0));
-  }
-
-  #[test]
-  fn test_get_sum_as_double() {
-    let m = LiteralUtil::create_r2(
-      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
-    assert_eq!(m.get_sum_as_double(&vec![0, 3]), Some(1.0 + 4.0));
-    assert_eq!(m.get_sum_as_double(&vec![0, 1, 2, 3]), Some(1.0 + 2.0 + 3.0 + 4.0));
-
-    let vals = vec![1.0; 1024];
-    let v = LiteralUtil::create_r1(&vals);
-    let mut indices = vec![];
-    let mut i = 0;
-    while i < 1024 {
-      indices.push(i);
-      assert_eq!(v.get_sum_as_double(&indices), Some((i as f64 + 2.0) / 2.0));
-      i += 2;
-    };
+    assert_eq!(nested_tuple.get::<i32>(&vec![], &vec![1, 0]).unwrap(), &-5);
+    assert_eq!(nested_tuple.get::<f64>(&vec![0], &vec![1, 1]).unwrap(), &2.0);
+    assert_eq!(nested_tuple.get::<f64>(&vec![1], &vec![1, 1]).unwrap(), &4.0);
   }
 
   #[test]
-  fn test_get_as_complex_64() {
-    let value = Complex64::new(1.0, 0.0);
-    let c1 = LiteralUtil::create_r0(value);
-    assert_eq!(c1.get_as_complex_64(&vec![]), Some(value));
+  fn test_copy_between_same_tuple() {
+    let elements = vec![
+      LiteralUtil::create_r0(-2), LiteralUtil::create_r0(4)];
+    let mut tuple =
+      LiteralUtil::make_tuple(&vec![&elements[0], &elements[1]]);
+    assert_eq!(tuple.get::<i32>(&vec![], &vec![0]).unwrap(), &-2);
+    assert_eq!(tuple.get::<i32>(&vec![], &vec![1]).unwrap(), &4);
 
-    let c2 = LiteralUtil::create_r0(1.0);
-    assert_eq!(c2.get_as_complex_64(&vec![]), Some(value));
-
-    let other_value = Complex64::new(1.0, 2.0);
-    let c5 = LiteralUtil::create_r0(other_value);
-    assert_eq!(c5.get_as_complex_64(&vec![]), Some(other_value));
-
-    let value_1 = Complex64::new(1.0, 0.0);
-    let c6 = LiteralUtil::create_r0(1);
-    assert_eq!(c6.get_as_complex_64(&vec![]), Some(value_1));
+    // Copy from one element to the other.
+    let tuple_clone = 
+      LiteralUtil::make_tuple(&vec![&elements[0], &elements[1]]);
+    let result = tuple.copy_from(
+      &tuple_clone, &vec![1], &vec![0], false);
+    assert!(result.is_ok());
+    assert_eq!(tuple.get::<i32>(&vec![], &vec![0]).unwrap(), &-2);
+    assert_eq!(tuple.get::<i32>(&vec![], &vec![1]).unwrap(), &-2);
   }
 
   #[test]
-  fn test_is_equal_at() {
-    let val_double = 4.0;
-    let val_integral: i64 = 4;
-    let c1 = LiteralUtil::create_r0(val_integral.clone());
-    assert_eq!(c1.is_equal_at(&vec![], &val_double), true);
-    assert_eq!(c1.is_equal_at(&vec![], &val_integral), true);
-
-    let c2 = LiteralUtil::create_r0(val_double.clone());
-    assert_eq!(c2.is_equal_at(&vec![], &val_double), true);
-    assert_eq!(c2.is_equal_at(&vec![], &val_integral), true);
-
-    let val_complex = Complex64::new(val_double, 0.0);
-    assert_eq!(c1.is_equal_at(&vec![], &val_complex), true);
-    assert_eq!(c2.is_equal_at(&vec![], &val_complex), true);
-
-    let c4 = LiteralUtil::create_r0(val_complex.clone());
-    assert_eq!(c4.is_equal_at(&vec![], &val_double), true);
-    assert_eq!(c4.is_equal_at(&vec![], &val_integral), true);
-    assert_eq!(c4.is_equal_at(&vec![], &val_complex), true);
+  fn test_copy_from_different_shapes() {
+    let mut matrix =
+      LiteralUtil::create_r2(&vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    let vector = LiteralUtil::create_r1(&vec![5.0, 7.0]);
+    let result = matrix.copy_from(
+      &vector, &vec![], &vec![], false);
+    assert!(result.is_err());
+    assert!(result.err().unwrap().contains(
+      "Destination subshape incompatible with source subshape"));
   }
 
   #[test]
-  fn test_create_from_shape_with_unknown_leaf_arrays() {
-    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
-      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![4, 4]));
-    assert_eq!(c1.is_known(&vec![]), false);
+  fn test_literal_move() {
+    let matrix =
+      LiteralUtil::create_r2(&vec![vec![1.0, 2.0], vec![3.0, 4.0]]);   
+    let literal = matrix;
+    assert!(ShapeEqual::new().equal(
+      &ShapeUtil::make_shape(&PrimitiveType::F64, vec![2, 2]), literal.shape()));
+    assert_eq!(literal.get::<f64>(&vec![0, 0], &vec![]).unwrap(), &1.0);
+    assert_eq!(literal.get::<f64>(&vec![0, 1], &vec![]).unwrap(), &2.0);
+    assert_eq!(literal.get::<f64>(&vec![1, 0], &vec![]).unwrap(), &3.0);
+    assert_eq!(literal.get::<f64>(&vec![1, 1], &vec![]).unwrap(), &4.0);
   }
 
   #[test]
-  fn test_create_from_shape_with_unknown_leaf_arrays_s4_tuple() {
-    let mut inner_shape = ShapeUtil::make_shape(
-      &PrimitiveType::S4, vec![4, 4]);
-    inner_shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(4);
+  fn test_decompose_tuple() {
+    let nil_literal = Literal::new_from_shape(&ShapeUtil::make_nil());
+    let inner_elements = vec![
+      LiteralUtil::create_r0(42),
+      LiteralUtil::create_r1(&vec![23.0, 44.0])
+    ];
+    let tuple_elements = vec![
+      LiteralUtil::create_r2(&vec![vec![1, 2], vec![3, 4]]),
+      LiteralUtil::make_tuple(&vec![&inner_elements[0], &inner_elements[1], &nil_literal])
+    ];
+    let mut nested_tuple = LiteralUtil::make_tuple(
+      &vec![&tuple_elements[0], &tuple_elements[1], &nil_literal]);
 
-    let c1 =
-      Literal::create_from_shape_with_unknown_leaf_arrays(&inner_shape);
-    assert_eq!(c1.is_known(&vec![]), false);
+    assert!(!ShapeUtil::is_empty_tuple(nested_tuple.shape()));
+    let elements = nested_tuple.decompose_tuple();
+    assert!(ShapeUtil::is_empty_tuple(nested_tuple.shape()));
+    assert_eq!(elements.len(), 3);
+
+    assert!(ShapeUtil::compatible(elements[0].shape(),
+      &ShapeUtil::make_shape(&PrimitiveType::S32, vec![2, 2])));
+    assert_eq!(elements[0].get::<i32>(&vec![0, 0], &vec![]).unwrap(), &1);
+    assert_eq!(elements[0].get::<i32>(&vec![0, 1], &vec![]).unwrap(), &2);
+    assert_eq!(elements[0].get::<i32>(&vec![1, 0], &vec![]).unwrap(), &3);
+    assert_eq!(elements[0].get::<i32>(&vec![1, 1], &vec![]).unwrap(), &4);
+
+    assert!(ShapeUtil::compatible(elements[1].shape(),
+      &ShapeUtil::make_tuple_shape(vec![
+        ShapeUtil::make_shape(&PrimitiveType::S32, vec![]),
+        ShapeUtil::make_shape(&PrimitiveType::F64, vec![2]),
+        ShapeUtil::make_nil()])));
+    assert_eq!(elements[1].get::<i32>(&vec![], &vec![0]).unwrap(), &42);
+    assert_eq!(elements[1].get::<f64>(&vec![0], &vec![1]).unwrap(), &23.0);
+    assert_eq!(elements[1].get::<f64>(&vec![1], &vec![1]).unwrap(), &44.0);
+
+    assert!(ShapeUtil::compatible(elements[2].shape(), &ShapeUtil::make_nil()));
   }
 
-  #[test] // FAIL
-  fn test_create_partially_known_tuple() {
-    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
-      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![4, 4]));
-    let c2 = LiteralUtil::create_r0(10);
-    let c3 = LiteralUtil::make_tuple(&vec![&c1, &c2]);
-    let c4 = LiteralUtil::create_r0(100);
-    let c5 = LiteralUtil::make_tuple(&vec![&c4, &c3]);
-    assert_eq!(c5.is_known(&vec![]), false);
+  #[test]
+  fn test_decompose_empty_tuple() {
+    let mut nil_literal = Literal::new_from_shape(&ShapeUtil::make_nil());
+    let elements = nil_literal.decompose_tuple();
+    assert_eq!(elements.len(), 0);
   }
-
-  fn test_copy_from_partially_known_tuple() {}
 
   #[test]
   fn test_populate_r1_dynamic() {
@@ -3333,6 +3811,96 @@ mod tests {
  { 4, 5, 6 }
 }".to_string();
     assert_eq!(literal.to_string(), expected);
-
   }
+
+  #[test]
+  fn test_move_into_tuple() {
+    let mut elements = vec![];
+    elements.push(LiteralUtil::create_r0(1.0));
+    elements.push(LiteralUtil::create_r1(&vec![4, 8]));
+
+    let mut inner_elements = vec![];
+    inner_elements.push(LiteralUtil::create_r0(42));
+    inner_elements.push(LiteralUtil::create_r1(&vec![23.0, 44.0]));
+    elements.push(LiteralUtil::make_tuple(
+      &vec![&inner_elements[0], &inner_elements[1]]));
+
+    let literal = Literal::move_into_tuple(&mut elements);
+    assert!(literal.shape().is_tuple());
+    assert_eq!(ShapeUtil::tuple_element_count(literal.shape()), 3);
+
+    assert_eq!(literal.get::<f64>(&vec![], &vec![0]).unwrap(), &1.0);
+    assert_eq!(literal.get::<i32>(&vec![0], &vec![1]).unwrap(), &4);
+    assert_eq!(literal.get::<i32>(&vec![1], &vec![1]).unwrap(), &8);
+    assert_eq!(literal.get::<i32>(&vec![], &vec![2, 0]).unwrap(), &42);
+    assert_eq!(literal.get::<f64>(&vec![0], &vec![2, 1]).unwrap(), &23.0);
+    assert_eq!(literal.get::<f64>(&vec![1], &vec![2, 1]).unwrap(), &44.0);
+
+    for elt in &elements {
+      assert!(ShapeUtil::is_empty_tuple(elt.shape()));
+    }
+  }
+
+  #[test]
+  fn test_move_into_empty_tuple() {
+    let mut empty_literals: Vec<Literal> = vec![];
+    let literal = Literal::move_into_tuple(&mut empty_literals);
+    assert!(literal.shape().is_tuple());
+    assert_eq!(ShapeUtil::tuple_element_count(literal.shape()), 0);
+  }
+
+  #[test]
+  fn test_literal_move_assignment() {
+    let mut literal = Literal::default();
+    assert!(ShapeEqual::new().equal(&ShapeUtil::make_nil(), literal.shape()));
+
+    let matrix = LiteralUtil::create_r2(
+      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    literal = matrix;
+
+    assert!(ShapeEqual::new().equal(
+      &ShapeUtil::make_shape(&PrimitiveType::F64, vec![2, 2]), literal.shape()));
+    assert_eq!(literal.get::<f64>(&vec![0, 0], &vec![]).unwrap(), &1.0);
+    assert_eq!(literal.get::<f64>(&vec![0, 1], &vec![]).unwrap(), &2.0);
+    assert_eq!(literal.get::<f64>(&vec![1, 0], &vec![]).unwrap(), &3.0);
+    assert_eq!(literal.get::<f64>(&vec![1, 1], &vec![]).unwrap(), &4.0);
+  }
+
+  #[test]
+  fn test_get_set_tuple() {
+    let r0 = LiteralUtil::create_r0(42.0);
+    let r2 = LiteralUtil::create_r2(
+      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    let mut tuple = LiteralUtil::make_tuple(&vec![&r0, &r2]);
+
+    assert_eq!(tuple.get::<f64>(&vec![], &vec![0]).unwrap(), &42.0);
+    tuple.set::<f64>(&vec![], &vec![0], -5.0);
+    assert_eq!(tuple.get::<f64>(&vec![], &vec![0]).unwrap(), &-5.0);
+
+    assert_eq!(tuple.get::<f64>(&vec![1, 0], &vec![1]).unwrap(), &3.0);
+    tuple.set::<f64>(&vec![1, 0], &vec![1], -4.0);
+    assert_eq!(tuple.get::<f64>(&vec![1, 0], &vec![1]).unwrap(), &-4.0);
+  }
+
+  #[test] // FAIL
+  fn test_create_from_shape_zero_initialized() {
+    // Literals constructed using CreateFromShape should be zero initialized.
+    let scalar_f64 = Literal::new_from_shape(
+      &ShapeUtil::make_shape(&PrimitiveType::F64, vec![]));
+    assert_eq!(scalar_f64.get::<f64>(&vec![], &vec![]).unwrap(), &0.0);
+  }
+
+/*
+  #[test]
+  fn test_broadcast_vector_to_matrix_0() {
+    let literal = LiteralUtil::create_r1(&vec![1, 2]);
+    let broadcast_literal = 
+      literal.broadcast(&ShapeUtil::make_shape(
+        &PrimitiveType::S64, vec![2, 2]), &vec![0]);
+    assert!(broadcast_literal.is_ok());
+    assert!(broadcast_literal.unwrap().equal(
+      &LiteralUtil::create_r2(&vec![vec![1, 1], vec![2, 2]]), false));
+  }
+*/
+
 }

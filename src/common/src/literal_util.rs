@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::{array3d::Array3D, blitz_data::PrimitiveType,
-  layout::Layout, layout_util::LayoutUtil, literal::{Literal, LiteralBase /*LiteralSlice*/},
+  layout::Layout, layout_util::LayoutUtil, literal::{Literal /*LiteralSlice*/},
   primitive_util::native_to_primitive_type, shape_util::ShapeUtil};
 
 // Utilities for dealing with Literal protobufs.
@@ -16,7 +16,7 @@ impl LiteralUtil {
 
   // Returns a literal scalar representing the element at `multi_index`.
   pub fn get_scalar_literal<T>(
-    _literal: LiteralBase, _multi_index: Vec<i64>) -> Literal
+    _literal: Literal, _multi_index: Vec<i64>) -> Literal
     where T: Clone + Default + PartialEq
   {
     unimplemented!()

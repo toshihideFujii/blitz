@@ -612,7 +612,7 @@ impl<'backend> Service<'backend> {
 
     let mut result_literal = result_literal_wrapper.unwrap();
     if output_layout.is_some() {
-      result_literal = result_literal.base.relayout(
+      result_literal = result_literal.relayout(
         output_layout.unwrap(), &vec![]);
     }
     Ok(result_literal)
