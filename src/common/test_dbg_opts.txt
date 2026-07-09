@@ -1,0 +1,3 @@
+blitz_gpu_disable_async_collectives: []
+blitz_gpu_target_config_filename: /gpu/target/config/from/debug/options/file
+blitz_dump_to: /path/from/debug/options/file

@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-
+use core::panic;
 use std::{collections::HashMap, sync::OnceLock};
 use crate::blitz_data::PrimitiveType;
 
@@ -37,10 +36,24 @@ fn get_or_create_map() -> &'static HashMap<&'static str, PrimitiveType> {
   primitive_type_map
 }
 
-pub fn significand_width(_t: &PrimitiveType) -> i64 {
-  0 // TODO
+// Returns the count of significand (mantissa) bits for float datatypes.
+// This includes the implicit leading mantissa bit. For example, returns 24 for
+// F32. For non-float datatypes, results in a LOG(FATAL).
+pub fn significand_width(t: &PrimitiveType) -> i64 {
+  let mut f = |primitive_t: PrimitiveType| -> i64 {
+    if primitive_t == PrimitiveType::F32 {
+      return 24;
+    } else if primitive_t == PrimitiveType::BF16 {
+      return 8;
+    } else {
+      unimplemented!();
+    }
+  };
+  floating_point_type_switch(&mut f, t)
 }
 
+// Returns the count of exponent bits for float datatypes. For example, returns
+// 8 for F32. For non-float datatypes, results in a LOG(FATAL).
 pub fn exponent_width(t: &PrimitiveType) -> i64 {
   let total_bit_width = bit_width(t);
   let trailing_significand_field_width = significand_width(t) - 1;
@@ -48,12 +61,38 @@ pub fn exponent_width(t: &PrimitiveType) -> i64 {
   total_bit_width - (trailing_significand_field_width + sign_bit_width)
 }
 
-pub fn underflow_exponent(_t: &PrimitiveType) -> i64 {
-  0 // TODO
+// Returns the smallest integer n such that 2**(n-1) is a normalized number for
+// the given float datatype. In other words, returns one plus the exponent of
+// the smallest normalized number. For example, returns -125 for F32. For
+// non-float datatypes, results in a LOG(FATAL).
+pub fn underflow_exponent(t: &PrimitiveType) -> i64 {
+  let mut f = |primitive_t: PrimitiveType| -> i64 {
+    if primitive_t == PrimitiveType::F32 {
+      return -125;
+    } else if primitive_t == PrimitiveType::BF16 {
+      return -125;
+    } else {
+      unimplemented!();
+    }
+  };
+  floating_point_type_switch(&mut f, t)
 }
 
-pub fn overflow_exponent(_t: &PrimitiveType) -> i64 {
-  unimplemented!()
+// Returns the largest integer n such that 2**(n-1) is a finite number for the
+// given float datatype. In other words, returns the smallest exponent that
+// causes overflow. For example, returns 128 for F32. For non-float datatypes,
+// results in a LOG(FATAL).
+pub fn overflow_exponent(t: &PrimitiveType) -> i64 {
+  let mut f = |primitive_t: PrimitiveType| -> i64 {
+    if primitive_t == PrimitiveType::F32 {
+      return 128;
+    } else if primitive_t == PrimitiveType::BF16 {
+      return 128;
+    } else {
+      unimplemented!();
+    }
+  };
+  floating_point_type_switch(&mut f, t)
 }
 
 pub fn exponent_bias(t: &PrimitiveType) -> i64 {
@@ -203,8 +242,12 @@ pub fn bit_width_array_helper() {
     
 }
 
-pub fn bit_width(_t: &PrimitiveType) -> i64 {
-  0 // TODO
+pub fn bit_width(t: &PrimitiveType) -> i64 {
+  match t {
+    PrimitiveType::F32 => return 32,
+    PrimitiveType::BF16 => return 16,
+    _ => return 0
+  }
 }
 
 // Returns the number of bytes in the representation for a given type.
@@ -435,9 +478,14 @@ impl PrimitiveTypeNameGenerator {
     let mut generator = PrimitiveTypeNameGenerator {
       lowercase_name: HashMap::new()
     };
+    generator.lowercase_name.insert(PrimitiveType::S4, "s4".to_string());
+    generator.lowercase_name.insert(PrimitiveType::S8, "s8".to_string());
+    generator.lowercase_name.insert(PrimitiveType::S16, "s16".to_string());
     generator.lowercase_name.insert(PrimitiveType::S32, "s32".to_string());
     generator.lowercase_name.insert(PrimitiveType::S64, "s64".to_string());
+    generator.lowercase_name.insert(PrimitiveType::U16, "u16".to_string());
     generator.lowercase_name.insert(PrimitiveType::U32, "u32".to_string());
+    generator.lowercase_name.insert(PrimitiveType::BF16, "bf16".to_string());
     generator.lowercase_name.insert(PrimitiveType::F32, "f32".to_string());
     generator.lowercase_name.insert(PrimitiveType::F64, "f64".to_string());
     generator.lowercase_name.insert(PrimitiveType::C64, "c64".to_string());
@@ -475,6 +523,9 @@ pub fn integral_type_switch<R, F>(f: &mut F, t: &PrimitiveType) -> R
   }
 }
 
+// If `type` is a floating-point type, returns the result of applying
+// polymorphic functor f on a PrimitiveTypeConstant<type> value; otherwise
+// crashes.
 pub fn floating_point_type_switch<R, F>(f: &mut F, t: &PrimitiveType) -> R
   where F: FnMut(PrimitiveType) -> R
 {
@@ -520,4 +571,40 @@ pub fn array_type_switch<R, F>(f: &mut F, t: &PrimitiveType) -> R
     }
   }
   unreachable!("Not an array data type.");
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_string_to_primitive_type() {
+    let expect_ok_and_equal =
+      |str: &String, expected: &PrimitiveType|
+    {
+      let actual = string_to_primitive_type(str);
+      assert!(actual.is_some());
+      assert_eq!(actual.unwrap(), expected);
+    };
+    expect_ok_and_equal(&"f32".to_string(), &PrimitiveType::F32);
+    expect_ok_and_equal(&"tuple".to_string(), &PrimitiveType::Tuple);
+    expect_ok_and_equal(&"pred".to_string(), &PrimitiveType::Pred);
+    expect_ok_and_equal(&"s32".to_string(), &PrimitiveType::S32);
+
+    assert!(string_to_primitive_type(&"F32".to_string()).is_none());
+    assert!(string_to_primitive_type(&"Pred".to_string()).is_none());
+    assert!(string_to_primitive_type(&"preD".to_string()).is_none());
+  }
+
+  #[test]
+  fn test_float_types() {
+    assert_eq!(significand_width(&PrimitiveType::F32), 24);
+    assert_eq!(significand_width(&PrimitiveType::BF16), 8);
+    assert_eq!(exponent_width(&PrimitiveType::F32), 8);
+    assert_eq!(exponent_width(&PrimitiveType::BF16), 8);
+    assert_eq!(underflow_exponent(&PrimitiveType::F32), -125);
+    assert_eq!(underflow_exponent(&PrimitiveType::BF16), -125);
+    assert_eq!(overflow_exponent(&PrimitiveType::F32), 128);
+    assert_eq!(overflow_exponent(&PrimitiveType::BF16), 128);
+  }
 }

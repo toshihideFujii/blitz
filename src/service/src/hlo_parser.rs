@@ -423,7 +423,7 @@ impl HloParser {
 
   pub fn parse_layout_only(&mut self) -> Result<Layout, String> {
     self.lexer.lex(0);
-    let mut layout = Layout::new();
+    let mut layout = Layout::default();
     if !self.parse_layout(&mut layout) {
       let mut error_msg = "Syntax error:\n".to_string();
       error_msg.push_str(&self.get_error());
@@ -3402,7 +3402,7 @@ impl HloParser {
       (self.lexer.look_ahead() == TokKind::Int ||
       self.lexer.look_ahead() == TokKind::Colon)
     {
-      let mut layout = Layout::new();
+      let mut layout = Layout::default();
       if !self.parse_layout(&mut layout) {
         return false;
       }
@@ -4300,5 +4300,10 @@ ENTRY %some_2x3 () -> f32[2,3] {
     assert!(sharding.is_ok());
     assert_eq!(sharding.unwrap().to_string(false), original);
     assert_eq!(HloSharding::unknown(vec![]).to_string(false), original);
+  }
+
+  #[test]
+  fn test_parse_frontend_attributes() {
+      
   }
 }

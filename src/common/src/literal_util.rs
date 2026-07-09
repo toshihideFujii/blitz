@@ -208,4 +208,15 @@ impl LiteralUtil {
   {
     unimplemented!()
   }
+
+  // Converts the given literal to a scalar int64_t, if possible.
+  // Fails if the literal is not an integral type or if the value it contains
+  // cannot be represented as an int64_t.
+  pub fn literal_as_scalar_i64(literal: &Literal) -> Option<i64> {
+    if !ShapeUtil::is_effective_scalar(literal.shape()) {
+      println!("literal is not an effective scalar: {:?}", literal.to_string());
+      return None;
+    }
+    literal.get_first_integer()
+  }
 }

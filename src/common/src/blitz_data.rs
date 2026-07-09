@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, sync::OnceLock};
 use crate::{debug_options_flags::get_debug_options_from_flags, shape::Shape};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -659,8 +659,27 @@ pub enum CollectiveOpType {
   AllGather,
   ReduceScatter,
   CollectiveBroadcast,
-  AllTotal,
+  AllToAll,
   CollectivePermute,
+}
+
+impl CollectiveOpType {
+  pub fn to_string(&self) -> String {
+    if *self == CollectiveOpType::AllReduce {
+      return "AllReduce".to_string();
+    } else if *self == CollectiveOpType::AllGather {
+      return "AllGather".to_string();
+    } else if *self == CollectiveOpType::ReduceScatter {
+      return "ReduceScatter".to_string();
+    } else if *self == CollectiveOpType::CollectiveBroadcast {
+      return "CollectiveBroadcast".to_string();
+    } else if *self == CollectiveOpType::AllToAll {
+      return "AllToAll".to_string();
+    } else if *self == CollectiveOpType::CollectivePermute {
+      return "CollectivePermute".to_string();
+    }
+    "NoOp".to_string()
+  }
 }
 
 // Enables strict PGLE checking. If an FDO profile is specified and latency
@@ -718,7 +737,7 @@ pub enum ShapeChecks {
   CompileTime,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CommandBufferCmdType {
   Invalid,
   Fusion,
@@ -729,15 +748,48 @@ pub enum CommandBufferCmdType {
   While,
   CustomCall,
   Cublaslt,
-  DynamicsliceFusion,
+  DynamicSliceFusion,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum LibraryFusionType {
+  Invalid,
+  Dot,
+  Eltwise,
+  Reduce,
+  IndividualDot,
+  IndividualConvolution
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum XnnGraphFusionMode {
   Diabled,
   Greedy,
+  GreedySlinky,
+  BypasscostModel,
 }
 
+// Code generation backends implemented for autotuning across XLA GPU and CPU.
+// When adding a fission backend for a backend X, it should be named X_FISSION.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AutotuneBackend {
+  Cudnn,
+  Triton,
+  Cublas,
+  Cublaslt,
+  Rocblas,
+  Hipblaslt,
+  Miopen,
+  CustomKernel,
+  BlockLevelEmitter,
+  NativeEmitter,
+  LlvmKernelEmitter,
+  CublasFission,
+  CublasltFission,
+  CustomKernelFission,
+  RocblasFission,
+  HipblasltFission,
+}
 // Debugging options for Blitz. These options may change at any time - there are
 // no guarantees about backward or forward compatibility for these fields.
 //
@@ -798,6 +850,7 @@ pub struct DebugOptions {
 
   // Directory to dump into.
   dump_to: String,
+  flags_reset: bool,
 
   // If specified, will only dump modules which match this regexp.
   dump_hlo_module_re: String,
@@ -872,10 +925,27 @@ pub struct DebugOptions {
   debug_buffer_assignment_show_max: usize,
   cpu_use_fusion_emitters: bool,
   cpu_use_xnnpack: bool,
+
+  // Call oneDNN custom call thunks in the CPU backend
+  cpu_experimental_onednn_custom_call: bool,
   cpu_experimental_xnn_graph_fusion_mode: XnnGraphFusionMode,
-  cpu_max_isa: bool,
+
+  // Stores the fusion types enabled for oneDNN in LibraryRewriter pass.
+  cpu_experimental_onednn_fusion_type: Vec<LibraryFusionType>,
+
+  // Stores the fusion types enabled for XNNPACK in LibraryRewriter pass.
+  cpu_experimental_xnn_fusion_type: Vec<LibraryFusionType>,
+
+  // When set, BLITZ:CPU will only generate code up to the specified ISA.
+  // (It will not use newer ISAs.) Using the string format allows us to extend
+  // the flag for more flexible control if necessary.
+  cpu_max_isa: String,
+
   cpu_generate_unique_c_style_kernel_entry_points: bool,
   gpu_fused_attension_use_cudnn_rng: bool,
+
+  // Determine the types of commands that are recorded into command buffers.
+  gpu_enable_command_buffer: Vec<CommandBufferCmdType>,
   gpu_enable_cublaslt: bool,
   gpu_graph_min_graph_size: usize,
   gpu_graph_enable_concurrent_region: bool,
@@ -953,6 +1023,10 @@ pub struct DebugOptions {
   gpu_filter_kernels_spilling_registers_on_autotuning: bool,
   gpu_fail_ptx_compilation_on_register_spilling: bool,
   gpu_llvm_verification_level: usize,
+
+  // Description of the target platform in GpuTargetConfigProto format; if
+  // provided, deviceless compilation is assumed, and the current device is
+  // ignored.
   gpu_target_config_filename: String,
   gpu_enable_cub_radix_sort: bool,
   gpu_enable_cudnn_layer_norm: bool,
@@ -978,6 +1052,7 @@ pub struct DebugOptions {
   syntax_sugar_async_ops: bool,
   gpu_per_fusion_autotune_cache_dir: String,
   gpu_experimental_autotune_cache_mode: AutotuneCacheMode,
+  gpu_experimental_autotune_backends: Vec<AutotuneBackend>,
   gpu_autotune_gemm_rtol: f64,
   enable_command_buffers_during_profiling: bool,
   gpu_cudnn_gemm_max_plans: usize,
@@ -1028,7 +1103,8 @@ impl DebugOptions {
       gpu_autotune_level: 0,
       allow_scalar_index_dynamic_ops: false,
       step_marker_location: StepMarkerLocation::None,
-      dump_to: "".to_string(),
+      dump_to: String::new(),
+      flags_reset: false,
       dump_hlo_module_re: "".to_string(),
       dump_hlo_pass_re: "".to_string(),
       dump_hlo_as_text: false,
@@ -1056,7 +1132,7 @@ impl DebugOptions {
       gpu_generate_debug_info: false,
       gpu_generate_line_info: false,
       gpu_use_runtime_fusion: false,
-      dump_hlo_as_long_text: false,
+      dump_hlo_as_long_text: true,
       dump_large_constants: false,
       dump_enable_mlir_pretty_form: false,
       dump_full_hlo_config: false,
@@ -1064,10 +1140,18 @@ impl DebugOptions {
       debug_buffer_assignment_show_max: 0,
       cpu_use_fusion_emitters: false,
       cpu_use_xnnpack: false,
+      cpu_experimental_onednn_custom_call: false,
       cpu_experimental_xnn_graph_fusion_mode: XnnGraphFusionMode::Diabled,
-      cpu_max_isa: false,
+      cpu_experimental_onednn_fusion_type: Vec::new(),
+      cpu_experimental_xnn_fusion_type: Vec::new(),
+      cpu_max_isa: String::new(),
       cpu_generate_unique_c_style_kernel_entry_points: false,
       gpu_fused_attension_use_cudnn_rng: false,
+      gpu_enable_command_buffer: vec![
+        CommandBufferCmdType::Fusion, CommandBufferCmdType::Cublas,
+        CommandBufferCmdType::Cublaslt, CommandBufferCmdType::CustomCall,
+        CommandBufferCmdType::Cudnn, CommandBufferCmdType::DynamicSliceFusion
+      ],
       gpu_enable_cublaslt: false,
       gpu_graph_min_graph_size: 0,
       gpu_graph_enable_concurrent_region: false,
@@ -1145,7 +1229,7 @@ impl DebugOptions {
       gpu_filter_kernels_spilling_registers_on_autotuning: false,
       gpu_fail_ptx_compilation_on_register_spilling: false,
       gpu_llvm_verification_level: 0,
-      gpu_target_config_filename: "".to_string(),
+      gpu_target_config_filename: String::new(),
       gpu_enable_cub_radix_sort: false,
       gpu_enable_cudnn_layer_norm: false,
       gpu_threshold_for_windowed_einsum_mib: 0,
@@ -1170,6 +1254,7 @@ impl DebugOptions {
       syntax_sugar_async_ops: false,
       gpu_per_fusion_autotune_cache_dir: "".to_string(),
       gpu_experimental_autotune_cache_mode: AutotuneCacheMode::Unspecified,
+      gpu_experimental_autotune_backends: Vec::new(),
       gpu_autotune_gemm_rtol: 0.0,
       enable_command_buffers_during_profiling: false,
       gpu_cudnn_gemm_max_plans: 0,
@@ -1194,6 +1279,7 @@ impl DebugOptions {
       gpu_experimental_enable_sync_collective_combining: false,
       unsupported_crash_on_hlo_pass_silent_hlo_change: false,
       unsupported_crash_on_hlo_pass_noop_change: false,
+      
     }
   }
 
@@ -1269,6 +1355,11 @@ impl DebugOptions {
     self.dump_module_metadata = value;
   }
 
+  // dump_hlo_as_long_text
+  pub fn blitz_dump_hlo_as_long_text(&self) -> bool {
+    self.dump_hlo_as_long_text
+  }
+
   pub fn set_blitz_dump_hlo_as_long_text(&mut self, value: bool) {
     self.dump_hlo_as_long_text = value;
   }
@@ -1301,15 +1392,83 @@ impl DebugOptions {
     self.cpu_use_xnnpack = value;
   }
 
+  pub fn blitz_cpu_experimental_onednn_custom_call(&self) -> bool {
+    self.cpu_experimental_onednn_custom_call
+  }
+
+  pub fn set_blitz_cpu_experimental_onednn_custom_call(&mut self, value: bool) {
+    self.cpu_experimental_onednn_custom_call = value;
+  }
+
+  pub fn blitz_cpu_experimental_xnn_graph_fusion_mode(&mut self) -> XnnGraphFusionMode {
+    self.cpu_experimental_xnn_graph_fusion_mode.clone()
+  }
+
   pub fn set_blitz_cpu_experimental_xnn_graph_fusion_mode(&mut self, value: XnnGraphFusionMode) {
     self.cpu_experimental_xnn_graph_fusion_mode = value.clone();
+  }
+
+  pub fn blitz_cpu_experimental_onednn_fusion_type(&self) -> Vec<LibraryFusionType> {
+    let mut result = vec![];
+    result.clone_from(&self.cpu_experimental_onednn_fusion_type);
+    result
+  }
+
+  pub fn add_blitz_cpu_experimental_onednn_fusion_type(&mut self, value: LibraryFusionType) {
+    if !self.cpu_experimental_onednn_fusion_type.contains(&value) {
+      self.cpu_experimental_onednn_fusion_type.push(value);
+    }
+  }
+
+  pub fn remove_blitz_cpu_experimental_onednn_fusion_type(&mut self, value: LibraryFusionType) {
+    if !self.cpu_experimental_onednn_fusion_type.contains(&value) { return; }
+    let mut index = 0;
+    for t in &self.cpu_experimental_onednn_fusion_type {
+      if *t == value { break; }
+      index += 1;
+    }
+    self.cpu_experimental_onednn_fusion_type.remove(index);
+  }
+
+  pub fn clear_blitz_cpu_experimental_onednn_fusion_type(&mut self) {
+    self.cpu_experimental_onednn_fusion_type.clear();
+  }
+
+  pub fn blitz_cpu_experimental_xnn_fusion_type(&self) -> Vec<LibraryFusionType> {
+    let mut result = vec![];
+    result.clone_from(&self.cpu_experimental_xnn_fusion_type);
+    result
+  }
+
+  pub fn add_blitz_cpu_experimental_xnn_fusion_type(&mut self, value: LibraryFusionType) {
+    if !self.cpu_experimental_xnn_fusion_type.contains(&value) {
+      self.cpu_experimental_xnn_fusion_type.push(value);
+    }
+  }
+
+  pub fn remove_blitz_cpu_experimental_xnn_fusion_type(&mut self, value: LibraryFusionType) {
+    if !self.cpu_experimental_xnn_fusion_type.contains(&value) { return; }
+    let mut index = 0;
+    for t in &self.cpu_experimental_xnn_fusion_type {
+      if *t == value { break; }
+      index += 1;
+    }
+    self.cpu_experimental_xnn_fusion_type.remove(index);
+  }
+
+  pub fn clear_blitz_cpu_experimental_xnn_fusion_type(&mut self) {
+    self.cpu_experimental_xnn_fusion_type.clear();
   }
 
   pub fn set_blitz_cpu_enable_concurrency_optimized_scheduler(&mut self, value: bool) {
     self.cpu_enable_concurrency_optimized_scheduler = value;
   }
 
-  pub fn set_blitz_cpu_max_isa(&mut self, value: bool) {
+  pub fn blitz_cpu_max_isa(&self) -> &String {
+    &self.cpu_max_isa
+  }
+
+  pub fn set_blitz_cpu_max_isa(&mut self, value: String) {
     self.cpu_max_isa = value;
   }
 
@@ -1321,8 +1480,20 @@ impl DebugOptions {
     self.gpu_fused_attension_use_cudnn_rng = value;
   }
 
+  pub fn blitz_cpu_enable_fast_math(&self) -> bool {
+    self.cpu_enable_fast_math
+  }
+
   pub fn set_blitz_cpu_enable_fast_math(&mut self, value: bool) {
     self.cpu_enable_fast_math = value;
+  }
+
+  pub fn blitz_cpu_enable_platform_dependent_math(&self) -> bool {
+    unimplemented!()
+  }
+
+  pub fn set_blitz_cpu_enable_platform_dependent_math(&mut self, _value: bool) {
+    unimplemented!()
   }
 
   pub fn set_blitz_cpu_enable_fast_min_max(&mut self, value: bool) {
@@ -1361,8 +1532,30 @@ impl DebugOptions {
     self.gpu_enable_cublaslt = value;
   }
 
-  pub fn add_blitz_gpu_enable_command_buffer(&mut self, _value: CommandBufferCmdType) {
-    unimplemented!()
+  pub fn blitz_gpu_enable_command_buffer(&self) -> Vec<CommandBufferCmdType> {
+    let mut result = vec![];
+    result.clone_from(&self.gpu_enable_command_buffer);
+    result
+  }
+
+  pub fn add_blitz_gpu_enable_command_buffer(&mut self, value: CommandBufferCmdType) {
+    if !self.gpu_enable_command_buffer.contains(&value) {
+      self.gpu_enable_command_buffer.push(value);
+    }
+  }
+
+  pub fn remove_blitz_gpu_enable_command_buffer(&mut self, value: CommandBufferCmdType) {
+    if !self.gpu_enable_command_buffer.contains(&value) { return; }
+    let mut index = 0;
+    for cmd in &self.gpu_enable_command_buffer {
+      if *cmd == value { break; }
+      index += 1;
+    }
+    self.gpu_enable_command_buffer.remove(index);
+  }
+
+  pub fn clear_blitz_gpu_enable_command_buffer(&mut self) {
+    self.gpu_enable_command_buffer.clear();
   }
 
   pub fn set_blitz_gpu_graph_min_graph_size(&mut self, value: usize) {
@@ -1411,6 +1604,19 @@ impl DebugOptions {
 
   pub fn set_blitz_gpu_collective_permute_combine_threshold_bytes(&mut self, value: usize) {
     self.gpu_collective_permute_combine_threshold_bytes = value;
+  }
+
+  // gpu_disable_async_collectives
+  pub fn blitz_gpu_disable_async_collectives(&self) -> &Vec<CollectiveOpType> {
+    &self.gpu_disable_async_collectives
+  }
+
+  pub fn add_blitz_gpu_disable_async_collectives(&mut self, op_type: CollectiveOpType) {
+    self.gpu_disable_async_collectives.push(op_type);
+  }
+
+  pub fn clear_gpu_disable_async_collectives(&mut self) {
+    self.gpu_disable_async_collectives.clear();
   }
 
   pub fn set_blitz_gpu_enable_all_gather_combine_by_dim(&mut self, value: bool) {
@@ -1669,6 +1875,11 @@ impl DebugOptions {
     self.gpu_llvm_verification_level = value;
   }
 
+  // gpu_target_config_filename
+  pub fn blitz_gpu_target_config_filename(&self) -> String {
+    self.gpu_target_config_filename.clone()
+  }
+
   pub fn set_blitz_gpu_target_config_filename(&mut self, value: String) {
     self.gpu_target_config_filename = value;
   }
@@ -1769,6 +1980,32 @@ impl DebugOptions {
     self.gpu_experimental_autotune_cache_mode = value.clone();
   }
 
+  pub fn blitz_gpu_experimental_autotune_backends(&self) -> Vec<AutotuneBackend> {
+    let mut result = vec![];
+    result.clone_from(&self.gpu_experimental_autotune_backends);
+    result
+  }
+
+  pub fn add_blitz_gpu_experimental_autotune_backends(&mut self, value: AutotuneBackend) {
+    if !self.gpu_experimental_autotune_backends.contains(&value) {
+      self.gpu_experimental_autotune_backends.push(value);
+    }
+  }
+
+  pub fn remove_blitz_gpu_experimental_autotune_backends(&mut self, value: AutotuneBackend) {
+    if !self.gpu_experimental_autotune_backends.contains(&value) { return; }
+    let mut index = 0;
+    for ab in &self.gpu_experimental_autotune_backends {
+      if *ab == value { break; }
+      index += 1;
+    }
+    self.gpu_experimental_autotune_backends.remove(index);
+  }
+
+  pub fn clear_blitz_gpu_experimental_autotune_backends(&mut self) {
+    self.gpu_experimental_autotune_backends.clear();
+  }
+
   pub fn set_blitz_gpu_autotune_gemm_rtol(&mut self, value: f64) {
     self.gpu_autotune_gemm_rtol = value;
   }
@@ -1849,8 +2086,21 @@ impl DebugOptions {
     self.unsupported_crash_on_hlo_pass_fix_max_iterations = value;
   }
 
+  // hlo_pass_fix_detect_cycles
+  pub fn blitz_hlo_pass_fix_detect_cycles(&self) -> bool {
+    self.hlo_pass_fix_detect_cycles
+  }
+
   pub fn set_blitz_hlo_pass_fix_detect_cycles(&mut self, value: bool) {
     self.hlo_pass_fix_detect_cycles = value;
+  }
+
+  pub fn blitz_hlo_evaluator_use_fasst_path(&self) -> bool {
+    unimplemented!()
+  }
+
+  pub fn set_blitz_hlo_evaluator_use_fast_path(&mut self, _value: bool) {
+    unimplemented!()
   }
 
   pub fn set_blitz_gpu_experimental_enable_sync_collective_combining(&mut self, value: bool) {
@@ -1871,6 +2121,15 @@ impl DebugOptions {
 
   pub fn blitz_dump_hlo_snapshots(&self) -> bool {
     unimplemented!()
+  }
+
+  // dump_to
+  pub fn blitz_dump_to(&self) -> String {
+    self.dump_to.clone()
+  }
+
+  pub fn set_blitz_dump_to(&mut self, value: String) {
+    self.dump_to = value;
   }
 }
 
@@ -2272,7 +2531,7 @@ impl ExecutionOptions {
     }
   }
 
-  pub fn debug_options(&self) -> &'static DebugOptions {
+  pub fn debug_options(&self) -> &'static OnceLock<DebugOptions> {
     get_debug_options_from_flags()
   }
 
@@ -2541,5 +2800,33 @@ impl StackFrameIndex {
 
   pub fn add_stack_frame(&mut self, stack_frame: StackFrame) {
     self.stack_frams.push(stack_frame);
+  }
+}
+
+// A [first; last] range of integers, inclusive on both ends.
+pub struct IntRangeInclusive {
+  first: i64,
+  last: i64
+}
+
+impl IntRangeInclusive {
+  pub fn new() -> Self {
+    IntRangeInclusive { first: 0, last: 0 }
+  }
+
+  pub fn first(&self) -> i64 {
+    self.first
+  }
+
+  pub fn last(&self) -> i64 {
+    self.last
+  }
+
+  pub fn set_first(&mut self, first: i64) {
+    self.first = first;
+  }
+
+  pub fn set_last(&mut self, last: i64) {
+    self.last = last;
   }
 }

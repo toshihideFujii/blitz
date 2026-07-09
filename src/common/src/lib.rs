@@ -15,6 +15,7 @@ pub mod index_util;
 pub mod layout_util;
 pub mod layout;
 pub mod literal_comparison;
+pub mod literal_pool;
 pub mod literal_util;
 pub mod literal;
 pub mod metric_table_report;

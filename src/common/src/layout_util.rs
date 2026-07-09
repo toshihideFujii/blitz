@@ -31,7 +31,7 @@ impl LayoutUtil {
     dynamic_shape_metadata_prefix_bytes: i64,
   ) -> Layout
   {
-    let mut layout = Layout::new();
+    let mut layout = Layout::default();
     for dimension_number in minor_to_major {
       layout.add_minor_to_major(*dimension_number);
     }
@@ -93,7 +93,7 @@ impl LayoutUtil {
   }
 
   pub fn make_layout_from_major_to_minor(major_to_minor: Vec<i64>) -> Layout {
-    let mut layout = Layout::new();
+    let mut layout = Layout::default();
     for i in major_to_minor.len()..0 {
       layout.add_minor_to_major(major_to_minor[i]);
     }
@@ -102,7 +102,7 @@ impl LayoutUtil {
 
   // Internal helper that creates a default layout for an array of the given rank.
   fn create_default_layout_for_rank(rank: i64) -> Layout {
-    let mut layout = Layout::new();
+    let mut layout = Layout::default();
     let minor_to_major = layout.minor_to_major_vec_mut();
     minor_to_major.resize(rank as usize, 0);
     set_default_layout_to_container(minor_to_major);
@@ -112,7 +112,7 @@ impl LayoutUtil {
   // Returns default layout for the given shape.
   pub fn get_default_layout_for_shape(shape: &Shape) -> Layout {
     if shape.is_opaque() || shape.is_token() {
-      return Layout::new();
+      return Layout::default();
     }
     assert!(shape.is_array());
     LayoutUtil::create_default_layout_for_rank(shape.dimensions_size() as i64)
@@ -432,6 +432,20 @@ impl LayoutUtil {
     layout.minor_to_major_vec()
   }
 
+  // Major(0) is the most major logical dimension number, Major(1) is the
+  // second-most-major logical dimension number and so on.
+  //
+  // This can be used to translate physical dimension numbers to logical
+  // dimension numbers. Assume that we are numbering the physical dimensions so
+  // that the most major physical dimension has physical dimension number 0 and
+  // so on. Then a physical dimension number p corresponds to the logical
+  // dimension number Major(p). So this function could also be called
+  // PhysicalToLogical().
+  //
+  // As an example, consider physical dimension number 0, which by definition is
+  // the most major. Then Major(0) is the most major logical dimension, so Major
+  // maps the physical dimension number 0 to the most major logical dimension
+  // number Major(0).
   pub fn major(layout: &Layout, physical_dimension_number: i64) -> i64 {
     assert!(0 <= physical_dimension_number);
     assert!(physical_dimension_number < layout.minor_to_major_size() as i64);
@@ -440,6 +454,8 @@ impl LayoutUtil {
     LayoutUtil::minor(layout, phys_dim_num)
   }
 
+  // Minor(0) is the most minor logical dimension number, minor(1) is the
+  // second-most-minor logical dimension number and so on.
   pub fn minor(layout: &Layout, physical_dimension_number: i64) -> i64 {
     assert!(0 <= physical_dimension_number);
     assert!(physical_dimension_number < layout.minor_to_major_size() as i64);
@@ -460,27 +476,31 @@ impl LayoutUtil {
   // 'src' and 'dst' need not be compatible to have the same layout but the two
   // shapes must have the same tuple structure (if any) and arrays must have
   // the same rank. Within the shapes must have the same number of dimensions.
-  pub fn copy_layout_between_shapes(src: &Shape, dst: &mut Shape) {
+  pub fn copy_layout_between_shapes(src: &Shape, dst: &mut Shape) -> Result<(), String> {
     if src.is_tuple() != dst.is_tuple() {
-      assert!(false, "Cannnot copy layout from shape: shape structure differs.");
-      return;
+      let err_msg =
+        "Cannnot copy layout from shape: shape structure differs.".to_string();
+      return Err(err_msg);
     }
     if src.is_tuple() {
       if ShapeUtil::tuple_element_count(src) !=
          ShapeUtil::tuple_element_count(dst)
       {
-        assert!(false, "Cannnot copy layout from shape: tuple element count differs.");
-        return;
+        let err_msg =
+          "Cannnot copy layout from shape: tuple element count differs.".to_string();
+        return Err(err_msg);
       }
       for i in 0..ShapeUtil::tuple_element_count(src) {
-        LayoutUtil::copy_layout_between_shapes(
+        let result = LayoutUtil::copy_layout_between_shapes(
           src.tuple_shapes(i), dst.mutable_tuple_shapes(i));
+        if result.is_err() { return result; }
       }
     } else {
       if src.has_layout() {
         if src.rank() != dst.rank() {
-          assert!(false, "Cannot copy layout from shape: ranks differs.");
-          return;
+          let err_msg =
+            "Cannot copy layout from shape: ranks differs.".to_string();
+          return Err(err_msg);
         }
         let _ = LayoutUtil::validate_layout_for_shape(
           src.layout().as_ref().unwrap(),
@@ -490,6 +510,7 @@ impl LayoutUtil {
         dst.clear_layout();
       }
     }
+    Ok(())
   }
 
   // Returns true if the layouts of lhs and rhs are equal, false otherwise.
@@ -552,7 +573,101 @@ impl LayoutUtil {
     ret
   }
 
-  pub fn linear_index() {}
+  // Constructs a new layout by making the given dimension in the given
+  // layout the minor most.
+  pub fn move_dim_to_minor(layout: &mut Layout, dim: i64) -> Layout {
+    if Some(&dim) == layout.minor_to_major_vec_mut().first() {
+      return layout.clone();
+    }
+    let mut ret = layout.clone();
+    ret.clear_minor_to_major();
+    ret.add_minor_to_major(dim);
+    let mut minor_to_major = vec![];
+    minor_to_major.resize(layout.minor_to_major_vec().len(), 0);
+    minor_to_major.clone_from_slice(layout.minor_to_major_vec_mut());
+    for d in minor_to_major {
+      if d != dim {
+        ret.add_minor_to_major(d);
+      }
+    }
+    ret
+  }
+
+  // Returns the linearized index of the cell at the given indices. The unit
+  // of the offset is in elements of the shape.
+  //
+  // NOTE: this method only uses the top-level tile and disregards the sub-tile
+  // in the layout. This method is also performance critical.
+  pub fn linear_index(_shape: &Shape, _indices: Vec<i64>) -> i64 {
+    unimplemented!()
+  }
+
+  // Maps a set of logical indices for a given shape to its corresponding
+  // physical index (linear offset) in memory. This mapping accounts for the
+  // shape's layout, including dimension order (`minor_to_major`) and nested
+  // tiling (`tiles`).
+  pub fn linear_index_for_nested_tiling(shape: &Shape, indices: Vec<i64>) -> i64 {
+    debug_assert!(shape.is_array());
+    debug_assert!(shape.has_layout());
+    let num_dims = shape.dimensions_vec().len();
+    debug_assert_eq!(num_dims, indices.len());
+    if num_dims == 0 {
+      return 0;
+    }
+    // 1. Initialize physical dimensions and indices (major-to-minor).
+    // The layout.minor_to_major(0) is the most minor physical dimension.
+    // We construct vectors in major-to-minor order to simplify tiling and
+    // linearization.
+    let mut current_shape = vec![];
+    let mut current_indices = vec![];
+    for i in num_dims-1..=0 {
+      let logical_dim = shape.layout().as_ref().unwrap().minor_to_major(i);
+      current_shape.push(shape.dimensions(logical_dim as usize));
+      current_indices.push(indices[logical_dim as usize]);
+    }
+    // 2. Iteratively apply each tile level.
+    for tile in shape.layout().as_ref().unwrap().tiles_vec() {
+      let tile_rank = tile.dimensions().len();
+      // Tiling applies to a suffix of the current physical dimensions.
+      debug_assert!(tile_rank <= current_shape.len());
+      let suffix_start = current_shape.len() - tile_rank;
+      let mut next_shape = vec![];
+      let mut next_indices = vec![];
+      // Prefix dimensions remain unchanged.
+      for i in 0..suffix_start {
+        next_shape.push(current_shape[i]);
+        next_indices.push(current_indices[i]);
+      }
+      // Outer tiles dimensions: ceil(d/t)
+      // Outer tiles indices: floor(e/t).
+      for i in 0..tile_rank {
+        let d = current_shape[suffix_start + i];
+        let e = current_indices[suffix_start + i];
+        let t = tile.dimension(i);
+        let ceil_of_ratio = (d +t - 1) / t;
+        next_shape.push(ceil_of_ratio);
+        next_indices.push(e / t);
+      }
+      // Inner tile dimensions: t.
+      // Inner tile indices: e mod t.
+      for i in 0..tile_rank {
+        let e = current_indices[suffix_start + i];
+        let t = tile.dimension(i);
+        next_shape.push(t);
+        next_indices.push(e % t);
+      }
+      current_shape = next_shape;
+      current_indices = next_indices;
+    }
+    // 3. Final linearization in the expanded row-major (major-to-minor) space.
+    let mut linear_index = 0;
+    let mut multiplier = 1;
+    for i in current_shape.len()-1..=0 {
+      linear_index += current_indices[i] * multiplier;
+      multiplier *= current_shape[i];
+    }
+    linear_index
+  }
 
   pub fn memory_space(shape: &Shape) -> i64 {
     if shape.has_layout() {
@@ -616,6 +731,53 @@ impl LayoutUtil {
     }
     true
   }
+
+  // The max size of the split in the given dimension. If the layout doesn't
+  // have a split config in the given dimension, the value returned from this
+  // function is equal to the Shape::dimensions(). If there is a split config in
+  // the given dimension, we then find the size of the largest split in that
+  // dimension.
+  pub fn max_split_size(shape: &Shape, dim: i64) -> i64 {
+    debug_assert!(shape.is_array());
+    if !shape.has_layout() {
+      return shape.dimensions(dim as usize);
+    }
+    let mut split_config = None;
+    for config in shape.layout().as_ref().unwrap().split_configs() {
+      if LayoutUtil::major(shape.layout().as_ref().unwrap(),
+      config.dimension()) == dim
+      {
+        split_config = Some(config);
+        break;
+      }
+    }
+    if split_config.is_some() {
+      let mut max_split_size = 0;
+      let mut last_split_index = 0;
+      for split_index in split_config.as_ref().unwrap().split_indices() {
+        let split_size = split_index - last_split_index;
+        max_split_size = i64::max(split_size, max_split_size);
+        last_split_index = *split_index;
+      }
+      max_split_size = i64::max(max_split_size,
+        shape.dimensions(dim as usize) - last_split_index);
+      return max_split_size;
+    }
+    shape.dimensions(dim as usize)
+  }
+
+  // This function is analogous to ShapeUtil::ElementsIn, except we use the max
+  // split sizes for each dimension to calculate the max number of elements
+  // stored in a particular split. This can be useful for calculating how much
+  // memory to allocate in each of the memories.
+  pub fn max_elements_in_per_split(shape: &Shape) -> i64 {
+    debug_assert!(shape.is_array());
+    let mut max_elements_in = 1;
+    for dim in 0..shape.dimensions_vec().len() {
+      max_elements_in *= LayoutUtil::max_split_size(shape, dim as i64);
+    }
+    max_elements_in
+  }
 }
 
 #[cfg(test)]
@@ -625,12 +787,13 @@ mod tests {
   fn make_shape_with_layout(
     elt_t: PrimitiveType,
     dimensions: Vec<i64>,
-    minor_to_major: Vec<i64>
+    minor_to_major: Vec<i64>,
+    tiles: Vec<Tile>
   ) -> Shape
   {
     let mut shape = ShapeUtil::make_shape(&elt_t, dimensions);
     let layout = LayoutUtil::make_layout(
-      &minor_to_major, vec![], 1,
+      &minor_to_major, tiles, 1,
       PrimitiveType::Invalid,
       PrimitiveType::Invalid,
       0, 0, vec![],
@@ -643,11 +806,11 @@ mod tests {
   fn test_tuple_layout_comparison() {
     let shape = ShapeUtil::make_tuple_shape(
       vec![make_shape_with_layout(
-        PrimitiveType::F32, vec![2, 3], vec![0, 1])]
+        PrimitiveType::F32, vec![2, 3], vec![0, 1], vec![])]
     );
     let other_shape = ShapeUtil::make_tuple_shape(
       vec![make_shape_with_layout(
-        PrimitiveType::F32, vec![2, 2], vec![0, 1])]
+        PrimitiveType::F32, vec![2, 2], vec![0, 1], vec![])]
     );
 
     let tuple0 = ShapeUtil::make_tuple_shape(vec![]);
@@ -676,28 +839,34 @@ mod tests {
     let mut src = make_shape_with_layout(
       PrimitiveType::F32,
       vec![2, 3],
-      vec![0, 1]);
+      vec![0, 1],
+      vec![]);
 
     let mut dst = make_shape_with_layout(
       PrimitiveType::F32,
       vec![2, 3],
-      vec![1, 0]);
+      vec![1, 0],
+      vec![]);
 
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), false);
-    LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    let mut result =
+      LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    assert!(result.is_ok());
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), true);
 
     // Should work if destination has no layout.
     dst.clear_layout();
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), false);
-    LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    result = LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    assert!(result.is_ok());
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), true);
 
     // If src is cleared, then destination should be cleared.
     src.clear_layout();
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), false);
     assert_eq!(dst.has_layout(), true);
-    LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    result = LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    assert!(result.is_ok());
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), true);
     assert_eq!(dst.has_layout(), false);
   }
@@ -706,40 +875,42 @@ mod tests {
   fn test_copy_layout_tuple() {
     let s1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3], 
-      vec![0, 1]);
+      vec![0, 1], vec![]);
     let s2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123], 
-      vec![1, 0]);
+      vec![1, 0], vec![]);
 
     let s3 = make_shape_with_layout(
       PrimitiveType::F32, vec![], 
-      vec![]);
+      vec![], vec![]);
     let s4 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3], 
-      vec![0, 2, 1]);
+      vec![0, 2, 1], vec![]);
     let s5 = ShapeUtil::make_tuple_shape(vec![s3, s4]);
 
     let src = ShapeUtil::make_tuple_shape(vec![s1, s2, s5]);
 
     let d1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3], 
-      vec![1, 0]);
+      vec![1, 0], vec![]);
     let d2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123], 
-      vec![1, 0]);
+      vec![1, 0], vec![]);
 
     let d3 = make_shape_with_layout(
       PrimitiveType::F32, vec![], 
-      vec![]);
+      vec![], vec![]);
     let d4 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3], 
-      vec![1, 2, 0]);
+      vec![1, 2, 0], vec![]);
     let d5 = ShapeUtil::make_tuple_shape(vec![d3, d4]);
 
     let mut dst = ShapeUtil::make_tuple_shape(vec![d1, d2, d5]);
 
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), false);
-    LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    let result =
+      LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    assert!(result.is_ok());
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), true);
   }
 
@@ -747,19 +918,69 @@ mod tests {
   fn test_copy_layout_not_compatible_same_rank() {
     let src = make_shape_with_layout(
       PrimitiveType::F32, vec![123, 42, 7], 
-      vec![2, 0, 1]);
+      vec![2, 0, 1], vec![]);
 
     let mut dst = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3, 5], 
-      vec![1, 0]);
+      vec![1, 0], vec![]);
 
-    LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    let result =
+      LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    assert!(result.is_ok());
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), true);
   }
 
-  fn test_copy_layout_not_compatible_different_rank() {}
-  fn test_copy_layout_not_compatible_tuple() {}
-  fn test_copy_layout_bogus_layout() {}
+  #[test]
+  fn test_copy_layout_not_compatible_different_rank() {
+    let src = make_shape_with_layout(
+      PrimitiveType::F32, vec![123, 42, 7], 
+      vec![2, 0, 1],vec![]);
+
+    let mut dst = make_shape_with_layout(
+      PrimitiveType::F32, vec![2, 3], 
+      vec![1, 0], vec![]);
+
+    let result =
+      LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    assert!(result.is_err());
+  }
+
+  #[test]
+  fn test_copy_layout_not_compatible_tuple() {
+    let src = ShapeUtil::make_tuple_shape(vec![
+      make_shape_with_layout(PrimitiveType::F32, vec![2, 3], vec![0, 1], vec![]),
+      make_shape_with_layout(PrimitiveType::F32, vec![42, 123], vec![1, 0], vec![]),
+      ShapeUtil::make_tuple_shape(vec![
+        make_shape_with_layout(PrimitiveType::F32, vec![1, 2, 3], vec![0, 2, 1], vec![])
+      ])
+    ]);
+    let mut dst = ShapeUtil::make_tuple_shape(vec![
+      make_shape_with_layout(PrimitiveType::F32, vec![2, 3], vec![1, 0], vec![]),
+      make_shape_with_layout(PrimitiveType::F32, vec![42, 123], vec![1, 0], vec![]),
+      ShapeUtil::make_tuple_shape(vec![
+        make_shape_with_layout(PrimitiveType::F32, vec![], vec![], vec![]),
+        make_shape_with_layout(PrimitiveType::F32, vec![1, 2, 3], vec![1, 2, 0], vec![])
+      ])
+    ]);
+    let result =
+      LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    assert!(result.is_err());
+  }
+
+  #[test] // FAIL
+  fn test_copy_layout_bogus_layout() {
+    let mut src = ShapeUtil::make_shape(
+      &PrimitiveType::F32, vec![2, 3]);
+    let mut dst = ShapeUtil::make_shape(
+      &PrimitiveType::F32, vec![2, 3]);
+
+    // Set layout to invalid value.
+    *src.mutable_layout() =
+      Some(LayoutUtil::make_layout_from_major_to_minor(vec![1, 2, 3, 4]));
+    let result =
+      LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    assert!(result.is_err());
+  }
 
   #[test]
   fn test_copy_token_layout() {
@@ -767,7 +988,9 @@ mod tests {
     let mut dst = ShapeUtil::make_token_shape();
 
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), true);
-    LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    let result =
+      LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    assert!(result.is_ok());
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), true);
   }
 
@@ -777,7 +1000,9 @@ mod tests {
     let mut dst = ShapeUtil::make_opaque_shape();
 
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), true);
-    LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    let result =
+      LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    assert!(result.is_ok());
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), true);
   }
 
@@ -785,44 +1010,46 @@ mod tests {
   fn test_copy_tuple_layout_with_token_and_opaque() {
     let s1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3],
-      vec![0, 1]);
+      vec![0, 1], vec![]);
     let s2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123],
-      vec![1, 0]);
+      vec![1, 0], vec![]);
     let s3 = ShapeUtil::make_token_shape();
 
     let s4 = ShapeUtil::make_opaque_shape();
     let s5 = make_shape_with_layout(
       PrimitiveType::F32, vec![],
-      vec![]);
+      vec![], vec![]);
     let s6 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3],
-      vec![0, 2, 1]);
+      vec![0, 2, 1], vec![]);
     let s7 = ShapeUtil::make_tuple_shape(vec![s4, s5, s6]);
 
     let src = ShapeUtil::make_tuple_shape(vec![s1, s2, s3, s7]);
 
     let d1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3],
-      vec![1, 0]);
+      vec![1, 0], vec![]);
     let d2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123],
-      vec![1, 0]);
+      vec![1, 0], vec![]);
     let d3 = ShapeUtil::make_token_shape();
 
     let d4 = ShapeUtil::make_opaque_shape();
     let d5 = make_shape_with_layout(
       PrimitiveType::F32, vec![],
-      vec![]);
+      vec![], vec![]);
     let d6 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3],
-      vec![1, 2, 0]);
+      vec![1, 2, 0], vec![]);
     let d7 = ShapeUtil::make_tuple_shape(vec![d4, d5, d6]);
 
     let mut dst = ShapeUtil::make_tuple_shape(vec![d1, d2, d3, d7]);
 
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), false);
-    LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    let result =
+      LayoutUtil::copy_layout_between_shapes(&src, &mut dst);
+    assert!(result.is_ok());
     assert_eq!(LayoutUtil::layouts_in_shapes_equal(&src, &dst), true);
   }
 
@@ -830,17 +1057,17 @@ mod tests {
   fn test_clear_layout_tuple() {
     let s1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3],
-      vec![1, 0]);
+      vec![1, 0], vec![]);
     let s2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123],
-      vec![1, 0]);
+      vec![1, 0], vec![]);
 
     let s3 = make_shape_with_layout(
       PrimitiveType::F32, vec![],
-      vec![]);
+      vec![], vec![]);
     let s4 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3],
-      vec![1, 2, 0]);
+      vec![1, 2, 0], vec![]);
     let s5 = ShapeUtil::make_tuple_shape(vec![s3, s4]);
 
     let mut shape = ShapeUtil::make_tuple_shape(vec![s1, s2, s5]);
@@ -872,17 +1099,17 @@ mod tests {
   fn test_set_to_default_layout_tuple() {
     let s1 = make_shape_with_layout(
       PrimitiveType::F32, vec![2, 3, 4],
-      vec![1, 0, 2]);
+      vec![1, 0, 2], vec![]);
     let s2 = make_shape_with_layout(
       PrimitiveType::F32, vec![42, 123, 7],
-      vec![1, 2, 0]);
+      vec![1, 2, 0], vec![]);
 
     let s3 = make_shape_with_layout(
       PrimitiveType::F32, vec![],
-      vec![]);
+      vec![], vec![]);
     let s4 = make_shape_with_layout(
       PrimitiveType::F32, vec![1, 2, 3, 4],
-      vec![3, 1, 2, 0]);
+      vec![3, 1, 2, 0], vec![]);
     let s5 = ShapeUtil::make_tuple_shape(vec![s3, s4]);
 
     let mut shape = ShapeUtil::make_tuple_shape(vec![s1, s2, s5]);
@@ -905,7 +1132,7 @@ mod tests {
   }
 
   #[test]
-  fn test_default_layout_getter_major_to_minor() {
+  fn test_default_layout_getters_major_to_minor() {
     let layout_r2 = LayoutUtil::make_layout(
       &vec![1, 0], vec![], 1,
       PrimitiveType::Invalid,
@@ -994,7 +1221,104 @@ mod tests {
       true);
   }
 
-  fn test_human_string_with_tiling() {}
+  #[test]
+  fn test_human_string_with_tiling() {
+    let mut shape = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::F32, &vec![2, 3, 4],
+      &vec![0, 1, 2], vec![],
+      1, 0, 0);
+
+    // No tiling.
+    assert_eq!(ShapeUtil::human_string_with_layout(&shape),
+      "f32[2,3,4]{0,1,2}".to_string());
+
+    // 2D tile.
+    let mut tile = Tile::default();
+    tile.add_dimensions(512);
+    tile.add_dimensions(1024);
+    shape.mutable_layout().as_mut().unwrap().add_tiles(tile);
+    assert_eq!(ShapeUtil::human_string_with_layout(&shape),
+      "f32[2,3,4]{0,1,2:T(512,1024)}".to_string());
+
+    // 1D tile.
+    shape.mutable_layout().as_mut().unwrap().clear_tiles();
+    tile = Tile::default();
+    tile.add_dimensions(512);
+    shape.mutable_layout().as_mut().unwrap().add_tiles(tile);
+    assert_eq!(ShapeUtil::human_string_with_layout(&shape),
+      "f32[2,3,4]{0,1,2:T(512)}".to_string());
+
+    // 2 tiles.
+    shape = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::BF16, &vec![2, 3, 4],
+      &vec![1, 2, 0], vec![],
+      1, 0, 0);
+    tile = Tile::default();
+    tile.add_dimensions(16);
+    tile.add_dimensions(256);
+    shape.mutable_layout().as_mut().unwrap().add_tiles(tile);
+    let mut tile2 = Tile::default();
+    tile2.add_dimensions(2);
+    tile2.add_dimensions(1);
+    shape.mutable_layout().as_mut().unwrap().add_tiles(tile2);
+    assert_eq!(ShapeUtil::human_string_with_layout(&shape),
+      "bf16[2,3,4]{1,2,0:T(16,256)(2,1)}".to_string());
+
+    // PRED with element size of 8 bits.
+    shape = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::Pred, &vec![8, 8, 8],
+      &vec![0, 2, 1], vec![],
+      1, 0, 0);
+    tile = Tile::default();
+    tile.add_dimensions(8);
+    tile.add_dimensions(128);
+    shape.mutable_layout().as_mut().unwrap().add_tiles(tile);
+    assert_eq!(ShapeUtil::human_string_with_layout(&shape),
+      "pred[8,8,8]{0,2,1:T(8,128)}".to_string());
+
+    // PRED with element size of 32 bits.
+    shape.mutable_layout().as_mut().unwrap().clear_tiles();
+    tile = Tile::default();
+    tile.add_dimensions(8);
+    tile.add_dimensions(128);
+    shape.mutable_layout().as_mut().unwrap().add_tiles(tile);
+    shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(32);
+    assert_eq!(ShapeUtil::human_string_with_layout(&shape),
+      "pred[8,8,8]{0,2,1:T(8,128)E(32)}".to_string());
+    
+    // No tile. PRED with element size of 32 bits.
+    shape.mutable_layout().as_mut().unwrap().clear_tiles();
+    shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(32);
+    assert_eq!(ShapeUtil::human_string_with_layout(&shape),
+      "pred[8,8,8]{0,2,1:E(32)}".to_string());
+
+    // Tile with negative dimension size for combining dimensions.
+    shape = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::BF16, &vec![2, 3, 1004],
+      &vec![2, 1, 0], vec![],
+      1, 0, 0);
+    tile = Tile::default();
+    tile.add_dimensions(2);
+    tile.add_dimensions(i64::MIN);
+    tile.add_dimensions(128);
+    shape.mutable_layout().as_mut().unwrap().add_tiles(tile);
+    assert_eq!(ShapeUtil::human_string_with_layout(&shape),
+      "bf16[2,3,1004]{2,1,0:T(2,*,128)}".to_string());
+
+    // Tile with two negative dimensions.
+    shape = ShapeUtil::make_shape_with_dense_layout(
+      &PrimitiveType::BF16, &vec![8, 2, 3, 1004],
+      &vec![3, 2, 1, 0], vec![],
+      1, 0, 0);
+    tile = Tile::default();
+    tile.add_dimensions(2);
+    tile.add_dimensions(i64::MIN);
+    tile.add_dimensions(i64::MIN);
+    tile.add_dimensions(128);
+    shape.mutable_layout().as_mut().unwrap().add_tiles(tile);
+    assert_eq!(ShapeUtil::human_string_with_layout(&shape),
+      "bf16[8,2,3,1004]{3,2,1,0:T(2,*,*,128)}".to_string());
+  }
 
   #[test]
   fn test_validate_layout_valid_array_layout() {
@@ -1119,16 +1443,37 @@ mod tests {
     let layout_clone = layout.clone();
 
     let new_layout = LayoutUtil::move_dim_to_major(&mut layout, 0);
-    assert_eq!(LayoutEqual::new().equal(&new_layout, &layout_clone), true);
+    assert!(LayoutEqual::new().equal(&new_layout, &layout_clone));
 
     let new_layout2 = LayoutUtil::move_dim_to_major(&mut layout, 1);
-    assert_eq!(LayoutEqual::new().equal(
+    assert!(LayoutEqual::new().equal(
       &new_layout2,
       &LayoutUtil::make_layout(&vec![2, 0, 1],
         vec![], 1, 
         PrimitiveType::Invalid, PrimitiveType::Invalid,
-        0, 0, vec![], None, 0)),
-        true);
+        0, 0, vec![], None, 0)));
+  }
+
+  #[test]
+  fn test_dim_to_minor() {
+    let mut layout = LayoutUtil::make_layout(
+      &vec![2, 0, 3, 1], vec![], 1, 
+      PrimitiveType::Invalid, 
+      PrimitiveType::Invalid,
+      0, 0, vec![],
+      None, 0);
+    let layout_clone = layout.clone();
+
+    let new_layout = LayoutUtil::move_dim_to_minor(&mut layout, 2);
+    assert!(LayoutEqual::new().equal(&new_layout, &layout_clone));
+
+    let new_layout2 = LayoutUtil::move_dim_to_minor(&mut layout, 3);
+    assert!(LayoutEqual::new().equal(
+      &new_layout2,
+      &LayoutUtil::make_layout(&vec![3, 2, 0, 1],
+        vec![], 1, 
+        PrimitiveType::Invalid, PrimitiveType::Invalid,
+        0, 0, vec![], None, 0)));
   }
 
   #[test]
@@ -1175,5 +1520,67 @@ mod tests {
       .mutable_layout().as_mut().unwrap()
       .set_element_size_in_bits(32);
     assert_eq!(LayoutUtil::has_custom_element_size_in_bits(&tuple_shape), true);
+  }
+
+  #[test]
+  fn test_max_split_size() {
+    let mut shape = ShapeUtil::make_shape(
+      &PrimitiveType::F32, vec![150, 200, 100]);
+    shape.set_layout(LayoutUtil::make_layout(
+      &vec![0, 1, 2], vec![], 1,
+      PrimitiveType::Invalid,
+      PrimitiveType::Invalid, 0, 0, vec![],
+      None, 0));
+    shape.mutable_layout().as_mut().unwrap()
+      .add_split_config(SplitConfig::new(0, vec![30]));
+    shape.mutable_layout().as_mut().unwrap()
+      .add_split_config(SplitConfig::new(1, vec![40, 130]));
+
+    assert_eq!(LayoutUtil::max_split_size(&shape, 0), 150);
+    assert_eq!(LayoutUtil::max_split_size(&shape, 1), 90);
+    assert_eq!(LayoutUtil::max_split_size(&shape, 2), 70);
+  }
+
+  #[test]
+  fn test_max_elements_in_per_split() {
+    let mut shape = ShapeUtil::make_shape(
+      &PrimitiveType::F32, vec![150, 200, 100]);
+    shape.set_layout(LayoutUtil::make_layout(
+      &vec![0, 1, 2], vec![], 1,
+      PrimitiveType::Invalid,
+      PrimitiveType::Invalid, 0, 0, vec![],
+      None, 0));
+    assert_eq!(LayoutUtil::max_elements_in_per_split(&shape), 150 * 200 * 100);
+
+    let mut layout = LayoutUtil::make_layout(
+      &vec![0, 1, 2], vec![], 1,
+      PrimitiveType::Invalid,
+      PrimitiveType::Invalid, 0, 0, vec![],
+      None, 0);
+    layout.add_split_config(SplitConfig::new(0, vec![30]));
+    layout.add_split_config(SplitConfig::new(1, vec![40, 130]));
+    shape.set_layout(layout);
+    assert_eq!(LayoutUtil::max_elements_in_per_split(&shape), 150 * 90 * 70);
+  }
+
+  #[test] // FAIL
+  fn test_linear_index_for_nested_tiling_round_trip_1d() {
+    // bf16[2048]{0:T(1024)(128)(2,1)}
+    let shape_id = make_shape_with_layout(PrimitiveType::BF16,
+      vec![2048], vec![0],
+    vec![Tile::new(vec![1024]), Tile::new(vec![128]), Tile::new(vec![2, 1])]);
+
+    assert_eq!(LayoutUtil::linear_index_for_nested_tiling(&shape_id, vec![0]), 0);
+    assert_eq!(LayoutUtil::linear_index_for_nested_tiling(&shape_id, vec![128]), 1);
+  }
+
+  #[test]
+  fn test_linear_index_for_nested_tiling_round_trip_2d() {
+    unimplemented!()
+  }
+
+  #[test]
+  fn test_linear_index_with_and_without_tiles() {
+    unimplemented!()
   }
 }

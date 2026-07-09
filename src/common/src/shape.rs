@@ -297,7 +297,7 @@ impl Shape {
   pub fn mutable_layout(&mut self) -> &mut Option<Layout> {
     assert!(self.is_array());
     if !self.has_layout() {
-      self.layout = Some(Layout::new());
+      self.layout = Some(Layout::default());
     }
     &mut self.layout
   }

@@ -3,15 +3,15 @@
 use core::f64;
 use std::{any::Any, fmt::Debug, mem::size_of, vec};
 use num::{complex::Complex64, Complex};
+use u4::U4x2;
 
 use crate::{
   array3d::Array3D, blitz_data::PrimitiveType, index_util::IndexUtil, layout::Layout,
-  layout_util::LayoutUtil, permutation_util::{inverse_permutation, is_permutation},
-  primitive_util::{
+  layout_util::LayoutUtil, permutation_util::{inverse_permutation, is_permutation}, primitive_util::{
     self, array_type_switch, complex_type_switch, floating_point_type_switch,
     integral_type_switch, is_array_type, is_complex_type, is_floating_point_type,
     is_integral_type, is_predicate_type, native_to_primitive_type, primitive_type_switch
-  }, printer::{Printer, StringPrinter}, shape::{Shape, ShapeEqual}, shape_util::ShapeUtil
+  }, printer::{Printer, StringPrinter}, shape::{Shape, ShapeEqual}, shape_tree::ShapeTree, shape_util::ShapeUtil
 };
 
 // Use just so many bytes that we don't increase the sizeof(Piece).
@@ -273,6 +273,10 @@ impl Literal {
     self.piece(shape_index).untyped_data()
   }
 
+  pub fn mutable_untyped_data(&mut self, shape_index: &Vec<i64>) -> &mut Vec<Box<dyn Any>> {
+    self.mutable_piece(shape_index).mutable_untyped_data()
+  }
+
   pub fn size_bytes(&self, shape_index: &Vec<i64>) -> i64 {
     self.piece(shape_index).size_bytes_dense()
   }
@@ -486,14 +490,18 @@ impl Literal {
   }
 
   // As above but returns any integer type casted to an int64_t.
-  pub fn get_first_integer(&self) -> Option<&i64> {
+  pub fn get_first_integer(&self) -> Option<i64> {
     if !is_integral_type(&self.shape().element_type()) {
       return None;
     }
-    let mut f = |_t: PrimitiveType| -> Option<&i64> {
-      let first_element: &dyn Any = self.get_first_element();
-      if first_element.is::<i64>() {
-        return first_element.downcast_ref::<i64>();
+    let mut f = |_t: PrimitiveType| -> Option<i64> {
+      let first_element = self.get_first_element();
+      if first_element.is::<i8>() {
+        return Some(*first_element.downcast_ref::<i8>().unwrap() as i64);
+      } else if first_element.is::<i32>() {
+        return Some(*first_element.downcast_ref::<i32>().unwrap() as i64);
+      } else if first_element.is::<i64>() {
+        return Some(*first_element.downcast_ref::<i64>().unwrap());
       }
       None
     };
@@ -509,6 +517,15 @@ impl Literal {
     assert!(subshape.is_array());
     let mut f = |t: PrimitiveType| -> String {
       if is_integral_type(&t) {
+        let value = self.get::<u8>(multi_index, shape_index);
+        if value.is_some() {
+          if t == PrimitiveType::S4 {
+            let pair = U4x2::from_byte(
+              *self.get::<u8>(multi_index, shape_index).unwrap());
+            return pair.right().to_string();
+          }
+          return value.unwrap().to_string();
+        }
         let value = self.get::<i32>(multi_index, shape_index);
         if value.is_some() {
           return value.unwrap().to_string();
@@ -640,7 +657,7 @@ impl Literal {
       }
     }
 
-    let as_c64 = self.get_as_complex_64(multi_index);
+    let as_c64 = self.get_as_complex64(multi_index);
     if as_c64.is_some() {
       let value_any: &dyn Any = value;
       let value_f64 = value_any.downcast_ref::<f64>();
@@ -667,7 +684,7 @@ impl Literal {
     if as_f64.is_some() {
       return as_f64.unwrap() == value.re && value.im == 0.0;
     }
-    let as_complex128 = self.get_as_complex_64(multi_index);
+    let as_complex128 = self.get_as_complex64(multi_index);
     if as_complex128.is_some() {
       return as_complex128.unwrap() == *value;
     }
@@ -714,7 +731,7 @@ impl Literal {
   // As Get(), but determines the correct type, and converts the value into
   // complex128. All floating point types can be converted into complex128.
   // This literal must be an array.
-  pub fn get_as_complex_64(&self, multi_index: &Vec<i64>) -> Option<Complex<f64>> {
+  pub fn get_as_complex64(&self, multi_index: &Vec<i64>) -> Option<Complex<f64>> {
     let mut f = |t: PrimitiveType| -> Option<Complex<f64>> {
       if is_array_type(&t) {
         if is_complex_type(&t) {
@@ -1851,6 +1868,19 @@ impl Literal {
     elements
   }
 
+  pub fn build_piece_subtree(&self, shape: &Shape, piece: &mut Piece) {
+    debug_assert!(self.shape().is_tuple());
+    for i in 0..ShapeUtil::tuple_element_count(shape) {
+      let subshape = shape.tuple_shapes(i);
+      let mut child_piece = Piece::new();
+      child_piece.set_subshape(subshape.clone());
+      if subshape.is_tuple() {
+        self.build_piece_subtree(subshape, &mut child_piece);
+      }
+      piece.emplace_back(child_piece);
+    }
+  }
+
   fn piece(&self, shape_index: &Vec<i64>) -> &Piece {
     let mut piece = self.root_piece();
     for i in  shape_index {
@@ -2595,6 +2625,20 @@ impl Piece {
       if orig_data.type_id() != other_data.type_id() {
         return false;
       }
+      // u8
+      if let (Some(orig_value), Some(other_value)) =
+        (orig_data.downcast_ref::<u8>(), other_data.downcast_ref::<u8>())
+      {
+        if self.subshape.element_type() == PrimitiveType::S4 {
+          let orig_s4 = U4x2::from_byte(*orig_value);
+          let other_s4 = U4x2::from_byte(*other_value);
+          if orig_s4.right() == other_s4.right() { continue; }
+          else { return false; }
+        }
+        //println!("orig: {:?}. other: {:?}", *orig_value, *other_value);
+        if orig_value == other_value { continue; }
+        else { return false; }
+      }
       // i32
       if let (Some(orig_value), Some(other_value)) =
         (orig_data.downcast_ref::<i32>(), other_data.downcast_ref::<i32>())
@@ -2770,6 +2814,211 @@ impl Piece {
       }
     }
     Ok(())
+  }
+}
+
+// A read-only view of a Literal. A LiteralSlice contains pointers to shape and
+// literal buffers always owned by others.
+pub struct LiteralSlice<'p> {
+  root_piece: &'p Piece,
+}
+
+impl<'p> LiteralSlice<'p> {
+  pub fn new(literal: &Literal) -> LiteralSlice {
+    LiteralSlice { root_piece: &literal.root_piece }
+  }
+
+  pub fn new_from_view_root(
+    literal: &'p Literal, view_root: &Vec<i64>) -> LiteralSlice<'p>
+  {
+    LiteralSlice { root_piece: literal.piece(view_root) }
+  }
+
+  pub fn new_from_slice(
+    slice: &'p LiteralSlice, view_root: &Vec<i64>) -> LiteralSlice<'p> {
+    let mut piece = slice.root_piece();
+    for i in  view_root {
+      assert!(*i >= 0);
+      assert!((*i as usize) < piece.children_size());
+      piece = piece.child(*i as usize).unwrap();
+    }
+    LiteralSlice {
+      root_piece: piece
+    }
+  }
+
+  pub fn root_piece(&self) -> &'p Piece {
+    self.root_piece
+  }
+
+  pub fn equal(&self, other: & Literal, layout_sensitive: bool) -> bool {
+    if !ShapeUtil::equal_structure(
+      &self.root_piece.subshape, other.shape())
+    {
+      return false;
+    }
+    let mut f =
+      |index: &Vec<i64>, piece: &Piece| -> bool
+    {
+      let other_piece = other.piece(index);
+      let subshape = piece.subshape();
+      let other_subshape = other_piece.subshape();
+      if subshape.element_type() != other_subshape.element_type() {
+        return false;
+      }
+      if !piece.subshape().is_array() {
+        return true;
+      }
+      if subshape.dimensions_size() != other_subshape.dimensions_size() {
+        return false;
+      }
+      if layout_sensitive && (subshape.layout() != other_subshape.layout()) {
+        return false;
+      }
+      for i in 0..subshape.dimensions_size() {
+        if piece.get_dynamic_size(i as i64) !=
+          other_piece.get_dynamic_size(i as i64)
+        {
+          return false;
+        }
+      }
+      if !piece.equal_elements(other_piece) {
+        return false;
+      }
+      true
+    };
+    self.root_piece().for_each_subpiece_with_bool(&mut f)
+  }
+
+  pub fn get<NativeT>(
+    &self,
+    multi_index: &Vec<i64>,
+    shape_index: &Vec<i64>) -> Option<&NativeT>
+    where NativeT: 'static
+  {
+    let mut piece = self.root_piece();
+    for i in  shape_index {
+      assert!(*i >= 0);
+      assert!((*i as usize) < piece.children_size());
+      piece = piece.child(*i as usize).unwrap();
+    }
+    piece.get(multi_index)
+  }
+}
+
+pub struct BorrowingLiteral {
+  root_piece: Piece,
+  // Shape of this literal. Stored as unique_ptr such that the (default) move
+  // construction of this class would be trivially correct: the pointer to Shape
+  // root_piece_ stores will still point to the correct address.
+  shape: Shape
+}
+
+impl BorrowingLiteral {
+  // 'src_buf_ptr' is not owned by this class and must outlive the
+  // lifetime of this class. It points to an appropriately sized buffer with
+  // data interpreted as indicated by 'shape'.
+  // This constructor is only used for array shapes.
+  pub fn new_from_data(data: Vec<Box<dyn Any>>, shape: &Shape) -> Self {
+    let mut literal = BorrowingLiteral {
+      root_piece: Piece::new(),
+      shape: shape.clone()
+    };
+    literal.root_piece.set_subshape(shape.clone());
+    literal.root_piece.set_data(data);
+    literal
+  }
+
+  pub fn new_from_buf(buf: Vec<Vec<Box<dyn Any>>>, shape: &Shape) -> Self {
+    let mut literal = BorrowingLiteral {
+      root_piece: Piece::new(),
+      shape: shape.clone()
+    };
+    assert!(shape.is_tuple());
+    assert!(!ShapeUtil::is_nested_tuple(shape));
+    assert_eq!(buf.len(), ShapeUtil::tuple_element_count(shape));
+    literal.root_piece.set_subshape(shape.clone());
+    Self::build_piece_subtree(shape, &mut literal.root_piece);
+
+    for i in 0..buf.len() {
+      let src_shape = literal.shape.tuple_shapes(i);
+      assert!(src_shape.is_array());
+      let mut data: Vec<Box<dyn Any>> = vec![];
+      if buf[i][0].downcast_ref::<i32>().is_some() {
+        for i in &buf[i] {
+          let v = *i.downcast_ref::<i32>().unwrap();
+          data.push(Box::new(v));
+        }
+      } else if buf[i][0].downcast_ref::<i64>().is_some() {
+        for i in &buf[i] {
+          let v = *i.downcast_ref::<i64>().unwrap();
+          data.push(Box::new(v));
+        }
+      } else if buf[i][0].downcast_ref::<f64>().is_some() {
+        for i in &buf[i] {
+          let v = *i.downcast_ref::<f64>().unwrap();
+          data.push(Box::new(v));
+        }
+      }
+
+      literal.root_piece.mutable_child(i).unwrap().set_data(data);
+    }
+    literal
+  }
+
+  pub fn new_from_tree<T>(tree: ShapeTree<T>) ->  Self
+    where T: 'static + Debug + Default + Clone + PartialEq
+  {
+    let mut literal = BorrowingLiteral {
+      root_piece: Piece::new(),
+      shape: tree.shape().clone()
+    };
+    Self::build_piece_subtree(&literal.shape, &mut literal.root_piece);
+    let mut func =
+      |index: &Vec<i64>, piece: &mut Piece| -> Result<(), String>
+    {
+      if ShapeUtil::get_subshape(&literal.shape, index).is_tuple() {
+        //debug_assert!(tree.element(index))
+        return Ok(());
+      }
+      let data = tree.element(index).clone();
+      piece.set_data(vec![Box::new(data)]);
+      Ok(())
+    };
+    literal.root_piece.for_each_mutable_subpiece(&mut func);
+    literal
+  }
+
+  pub fn root_piece(&self) -> &Piece {
+    &self.root_piece
+  }
+
+  pub fn get<NativeT>(
+    &self,
+    multi_index: &Vec<i64>,
+    shape_index: &Vec<i64>) -> Option<&NativeT>
+    where NativeT: 'static
+  {
+    let mut piece = self.root_piece();
+    for i in  shape_index {
+      assert!(*i >= 0);
+      assert!((*i as usize) < piece.children_size());
+      piece = piece.child(*i as usize).unwrap();
+    }
+    piece.get(multi_index)
+  }
+
+  fn build_piece_subtree(shape: &Shape, piece: &mut Piece) {
+    //debug_assert!(self.shape.is_tuple());
+    for i in 0..ShapeUtil::tuple_element_count(shape) {
+      let subshape = shape.tuple_shapes(i);
+      let mut child_piece = Piece::new();
+      child_piece.set_subshape(subshape.clone());
+      if subshape.is_tuple() {
+        BorrowingLiteral::build_piece_subtree(subshape, &mut child_piece);
+      }
+      piece.emplace_back(child_piece);
+    }
   }
 }
 
@@ -2998,6 +3247,12 @@ mod tests {
   }
 
   #[test]
+  fn test_r3_to_sstring() {}
+
+  #[test]
+  fn test_r6_to_string() {}
+
+  #[test]
   fn test_tuple_to_string() {
     let scalar = LiteralUtil::create_r0(1.0);
     let matrix = LiteralUtil::create_r2(&vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
@@ -3011,6 +3266,18 @@ f64[2,2] {
 )".to_string();
     assert_eq!(tuple.to_string(), expected);
   }
+
+  #[test]
+  fn test_create_r3_from_array_3d() {}
+
+  #[test]
+  fn test_literal_r4_f64_projected_stringifies() {}
+
+  #[test]
+  fn test_literal_r4_f64_stringifies() {}
+
+  #[test]
+  fn test_each_cell_r2_f64() {}
 
   #[test]
   fn test_scalar_equality() {
@@ -3108,6 +3375,30 @@ f64[2,2] {
   }
 
   #[test]
+  fn test_different_layout_inequality() {}
+
+  #[test]
+  fn test_logical_inequality_fast_path() {}
+
+  #[test]
+  fn test_logical_inequality_slow_path() {}
+
+  #[test]
+  fn test_make_returns_error_on_huge_allocation() {}
+
+  #[test]
+  fn test_make_unique() {}
+
+  #[test]
+  fn test_make_unique_error() {}
+
+  #[test]
+  fn test_create_without_layout() {}
+
+  #[test]
+  fn test_create_without_layout_tuple() {}
+
+  #[test]
   fn test_tuple_equality() {
     // Test equality with tuples.
     let scalar = LiteralUtil::create_r0::<f64>(1.0);
@@ -3169,6 +3460,9 @@ f64[2,2] {
       LiteralUtil::create_r1(&vec![c2, c1]);
     assert!(!vec.equal(&vec_reversed, false));
   }
+
+  #[test]
+  fn test_c128_equality() {}
 
   #[test]
   fn test_is_all_tuple() {
@@ -3318,6 +3612,9 @@ f64[2,2] {
   }
 
   #[test]
+  fn test_count_equal_mismatched() {}
+
+  #[test]
   fn test_is_zero() {
     let scalar_zero = LiteralUtil::create_r0(0.0);
     let scalar_one = LiteralUtil::create_r0(1.0);
@@ -3340,10 +3637,49 @@ f64[2,2] {
   }
 
   #[test]
+  fn test_relayout_2x2() {}
+
+  #[test]
   fn test_reshape_r0() {
     //let original = LiteralUtil::create_r0(1.7);
     //let reshape = original.
   }
+
+  #[test]
+  fn test_reshape_r4() {}
+
+  #[test]
+  fn test_reshape_r4_dim0_minor() {}
+
+  #[test]
+  fn test_transpose_r0() {}
+
+  #[test]
+  fn test_each_cell_until_failure_aborts_on_failure() {}
+
+  #[test]
+  fn test_each_cell_until_failure_goes_through_all_cells() {}
+
+  #[test]
+  fn test_transpose_r4() {}
+
+  #[test]
+  fn test_transpose_dynamic_r2() {}
+
+  #[test]
+  fn test_to_static_r2() {}
+
+  #[test]
+  fn test_to_bounded_dynamic_r2() {}
+
+  #[test]
+  fn test_r4_relayout_equivalence() {}
+
+  #[test]
+  fn test_r2_linear_layout() {}
+
+  #[test]
+  fn test_r3_linear_layout() {}
 
   #[test]
   fn test_slice_r0_i64() {
@@ -3356,167 +3692,28 @@ f64[2,2] {
   }
 
   #[test]
-  fn test_replicate_r2_u32() {
-    
-  }
+  fn test_slice_r1_f64() {}
 
   #[test]
-  fn test_get_as_double() {
-    let m = LiteralUtil::create_r2(
-      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
-    assert_eq!(m.get_as_double(&vec![0, 0]), Some(1.0));
-    assert_eq!(m.get_as_double(&vec![1, 0]), Some(3.0));
-  }
+  fn test_slice_r2_u32() {}
 
   #[test]
-  fn test_get_sum_as_double() {
-    let m = LiteralUtil::create_r2(
-      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
-    assert_eq!(m.get_sum_as_double(&vec![0, 3]), Some(1.0 + 4.0));
-    assert_eq!(m.get_sum_as_double(&vec![0, 1, 2, 3]), Some(1.0 + 2.0 + 3.0 + 4.0));
-
-    let vals = vec![1.0; 1024];
-    let v = LiteralUtil::create_r1(&vals);
-    let mut indices = vec![];
-    let mut i = 0;
-    while i < 1024 {
-      indices.push(i);
-      assert_eq!(v.get_sum_as_double(&indices), Some((i as f64 + 2.0) / 2.0));
-      i += 2;
-    };
-  }
+  fn test_slice_r3_u32_full() {}
 
   #[test]
-  fn test_get_as_complex_64() {
-    let value = Complex64::new(1.0, 0.0);
-    let c1 = LiteralUtil::create_r0(value);
-    assert_eq!(c1.get_as_complex_64(&vec![]), Some(value));
-
-    let c2 = LiteralUtil::create_r0(1.0);
-    assert_eq!(c2.get_as_complex_64(&vec![]), Some(value));
-
-    let other_value = Complex64::new(1.0, 2.0);
-    let c5 = LiteralUtil::create_r0(other_value);
-    assert_eq!(c5.get_as_complex_64(&vec![]), Some(other_value));
-
-    let value_1 = Complex64::new(1.0, 0.0);
-    let c6 = LiteralUtil::create_r0(1);
-    assert_eq!(c6.get_as_complex_64(&vec![]), Some(value_1));
-  }
-
-  #[test] // FAIL
-  fn test_slice_on_bool() {
-    let c1 = LiteralUtil::create_r1(&vec![true, true, false]);
-    let slice_c1 = c1.slice(&vec![0], &vec![3]); 
-    assert!(c1.equal(&slice_c1, false));
-  }
+  fn test_slice_r2_dynamic() {}
 
   #[test]
-  fn test_is_equal_at() {
-    let val_double = 4.0;
-    let val_integral: i64 = 4;
-    let c1 = LiteralUtil::create_r0(val_integral.clone());
-    assert_eq!(c1.is_equal_at(&vec![], &val_double), true);
-    assert_eq!(c1.is_equal_at(&vec![], &val_integral), true);
-
-    let c2 = LiteralUtil::create_r0(val_double.clone());
-    assert_eq!(c2.is_equal_at(&vec![], &val_double), true);
-    assert_eq!(c2.is_equal_at(&vec![], &val_integral), true);
-
-    let val_complex = Complex64::new(val_double, 0.0);
-    assert_eq!(c1.is_equal_at(&vec![], &val_complex), true);
-    assert_eq!(c2.is_equal_at(&vec![], &val_complex), true);
-
-    let c4 = LiteralUtil::create_r0(val_complex.clone());
-    assert_eq!(c4.is_equal_at(&vec![], &val_double), true);
-    assert_eq!(c4.is_equal_at(&vec![], &val_integral), true);
-    assert_eq!(c4.is_equal_at(&vec![], &val_complex), true);
-  }
+  fn test_slice_r2_dynamic_in_bound() {}
 
   #[test]
-  fn test_create_from_shape_with_unknown_leaf_arrays() {
-    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
-      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![4, 4]));
-    assert_eq!(c1.is_known(&vec![]), false);
-  }
+  fn test_slice_r2_dynamic_out_of_bound() {}
 
   #[test]
-  fn test_create_from_shape_with_unknown_leaf_arrays_s4_tuple() {
-    let mut inner_shape = ShapeUtil::make_shape(
-      &PrimitiveType::S4, vec![4, 4]);
-    inner_shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(4);
-
-    let c1 =
-      Literal::create_from_shape_with_unknown_leaf_arrays(&inner_shape);
-    assert_eq!(c1.is_known(&vec![]), false);
-  }
+  fn test_populate_r1_i64() {}
 
   #[test]
-  fn test_create_partially_known_tuple() {
-    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
-      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![4, 4]));
-    let c2 = LiteralUtil::create_r0(10);
-    let c3 = LiteralUtil::make_tuple(&vec![&c1, &c2]);
-    let c4 = LiteralUtil::create_r0(100);
-    let c5 = LiteralUtil::make_tuple(&vec![&c4, &c3]);
-    assert_eq!(c5.is_known(&vec![]), false);
-  }
-
-  #[test]
-  fn test_copy_from_partially_known_tuple() {
-    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
-      &ShapeUtil::make_shape(&PrimitiveType::F64, vec![4, 4]));
-    let c2 = LiteralUtil::create_r0(10);
-    let c3 = LiteralUtil::make_tuple(&vec![&c1, &c2]);
-    let c4 = LiteralUtil::create_r0(100);
-    let c5 = LiteralUtil::make_tuple(&vec![&c4, &c3]);
-    let mut c6 = Literal::create_from_shape(c5.shape());
-    let result = c6.copy_from(
-      &c5, &vec![1], &vec![1], false);
-    assert!(result.is_ok());
-    assert!(!c6.is_known(&vec![]));
-  }
-
-  #[test]
-  fn test_copy_from_partially_known_tuple_unknown_tuple_element() {
-    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
-      &ShapeUtil::make_tuple_shape(vec![
-        ShapeUtil::make_shape(&PrimitiveType::F64, vec![4, 4]),
-        ShapeUtil::make_shape(&PrimitiveType::F64, vec![4, 4])]));
-    let c2 = LiteralUtil::create_r0(10);
-    let c3 = LiteralUtil::make_tuple(&vec![&c1, &c2]);
-    let c4 = LiteralUtil::create_r0(100);
-    let c5 = LiteralUtil::make_tuple(&vec![&c4, &c3]);
-    let mut c6 = Literal::create_from_shape(c5.shape());
-    let mut c1_copy = Literal::create_from_shape(c1.shape());
-    let mut c2_copy = Literal::create_from_shape(c2.shape());
-
-    let mut result = c6.copy_from(
-      &c5, &vec![1], &vec![1], false);
-    assert!(result.is_ok());
-    result = c1_copy.copy_from(
-      &c6, &vec![], &vec![1, 0], false);
-    assert!(result.is_ok());
-    result = c2_copy.copy_from(
-      &c6, &vec![], &vec![1, 1], false);
-    assert!(result.is_ok());
-
-    assert!(!c6.is_known(&vec![]));
-    assert!(!c1_copy.is_known(&vec![]));
-    assert!(c2_copy.is_known(&vec![]));
-  }
-
-    #[test]
-  fn test_populate_r1_i64() {
-    let shape = ShapeUtil::make_shape(
-      &PrimitiveType::S64, vec![1]);
-    let mut output = Literal::new_from_shape(&shape);
-    let vec: Vec<i64> = vec![77];
-    output.populate_r1(&vec);
-
-    let expected = LiteralUtil::create_r1(&vec);
-    assert!(output.equal(&expected, false));
-  }
+  fn test_populate_r1_u64() {}
 
   #[test]
   fn test_populate_r1_c64() {
@@ -3529,6 +3726,9 @@ f64[2,2] {
     let expected = LiteralUtil::create_r1(&vec![c]);
     assert!(output.equal(&expected, false))
   }
+
+  #[test]
+  fn test_populate_r1_c128() {}
 
   #[test]
   fn test_populate_r2_c64() {
@@ -3582,7 +3782,7 @@ f64[2,2] {
   }
 
   #[test]
-  fn test_populate_with_value_r1_s64() {
+  fn test_populate_with_value_r1_i64() {
     let shape = ShapeUtil::make_shape(
       &PrimitiveType::S64, vec![3]);
     let mut output = Literal::new_from_shape(&shape);
@@ -3593,6 +3793,21 @@ f64[2,2] {
       LiteralUtil::create_r1(&vec);
     assert!(output.equal(&expecteed, false));
   }
+
+  #[test]
+  fn test_populate_with_value_r2_u64() {}
+
+  #[test]
+  fn test_populate_with_value_r2_c64() {}
+
+  #[test]
+  fn test_populate_with_value_r2_c128() {}
+
+  #[test]
+  fn test_replicate_r2_u32() {}
+
+  #[test]
+  fn test_copy_slice_from() {}
 
   #[test]
   fn test_copy_from_scalars() {
@@ -3606,6 +3821,9 @@ f64[2,2] {
     // TODO
   }
 
+  #[test]
+  fn test_copy_from_and_to_zero_element() {}
+  
   #[test]
   fn test_copy_from_nil_shape() {
     let mut nil_literal_0 =
@@ -3712,6 +3930,187 @@ f64[2,2] {
   }
 
   #[test]
+  fn test_f16() {}
+
+  #[test]
+  fn test_populate() {}
+
+  #[test]
+  fn test_populate_parallel() {}
+
+  #[test]
+  fn test_populate_linear_parallel() {}
+
+  #[test]
+  fn test_convert_r4() {}
+
+  #[test]
+  fn test_convert_if_types_match() {}
+
+  #[test]
+  fn test_convert_if_types_match_f8() {}
+
+  #[test]
+  fn test_bitcast_convert() {}
+
+  #[test]
+  fn test_bitcast_convert_between_invalid_types() {}
+
+  #[test]
+  fn test_literal_dynamic_slice() {
+    let scalar = LiteralUtil::create_r0(1.0);
+    let matrix =
+      LiteralUtil::create_r2(&vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    let tuple =
+      LiteralUtil::make_tuple(&vec![&scalar, &matrix]);
+    let nested_tuple =
+      LiteralUtil::make_tuple(&vec![&tuple, &scalar]);
+    let nil = Literal::new_from_shape(&ShapeUtil::make_nil());
+
+    assert!(LiteralSlice::new_from_view_root(&scalar, &vec![])
+      .equal(&scalar, false));
+    assert!(LiteralSlice::new_from_view_root(&matrix, &vec![])
+      .equal(&matrix, false));
+    assert!(LiteralSlice::new_from_view_root(&tuple, &vec![])
+      .equal(&tuple, false));
+    assert!(LiteralSlice::new_from_view_root(&nested_tuple, &vec![])
+      .equal(&nested_tuple, false));
+    assert!(LiteralSlice::new_from_view_root(&nil, &vec![])
+      .equal(&nil, false));
+
+    assert!(LiteralSlice::new_from_view_root(&tuple, &vec![0])
+      .equal(&scalar, false));
+    assert!(LiteralSlice::new_from_view_root(&tuple, &vec![1])
+      .equal(&matrix, false));
+
+    assert!(LiteralSlice::new_from_view_root(&nested_tuple, &vec![0])
+      .equal(&tuple, false));
+    assert!(LiteralSlice::new_from_view_root(&nested_tuple, &vec![0, 0])
+      .equal(&scalar, false));
+    assert!(LiteralSlice::new_from_view_root(&nested_tuple, &vec![0, 1])
+      .equal(&matrix, false));
+    assert!(LiteralSlice::new_from_view_root(&nested_tuple, &vec![1])
+      .equal(&scalar, false));
+  }
+
+  #[test]
+  fn test_mutating_literal_slice() {
+    let scalar = LiteralUtil::create_r0(1.0);
+    let matrix =
+      LiteralUtil::create_r2(&vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    let tuple =
+      LiteralUtil::make_tuple(&vec![&scalar, &matrix]);
+    let mut nested_tuple =
+      LiteralUtil::make_tuple(&vec![&tuple, &scalar]);
+
+    // Verify that changing the underlying data beneath the view changes the
+    // data of the view itself.
+    let nested_tuple_view = LiteralSlice::new(&nested_tuple);
+    assert_eq!(nested_tuple.get::<f64>(&vec![], &vec![0, 0]).unwrap(), &1.0);
+    assert_eq!(nested_tuple_view.get::<f64>(&vec![], &vec![0, 0]).unwrap(), &1.0);
+
+    nested_tuple.set::<f64>(&vec![], &vec![0, 0], 555.0);
+    assert_eq!(nested_tuple.get::<f64>(&vec![], &vec![0, 0]).unwrap(), &555.0);
+    //assert_eq!(nested_tuple_view.get::<f64>(&vec![], &vec![0, 0]).unwrap(), &555.0);
+  }
+
+  #[test]
+  fn test_literal_slice_of_a_literal_slice() {
+    let scalar = LiteralUtil::create_r0(1.0);
+    let matrix =
+      LiteralUtil::create_r2(&vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    let tuple =
+      LiteralUtil::make_tuple(&vec![&scalar, &matrix]);
+    let nested_tuple =
+      LiteralUtil::make_tuple(&vec![&tuple, &scalar]);
+
+    let nested_tuple_view = LiteralSlice::new(&nested_tuple);
+    let tuple_view = LiteralSlice::new_from_slice(
+      &nested_tuple_view, &vec![0]);
+    let matrix_view = LiteralSlice::new_from_slice(
+      &tuple_view, &vec![1]);
+    let target =
+      LiteralUtil::create_r2(&vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    assert!(matrix_view.equal(&target, false));
+  }
+
+  #[test]
+  fn test_borrowing_literal_from_one_buffer_ptr() {
+    let values: Vec<i64> = vec![1, 2, 3];
+    let literal_shape =
+      ShapeUtil::make_shape(&PrimitiveType::S64, vec![3]);
+    let mut wrapped_values: Vec<Box<dyn Any>> = vec![];
+    for v in &values {
+      wrapped_values.push(Box::new(*v));
+    }
+
+    let literal = BorrowingLiteral::new_from_data(
+      wrapped_values, &literal_shape);
+    assert_eq!(literal.get::<i64>(&vec![0], &vec![]).unwrap(), &1);
+    assert_eq!(literal.get::<i64>(&vec![1], &vec![]).unwrap(), &2);
+    assert_eq!(literal.get::<i64>(&vec![2], &vec![]).unwrap(), &3);
+  }
+
+  #[test]
+  fn test_borrowing_literal_from_multiple_buffer_ptrs() {
+    let v_123: Vec<i64> = vec![1, 2, 3];
+    let shape_123 =
+      ShapeUtil::make_shape(&PrimitiveType::S64, vec![3]);
+    let v_100: Vec<i64> = vec![100];
+    let shape_100 =
+      ShapeUtil::make_shape(&PrimitiveType::S64, vec![1]);
+
+    let mut buf: Vec<Vec<Box<dyn Any>>> = vec![];
+    let mut buf_123: Vec<Box<dyn Any>> = vec![];
+    for i in &v_123 {
+      buf_123.push(Box::new(*i));
+    }
+    buf.push(buf_123);
+    let mut buf_100: Vec<Box<dyn Any>> = vec![];
+    for i in &v_100 {
+      buf_100.push(Box::new(*i));
+    }
+    buf.push(buf_100);
+
+    let shape =
+      ShapeUtil::make_tuple_shape(vec![shape_123, shape_100]);
+    let literal = BorrowingLiteral::new_from_buf(buf, &shape);
+    assert_eq!(literal.get::<i64>(&vec![0], &vec![0]).unwrap(), &1);
+    assert_eq!(literal.get::<i64>(&vec![0], &vec![1]).unwrap(), &100);
+    assert_eq!(literal.get::<i64>(&vec![1], &vec![0]).unwrap(), &2);
+    assert_eq!(literal.get::<i64>(&vec![2], &vec![0]).unwrap(), &3);
+  }
+
+  #[test] // FAIL
+  fn test_borrowing_literal_from_shape_tree() {
+    let data1 = vec![1.0, 2.0, 3.0];
+    let mut data2 = vec![];
+    data2.clone_from(&data1);
+    let mut data3 = vec![];
+    data3.clone_from(&data1);
+
+    let shape = ShapeUtil::make_shape(
+      &PrimitiveType::F64, vec![3]);
+    let tuple = ShapeUtil::make_tuple_shape(
+      vec![shape.clone(), shape.clone()]);
+    let mut nested_tuple =
+      ShapeUtil::make_tuple_shape(vec![tuple, shape]);
+    
+    let mut tree: ShapeTree<Vec<f64>> = ShapeTree::new(&mut nested_tuple);
+    *tree.mutable_element(&vec![0, 0]) = data1;
+    *tree.mutable_element(&vec![0, 1]) = data2;
+    *tree.mutable_element(&vec![1]) = data3;
+
+    let literal = BorrowingLiteral::new_from_tree(tree);
+    assert_eq!(literal.get::<Vec<f64>>(&vec![0, 0], &vec![]).unwrap(), &vec![1.0, 2.0, 3.0]);
+    assert_eq!(literal.get::<Vec<f64>>(&vec![0, 1], &vec![]).unwrap(), &vec![1.0, 2.0, 3.0]);
+    assert_eq!(literal.get::<Vec<f64>>(&vec![1], &vec![]).unwrap(), &vec![1.0, 2.0, 3.0]);
+  }
+
+  #[test]
+  fn test_mutable_borrowing_literal_from_shape_tree() {}
+
+  #[test]
   fn test_literal_move() {
     let matrix =
       LiteralUtil::create_r2(&vec![vec![1.0, 2.0], vec![3.0, 4.0]]);   
@@ -3770,50 +4169,6 @@ f64[2,2] {
   }
 
   #[test]
-  fn test_populate_r1_dynamic() {
-    let mut literal = Literal::new_from_shape(
-      &ShapeUtil::make_shape(&PrimitiveType::U32, vec![20]));
-    literal.set_dynamic_size(0, &vec![], 10);
-    let values: Vec<u32> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-    literal.populate_r1(&values);
-
-    let expected =
-      "u32[<=20](10) {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}".to_string();
-    assert_eq!(literal.to_string(), expected);
-  }
-
-  #[test]
-  fn test_populate_r2_dynamic_dim0() {
-    let mut literal = Literal::new_from_shape(
-      &ShapeUtil::make_shape(&PrimitiveType::U32, vec![5, 2]));
-    literal.set_dynamic_size(0, &vec![], 3);
-    let values: Vec<Vec<u32>> = vec![vec![1, 2], vec![3, 4], vec![5, 6]];
-    literal.populate_r2(&values);
-
-    let expected = "u32[<=5,2](3,2) {
- { 1, 2 },
- { 3, 4 },
- { 5, 6 }
-}".to_string();
-    assert_eq!(literal.to_string(), expected);
-  }
-
-  #[test] // FAIL
-  fn test_populate_r2_dynamic_dim1() {
-    let mut literal = Literal::new_from_shape(
-      &ShapeUtil::make_shape(&PrimitiveType::U32, vec![2, 5]));
-    literal.set_dynamic_size(1, &vec![], 3);
-    let values: Vec<Vec<u32>> = vec![vec![1, 2, 3], vec![4, 5, 6]];
-    literal.populate_r2(&values);
-
-    let expected = "u32[2,<=5](2,3) {
- { 1, 2, 3 },
- { 4, 5, 6 }
-}".to_string();
-    assert_eq!(literal.to_string(), expected);
-  }
-
-  #[test]
   fn test_move_into_tuple() {
     let mut elements = vec![];
     elements.push(LiteralUtil::create_r0(1.0));
@@ -3867,6 +4222,20 @@ f64[2,2] {
   }
 
   #[test]
+  fn test_literal_slice_copy() {
+    let matrix = LiteralUtil::create_r2(
+      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    let matrix_view = LiteralSlice::new(&matrix);
+    let matrix_view_copy =
+      LiteralSlice::new_from_slice(&matrix_view, &vec![]);
+    
+    assert_eq!(matrix_view_copy.get::<f64>(&vec![0, 0], &vec![]).unwrap(), &1.0);
+    assert_eq!(matrix_view_copy.get::<f64>(&vec![0, 1], &vec![]).unwrap(), &2.0);
+    assert_eq!(matrix_view_copy.get::<f64>(&vec![1, 0], &vec![]).unwrap(), &3.0);
+    assert_eq!(matrix_view_copy.get::<f64>(&vec![1, 1], &vec![]).unwrap(), &4.0);
+  }
+
+  #[test]
   fn test_get_set_tuple() {
     let r0 = LiteralUtil::create_r0(42.0);
     let r2 = LiteralUtil::create_r2(
@@ -3890,9 +4259,8 @@ f64[2,2] {
     assert_eq!(scalar_f64.get::<f64>(&vec![], &vec![]).unwrap(), &0.0);
   }
 
-/*
-  #[test]
-  fn test_broadcast_vector_to_matrix_0() {
+  #[test] // FAIL
+  fn test_broadcast_vector_to_matrix0() {
     let literal = LiteralUtil::create_r1(&vec![1, 2]);
     let broadcast_literal = 
       literal.broadcast(&ShapeUtil::make_shape(
@@ -3901,6 +4269,270 @@ f64[2,2] {
     assert!(broadcast_literal.unwrap().equal(
       &LiteralUtil::create_r2(&vec![vec![1, 1], vec![2, 2]]), false));
   }
-*/
 
+  #[test]
+  fn test_broadcast_vector_to_matrix1() {}
+
+  #[test]
+  fn test_broadcast_vector_to_matrix_with_zero_dim() {}
+
+  #[test]
+  fn test_broadcast_scalat_to_matrix() {}
+
+  #[test]
+  fn test_dynamic_broadcast() {}
+
+  #[test]
+  fn test_get_as_scalar_i64() {
+    let scalar1 = LiteralUtil::create_r0::<i32>(12);
+    assert_eq!(LiteralUtil::literal_as_scalar_i64(&scalar1), Some(12));
+    let scalar2 = LiteralUtil::create_r0::<i8>(12);
+    assert_eq!(LiteralUtil::literal_as_scalar_i64(&scalar2), Some(12));
+    let non_scalar1 = LiteralUtil::create_r2::<i32>(
+      &vec![vec![1, 2], vec![3, 4]]);
+    assert!(LiteralUtil::literal_as_scalar_i64(&non_scalar1).is_none());
+    let non_scalar2 = LiteralUtil::create_r1::<i32>(&vec![1, 2]);
+    assert!(LiteralUtil::literal_as_scalar_i64(&non_scalar2).is_none());
+  }
+
+  #[test]
+  fn test_get_as_double() {
+    let m = LiteralUtil::create_r2(
+      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    assert_eq!(m.get_as_double(&vec![0, 0]), Some(1.0));
+    assert_eq!(m.get_as_double(&vec![1, 0]), Some(3.0));
+  }
+
+  #[test]
+  fn test_get_sum_as_double() {
+    let m = LiteralUtil::create_r2(
+      &vec![vec![1.0, 2.0], vec![3.0, 4.0]]);
+    assert_eq!(m.get_sum_as_double(&vec![0, 3]), Some(1.0 + 4.0));
+    assert_eq!(m.get_sum_as_double(&vec![0, 1, 2, 3]), Some(1.0 + 2.0 + 3.0 + 4.0));
+
+    let vals = vec![1.0; 1024];
+    let v = LiteralUtil::create_r1(&vals);
+    let mut indices = vec![];
+    let mut i = 0;
+    while i < 1024 {
+      indices.push(i);
+      assert_eq!(v.get_sum_as_double(&indices), Some((i as f64 + 2.0) / 2.0));
+      i += 2;
+    };
+  }
+
+  #[test]
+  fn test_get_as_complex64() {
+    let value = Complex64::new(1.0, 0.0);
+    let c1 = LiteralUtil::create_r0(value);
+    assert_eq!(c1.get_as_complex64(&vec![]), Some(value));
+
+    let c2 = LiteralUtil::create_r0(1.0);
+    assert_eq!(c2.get_as_complex64(&vec![]), Some(value));
+
+    let other_value = Complex64::new(1.0, 2.0);
+    let c5 = LiteralUtil::create_r0(other_value);
+    assert_eq!(c5.get_as_complex64(&vec![]), Some(other_value));
+
+    let value_1 = Complex64::new(1.0, 0.0);
+    let c6 = LiteralUtil::create_r0(1);
+    assert_eq!(c6.get_as_complex64(&vec![]), Some(value_1));
+  }
+
+  #[test]
+  fn test_get_as_complex128() {}
+
+  #[test] // FAIL
+  fn test_slice_on_bool() {
+    let c1 = LiteralUtil::create_r1(&vec![true, true, false]);
+    let slice_c1 = c1.slice(&vec![0], &vec![3]); 
+    assert!(c1.equal(&slice_c1, false));
+  }
+
+  #[test]
+  fn test_is_equal_at() {
+    let val_double = 4.0;
+    let val_integral: i64 = 4;
+    let c1 = LiteralUtil::create_r0(val_integral.clone());
+    assert_eq!(c1.is_equal_at(&vec![], &val_double), true);
+    assert_eq!(c1.is_equal_at(&vec![], &val_integral), true);
+
+    let c2 = LiteralUtil::create_r0(val_double.clone());
+    assert_eq!(c2.is_equal_at(&vec![], &val_double), true);
+    assert_eq!(c2.is_equal_at(&vec![], &val_integral), true);
+
+    let val_complex = Complex64::new(val_double, 0.0);
+    assert_eq!(c1.is_equal_at(&vec![], &val_complex), true);
+    assert_eq!(c2.is_equal_at(&vec![], &val_complex), true);
+
+    let c4 = LiteralUtil::create_r0(val_complex.clone());
+    assert_eq!(c4.is_equal_at(&vec![], &val_double), true);
+    assert_eq!(c4.is_equal_at(&vec![], &val_integral), true);
+    assert_eq!(c4.is_equal_at(&vec![], &val_complex), true);
+  }
+
+  #[test]
+  fn test_create_from_shape_with_unknown_leaf_arrays() {
+    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
+      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![4, 4]));
+    assert_eq!(c1.is_known(&vec![]), false);
+  }
+
+  #[test]
+  fn test_create_from_shape_with_unknown_leaf_arrays_s4_tuple() {
+    let mut inner_shape = ShapeUtil::make_shape(
+      &PrimitiveType::S4, vec![4, 4]);
+    inner_shape.mutable_layout().as_mut().unwrap().set_element_size_in_bits(4);
+
+    let c1 =
+      Literal::create_from_shape_with_unknown_leaf_arrays(&inner_shape);
+    assert_eq!(c1.is_known(&vec![]), false);
+  }
+
+  #[test]
+  fn test_create_partially_known_tuple() {
+    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
+      &ShapeUtil::make_shape(&PrimitiveType::F32, vec![4, 4]));
+    let c2 = LiteralUtil::create_r0(10);
+    let c3 = LiteralUtil::make_tuple(&vec![&c1, &c2]);
+    let c4 = LiteralUtil::create_r0(100);
+    let c5 = LiteralUtil::make_tuple(&vec![&c4, &c3]);
+    assert_eq!(c5.is_known(&vec![]), false);
+  }
+
+  #[test]
+  fn test_copy_from_partially_known_tuple() {
+    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
+      &ShapeUtil::make_shape(&PrimitiveType::F64, vec![4, 4]));
+    let c2 = LiteralUtil::create_r0(10);
+    let c3 = LiteralUtil::make_tuple(&vec![&c1, &c2]);
+    let c4 = LiteralUtil::create_r0(100);
+    let c5 = LiteralUtil::make_tuple(&vec![&c4, &c3]);
+    let mut c6 = Literal::create_from_shape(c5.shape());
+    let result = c6.copy_from(
+      &c5, &vec![1], &vec![1], false);
+    assert!(result.is_ok());
+    assert!(!c6.is_known(&vec![]));
+  }
+
+  #[test]
+  fn test_copy_from_partially_known_tuple_unknown_tuple_element() {
+    let c1 = Literal::create_from_shape_with_unknown_leaf_arrays(
+      &ShapeUtil::make_tuple_shape(vec![
+        ShapeUtil::make_shape(&PrimitiveType::F64, vec![4, 4]),
+        ShapeUtil::make_shape(&PrimitiveType::F64, vec![4, 4])]));
+    let c2 = LiteralUtil::create_r0(10);
+    let c3 = LiteralUtil::make_tuple(&vec![&c1, &c2]);
+    let c4 = LiteralUtil::create_r0(100);
+    let c5 = LiteralUtil::make_tuple(&vec![&c4, &c3]);
+    let mut c6 = Literal::create_from_shape(c5.shape());
+    let mut c1_copy = Literal::create_from_shape(c1.shape());
+    let mut c2_copy = Literal::create_from_shape(c2.shape());
+
+    let mut result = c6.copy_from(
+      &c5, &vec![1], &vec![1], false);
+    assert!(result.is_ok());
+    result = c1_copy.copy_from(
+      &c6, &vec![], &vec![1, 0], false);
+    assert!(result.is_ok());
+    result = c2_copy.copy_from(
+      &c6, &vec![], &vec![1, 1], false);
+    assert!(result.is_ok());
+
+    assert!(!c6.is_known(&vec![]));
+    assert!(!c1_copy.is_known(&vec![]));
+    assert!(c2_copy.is_known(&vec![]));
+  }
+
+  #[test]
+  fn test_populate_r1_dynamic() {
+    let mut literal = Literal::new_from_shape(
+      &ShapeUtil::make_shape(&PrimitiveType::U32, vec![20]));
+    literal.set_dynamic_size(0, &vec![], 10);
+    let values: Vec<u32> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    literal.populate_r1(&values);
+
+    let expected =
+      "u32[<=20](10) {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}".to_string();
+    assert_eq!(literal.to_string(), expected);
+  }
+
+  #[test]
+  fn test_populate_r2_dynamic_dim0() {
+    let mut literal = Literal::new_from_shape(
+      &ShapeUtil::make_shape(&PrimitiveType::U32, vec![5, 2]));
+    literal.set_dynamic_size(0, &vec![], 3);
+    let values: Vec<Vec<u32>> = vec![vec![1, 2], vec![3, 4], vec![5, 6]];
+    literal.populate_r2(&values);
+
+    let expected = "u32[<=5,2](3,2) {
+ { 1, 2 },
+ { 3, 4 },
+ { 5, 6 }
+}".to_string();
+    assert_eq!(literal.to_string(), expected);
+  }
+
+  #[test] // FAIL
+  fn test_populate_r2_dynamic_dim1() {
+    let mut literal = Literal::new_from_shape(
+      &ShapeUtil::make_shape(&PrimitiveType::U32, vec![2, 5]));
+    literal.set_dynamic_size(1, &vec![], 3);
+    let values: Vec<Vec<u32>> = vec![vec![1, 2, 3], vec![4, 5, 6]];
+    literal.populate_r2(&values);
+
+    let expected = "u32[2,<=5](2,3) {
+ { 1, 2, 3 },
+ { 4, 5, 6 }
+}".to_string();
+    assert_eq!(literal.to_string(), expected);
+  }
+
+  #[test]
+  fn test_populate_from_1d_array() {}
+
+  #[test]
+  fn test_populate_from_array_dunamic_dim0() {}
+
+  #[test]
+  fn test_populate_from_array_jdynamic_dim1() {}
+
+  #[test]
+  fn test_populate_r2_from_array2d_dynamic_dim0() {}
+
+  #[test]
+  fn test_populate_r2_from_array2d_dynamic_dim1() {}
+
+  #[test]
+  fn test_populate_r2_from_array2d_synamic_dim0_dim1() {}
+
+  #[test]
+  fn test_populate_r3_from_array3d_dynamic_dim0() {}
+
+  #[test]
+  fn test_populate_r3_from_array3d_dynamic_dim1() {}
+
+  #[test]
+  fn test_populate_r3_from_array3d_dynamic_dim2() {}
+
+  #[test]
+  fn test_compare_4bit_type() {
+    let mut literal1 = Literal::new_from_shape(
+      &ShapeUtil::make_shape(&PrimitiveType::S4, vec![]));
+    let mut literal2 = Literal::new_from_shape(
+      &ShapeUtil::make_shape(&PrimitiveType::S4, vec![]));
+
+    let p =
+      literal1.mutable_untyped_data(&vec![]);
+    let q =
+      literal2.mutable_untyped_data(&vec![]);
+    
+    p.push(Box::new(0x44 as u8));
+    q.push(Box::new(0xc4 as u8));
+
+    let expected = "s4[] 4".to_string();
+    assert_eq!(literal1.to_string(), expected);
+    assert_eq!(literal1.to_string(), literal2.to_string());
+    assert!(literal1.equal(&literal2, false));
+  }
 }

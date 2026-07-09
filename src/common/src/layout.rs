@@ -15,7 +15,7 @@ pub struct Tile {
 impl Tile {
   pub const COMBINE_DIMENSION: i64 = i64::MIN;
 
-  pub fn new_default() -> Self {
+  pub fn default() -> Self {
     Tile {
       dimensions: Vec::new()
     }
@@ -123,7 +123,7 @@ pub struct Layout {
 impl Layout {
   pub const DEFAULT_MEMORY_SPACE: i64 = 0;
 
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     Layout {
       dim_attributes: Vec::new(),
       n_dim_level_types: 0,
@@ -211,6 +211,34 @@ impl Layout {
     result
   }
 
+  // Prints this layout as human-readable string, in the format
+  // "{minor_to_major:properties}", where the fields are:
+  //
+  //   minor_to_major: Comma-separated minor-to-major order of the dimensions.
+  //                   E.g. "{1,0}" means that dimension 1 is the most minor
+  //                   dimension, and dimension 0 is the most major dimension.
+  //   properties: concatenation of the following, separated by nothing (a
+  //               property is ommitted if it is the default):
+  //     T(...)...(...): The tiling (each (...) is acomma-separated list of
+  //                     tile bound sizes). E.g.
+  //             T(2,4)(3,5): The shape is tiled with 2x4 and 3x5 tiles.
+  //             T(*,*,2,*,4): The dimensions corresponding the '*' are first
+  //                 combined with the next more minor dimension, and then the
+  //                 result shape is tiled with 2x4 tiles.
+  //             If omitted, the shape is not tiled.
+  //     L(n): The tail padding alignment in elements. Omitted if n is 1.
+  //     #(type): The type of the indices.
+  //     *(type): The type of the pointers.
+  //     E(n): The element size in bits.
+  //     S(n): The numeric value of thememory space. See the definition of
+  //           Layout::memory_space() for details.
+  //     SC(...)...(...): List of split configs, separated by nothing. Each
+  //              (...) is a string of the form "(dimension:split_indices)".
+  //              E.g. SC(1:512)(2:1024,2048): dimension 1 is split into 2 parts
+  //              at index 512, and dimension 2 is split into 3 parts at index
+  //              1024 and 2048.
+  //     P(shape): The physical shape.
+  //     M(n): The dynamic shape metadata prefix bytes. Omitted if n is 0.
   pub fn print(&self, printer: &mut dyn Printer) {
     printer.append(&"{".to_string());
     self.append_join_minor_to_major(printer);
@@ -240,6 +268,8 @@ impl Layout {
       }
       printer.append(&")".to_string());
     }
+
+    // Print the tiles as T(...)...(...).
     if !self.tiles.is_empty() {
       print_colon(printer);
       printer.append(&"T".to_string());
@@ -247,12 +277,18 @@ impl Layout {
         tile.print(printer);
       }
     }
+
+    // Print the tail padding alignment as L(n). Omit this if n is 1.
     if self.tail_padding_alignment_in_elements() != 1 {
       print_colon(printer);
       printer.append(&"L(".to_string());
       printer.append(&self.tail_padding_alignment_in_elements.to_string());
       printer.append(&")".to_string());
     }
+
+    // Print the primitive type used for indices as #(type). Print
+    // #(invalid) if the type is valid but not an integer. Omit this if the type
+    // is PRIMITIVE_TYPE_INVALID.
     if self.index_primitive_type() != PrimitiveType::Invalid {
       print_colon(printer);
       if primitive_util::is_integral_type(&self.index_primitive_type) {
@@ -265,33 +301,62 @@ impl Layout {
         printer.append(&"#(invalid)".to_string());
       }
     }
+
+    // Print the primitive type used for poitners as *(type). Print *(invalid) if
+    // the type is valid but not a pointer. Omit this if the type is
+    // PRIMITIVE_TYPE_INVALID.
     if self.pointer_primitive_type != PrimitiveType::Invalid {
       print_colon(printer);
       if primitive_util::is_integral_type(&self.pointer_primitive_type) {
         printer.append(&"*(".to_string());
         let primitive_type_name =
-          primitive_util::lowercase_primitive_type_name(&self.index_primitive_type);
+          primitive_util::lowercase_primitive_type_name(&self.pointer_primitive_type);
         printer.append(&primitive_type_name);
         printer.append(&")".to_string());
       } else {
         printer.append(&"*(invalid".to_string());
       }
     }
+
+    // Print the element size in bits as E(n). Omit this if n is 0.
     if self.element_size_in_bits != 0 {
       print_colon(printer);
       printer.append(&"E(".to_string());
       printer.append(&self.element_size_in_bits.to_string());
       printer.append(&")".to_string());
     }
+
+    // Print the memory space as S(n). Omit this if n is 0.
     if self.memory_space != 0 {
       print_colon(printer);
       printer.append(&"S(".to_string());
       printer.append(&self.memory_space.to_string());
       printer.append(&")".to_string());
     }
+
+    // Print the split configs as SC(...)...(...). Omit this if the split configs
+    // are empty.
+    if !self.split_configs().is_empty() {
+      print_colon(printer);
+      printer.append(&"SC".to_string());
+      for sc in self.split_configs() {
+        printer.append(&sc.to_string());
+      }
+    }
+
+    // Print the physical shape as P(physical_shape). Omit this if the physical
+    // shape is not set.
     if self.has_physical_shape() {
       print_colon(printer);
-      printer.append(&"P{".to_string());
+      printer.append(&"P(".to_string());
+      self.physical_shape().as_ref().unwrap().print(printer, true);
+      printer.append(&")".to_string());
+    }
+
+    // Print the dynamic shape metadata prefix bytes as M(n). Omit this if n is 0.
+    if self.dynamic_shape_metadata_prefix_bytes > 0 {
+      print_colon(printer);
+      printer.append(&"M(".to_string());
       printer.append(&self.dynamic_shape_metadata_prefix_bytes.to_string());
       printer.append(&")".to_string());
     }
@@ -299,6 +364,7 @@ impl Layout {
     printer.append(&"}".to_string())
   }
 
+  // Returns a human-readable string that represents this layout.
   pub fn to_string(&self) -> String {
     let mut printer = StringPrinter::new();
     self.print(&mut printer);
@@ -388,7 +454,22 @@ impl Layout {
     self.minor_to_major.clear();
   }
 
-  pub fn delete_dimension(&mut self, _dim_to_delete: i64) {}
+  // Removes the given dimension from 'minor_to_major_', and adjusts the other
+  // dimensions accordingly.
+  // Precondition: dim_to_delete is in the range [0, minor_to_major_size()).
+  pub fn delete_dimension(&mut self, dim_to_delete: i64) {
+    debug_assert!(dim_to_delete >= 0);
+    debug_assert!(dim_to_delete < self.minor_to_major.len() as i64);
+    for i in 0..self.minor_to_major.len() {
+      if self.minor_to_major[i] == dim_to_delete {
+        self.minor_to_major.remove(i);
+        continue;
+      }
+      if self.minor_to_major[i] > dim_to_delete {
+        self.minor_to_major[i] -= 1;
+      }
+    }
+  }
 
   pub fn minor_to_major_vec(&self) -> &DimensionVector {
     &self.minor_to_major
@@ -481,6 +562,10 @@ impl Layout {
 
   pub fn set_dynamic_shape_metadata_prefix_bytes(&mut self, bytes: i64) {
     self.dynamic_shape_metadata_prefix_bytes = bytes;
+  }
+
+  pub fn split_configs(&self) -> &Vec<SplitConfig> {
+    &self.split_configs
   }
 
   pub fn split_config(&self, index: usize) -> &SplitConfig {
@@ -681,22 +766,81 @@ impl LayoutEqual {
 // minormost dimension.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SplitConfig {
-
+  dimension: i64,
+  split_indices: Vec<i64>,
 }
 
 impl SplitConfig {
-    
+  pub fn new(dimension: i64, split_indices: Vec<i64>) -> Self {
+    SplitConfig { dimension: dimension, split_indices: split_indices }
+  }
+
+  // Returns the dimension that is split.
+  pub fn dimension(&self) -> i64 {
+    self.dimension
+  }
+
+  pub fn set_dimension(&mut self, dimension: i64) {
+    self.dimension = dimension;
+  }
+
+  // Returns the indices where splits occur.
+  pub fn split_indices(&self) -> &Vec<i64> {
+    &self.split_indices
+  }
+
+  pub fn split_indices_at(&self, index: usize) -> i64 {
+    self.split_indices[index]
+  }
+
+  pub fn split_indices_size(&self) -> usize {
+    self.split_indices.len()
+  }
+
+  pub fn add_split_indices(&mut self, split_index: i64) {
+    self.split_indices.push(split_index);
+  }
+
+  pub fn clear_split_indices(&mut self) {
+    self.split_indices.clear();
+  }
+
+  pub fn to_string(&self) -> String {
+    let mut result = "(".to_string();
+    result.push_str(&self.dimension.to_string());
+    result.push_str(&":".to_string());
+    let mut counter = self.split_indices.len();
+    for i in &self.split_indices {
+      result.push_str(&i.to_string());
+      counter -= 1;
+      if counter != 0 {
+        result.push_str(",");
+      }
+    }
+    result.push_str(")");
+    result
+  }
 }
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use crate::shape_util::ShapeUtil;
+
+use super::*;
 
   #[test]
-  fn test_to_string() {
-    assert_eq!(Layout::new().to_string(), "{}");
-    assert_eq!(Layout::new_from_minor_to_major(vec![4, 5, 6]).to_string(), "{4,5,6}");
+  fn test_to_string_for_empty() {
+    assert_eq!(Layout::default().to_string(), "{}");
+  }
 
+  #[test]
+  fn test_to_string_for_minor_to_major_only() {
+    let layout = Layout::new_from_minor_to_major(vec![1, 2, 0]);
+    assert_eq!(layout.to_string(), "{1,2,0}");
+  }
+
+  #[test]
+  fn test_to_string_for_tiles() {
     let layout = Layout::new_from(
       vec![3, 2, 1, 0],
       vec![], vec![], vec![],
@@ -707,29 +851,109 @@ mod tests {
       0, 0, None,
       0);
     assert_eq!(layout.to_string(), "{3,2,1,0:T(42,123)(4,5)}");
+  }
 
-    let mut layout1 = layout.clone();
-    layout1.set_tail_padding_alignment_in_elements(100);
-    layout1.set_element_size_in_bits(42);
-    assert_eq!(layout1.to_string(), "{3,2,1,0:T(42,123)(4,5)L(100)E(42)}");
+  #[test]
+  fn test_to_string_for_tile_with_combined_dimensions() {
+    let layout = Layout::new_from(
+      vec![3, 2, 1, 0],
+      vec![], vec![], vec![],
+      vec![Tile::new(vec![i64::MIN, i64::MIN, 42, 123])],
+      1,
+      PrimitiveType::Invalid,
+      PrimitiveType::Invalid,
+      0, 0, None,
+      0);
+    assert_eq!(layout.to_string(), "{3,2,1,0:T(*,*,42,123)}");
+  }
 
-    let mut layout2 = layout.clone();
-    layout2.set_memory_space(3);
-    assert_eq!(layout2.to_string(), "{3,2,1,0:T(42,123)(4,5)S(3)}");
+  #[test]
+  fn test_to_string_for_tail_padding_alignment() {
+    let mut layout = Layout::new_from_minor_to_major(vec![3, 2, 1, 0]);
+    layout.set_tail_padding_alignment_in_elements(100);
+    assert_eq!(layout.to_string(), "{3,2,1,0:L(100)}");
+  }
+
+  #[test]
+  fn test_to_string_for_index_primitive_type() {
+    let mut layout = Layout::new_from_minor_to_major(vec![3, 2, 1, 0]);
+    layout.set_index_primitive_type(PrimitiveType::U32);
+    assert_eq!(layout.to_string(), "{3,2,1,0:#(u32)}");
+  }
+
+  #[test]
+  fn test_to_string_for_pointer_primitive_type() {
+    let mut layout = Layout::new_from_minor_to_major(vec![3, 2, 1, 0]);
+    layout.set_pointer_primitive_type(PrimitiveType::U16);
+    assert_eq!(layout.to_string(), "{3,2,1,0:*(u16)}");
+  }
+
+  #[test]
+  fn test_to_string_for_element_size() {
+    let mut layout = Layout::new_from_minor_to_major(vec![3, 2, 1, 0]);
+    layout.set_element_size_in_bits(42);
+    assert_eq!(layout.to_string(), "{3,2,1,0:E(42)}");
+  }
+
+  #[test]
+  fn test_to_string_for_memory_space() {
+    let mut layout = Layout::new_from_minor_to_major(vec![3, 2, 1, 0]);
+    layout.set_memory_space(3);
+    assert_eq!(layout.to_string(), "{3,2,1,0:S(3)}");
+  }
+
+  #[test]
+  fn test_to_string_for_split_configs() {
+    let mut layout = Layout::new_from_minor_to_major(vec![0, 1]);
+    layout.add_split_config(SplitConfig::new(0, vec![3]));
+    layout.add_split_config(SplitConfig::new(1, vec![0, 4]));
+    assert_eq!(layout.to_string(), "{0,1:SC(0:3)(1:0,4)}");
+  }
+
+  #[test]
+  fn test_to_string_for_physical_shape() {
+    let mut layout = Layout::new_from_minor_to_major(vec![0, 1]);
+    let shape = ShapeUtil::make_shape(
+      &PrimitiveType::S32, vec![10, 20]);
+    layout.set_physical_shape(shape);
+    assert_eq!(layout.to_string(), "{0,1:P(s32[10,20]{1,0})}");
+  }
+
+  #[test]
+  fn test_to_string_for_dynamic_shape_metadata_prefix_bytes() {
+    let mut layout = Layout::new_from_minor_to_major(vec![0, 1]);
+    layout.set_dynamic_shape_metadata_prefix_bytes(123);
+    assert_eq!(layout.to_string(), "{0,1:M(123)}");
+  }
+
+  #[test]
+  fn test_to_string_for_multiple_properties() {
+    let mut layout = Layout::new_from(
+      vec![3, 2, 1, 0],
+      vec![], vec![], vec![],
+      vec![Tile::new(vec![42, 123]), Tile::new(vec![4, 5])],
+      1,
+      PrimitiveType::Invalid,
+      PrimitiveType::Invalid,
+      0, 0, None,
+      0);
+    layout.set_tail_padding_alignment_in_elements(100);
+    layout.set_element_size_in_bits(42);
+    assert_eq!(layout.to_string(), "{3,2,1,0:T(42,123)(4,5)L(100)E(42)}");
   }
 
   #[test]
   fn test_equality() {
     assert_eq!(LayoutEqual::new().equal(
-      &Layout::new(),
-      &Layout::new()),
+      &Layout::default(),
+      &Layout::default()),
       true);
     assert_eq!(LayoutEqual::new().equal(
       &Layout::new_from_minor_to_major(vec![]),
       &Layout::new_from_minor_to_major(vec![])),
       true);
     assert_eq!(LayoutEqual::new().equal(
-      &Layout::new(),
+      &Layout::default(),
       &Layout::new_from_minor_to_major(vec![])),
       true);
     assert_eq!(LayoutEqual::new().equal(
@@ -820,5 +1044,23 @@ mod tests {
     l2 = Layout::new_from_minor_to_major(vec![0, 1, 2]);
     l2.set_memory_space(3);
     assert_eq!(LayoutEqual::new().ignore_memory_space().equal(&l1, &l2), true);
+  }
+
+  #[test]
+  fn test_delete_dimension_works_for_deleting_last_dim_from_dense_layout() {
+    let mut layout = Layout::new_from_minor_to_major(vec![0, 1]);
+    assert_eq!(layout.minor_to_major_size(), 2);
+
+    layout.delete_dimension(1);
+    assert_eq!(layout.minor_to_major_vec(), &vec![0]);
+  }
+
+  #[test]
+  fn test_delete_dimension_works_for_deleting_non_last_dim_from_dense_layout() {
+    let mut layout = Layout::new_from_minor_to_major(vec![1, 0]);
+    assert_eq!(layout.minor_to_major_size(), 2);
+
+    layout.delete_dimension(0);
+    assert_eq!(layout.minor_to_major_vec(), &vec![0]);
   }
 }

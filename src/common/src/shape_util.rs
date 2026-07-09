@@ -5,7 +5,7 @@ use crate::{
   layout::Tile,
   layout_util::LayoutUtil,
   overflow_util::{self, overflow_safe_multiply},
-  permutation_util::compose_permutation,
+  permutation_util::compose_permutations,
   primitive_util,
   printer::{Printer, StringPrinter},
   shape::{ProgramShape, Shape, ShapeEqual},
@@ -1058,9 +1058,9 @@ impl ShapeUtil {
       return false;
     }
 
-    let permutations = compose_permutation(
-      dimension_mapping,
-      output_shape.layout().as_ref().unwrap().minor_to_major_vec().clone());
+    let permutations = compose_permutations(
+      &dimension_mapping,
+      &output_shape.layout().as_ref().unwrap().minor_to_major_vec().clone());
     
     &permutations == input_shape.layout().as_ref().unwrap().minor_to_major_vec()
   }
