@@ -480,7 +480,7 @@ impl ShapeUtil {
 
   // Creates a tuple shape from a slice of element shapes within the tuple.
   pub fn make_tuple_shape(shapes: Vec<Shape>) -> Shape {
-    let mut result = Shape::new();
+    let mut result = Shape::default();
     result.set_element_type(PrimitiveType::Tuple);
     result.tuple_shapes_vec_mut().reserve(shapes.len());
     for shape in shapes {
@@ -495,7 +495,7 @@ impl ShapeUtil {
   }
 
   pub fn make_tuple_shape_with_ptrs(shapes: Vec<&Shape>) -> Shape {
-    let mut result = Shape::new();
+    let mut result = Shape::default();
     result.set_element_type(PrimitiveType::Tuple);
     result.tuple_shapes_vec_mut().reserve(shapes.len());
     for shape in shapes {
@@ -517,7 +517,7 @@ impl ShapeUtil {
   }
 
   pub fn make_opaque_shape() -> Shape {
-    let mut result = Shape::new();
+    let mut result = Shape::default();
     result.set_element_type(PrimitiveType::OpaqueType);
     let err =
       ShapeUtil::validate_shape_with_optional_layout(&result);
@@ -530,7 +530,7 @@ impl ShapeUtil {
   // Creates a token shape.
   // Values of this shape are used for ordering side-effecting operations.
   pub fn make_token_shape() -> Shape {
-    let mut result = Shape::new();
+    let mut result = Shape::default();
     result.set_element_type(PrimitiveType::Token);
     let err =
       ShapeUtil::validate_shape_with_optional_layout(&result);
@@ -629,7 +629,7 @@ impl ShapeUtil {
 
   // Constructs a new shape with the given element type and sequence of dimensions.
   pub fn make_shape(elt_t: &PrimitiveType, dimensions: Vec<i64>) -> Shape {
-    let mut shape = Shape::new();
+    let mut shape = Shape::default();
     assert!(ShapeUtil::fill_new_shape(elt_t, &dimensions, &mut shape));
     shape
   }
@@ -656,7 +656,7 @@ impl ShapeUtil {
   // dimensions. Method checks the element type is valid, the shape's
   // size fits in i64::max(), and dynamic size is not marked static.
   pub fn make_validated_shape(elt_t: &PrimitiveType, dimensions: &Vec<i64>) -> Shape {
-    let mut shape = Shape::new();
+    let mut shape = Shape::default();
     if !ShapeUtil::fill_new_shape(elt_t, dimensions, &mut shape) {
       assert!(false, "Invalid shape type={:?}, dims={:?}.", elt_t, dimensions);
     }
@@ -672,7 +672,7 @@ impl ShapeUtil {
       assert!(false, "Dynamic dimensions size {} did not match number of dimensions {}.",
         dynamic_dimensions.len(), dimensions.len());
     }
-    let mut shape = Shape::new();
+    let mut shape = Shape::default();
     if !ShapeUtil::fill_new_shape(elt_t, &dimensions, &mut shape) {
       assert!(false, "Invalid shape type={:?}, dims={:?}.",
         elt_t, dimensions);

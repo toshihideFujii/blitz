@@ -19,7 +19,6 @@ impl AsyncRuntime {
   pub fn await_token() {}
 
   pub fn create_value() {}
-  pub fn set_available() {}
   pub fn set_error_value() {}
   pub fn is_error_value() {}
   pub fn await_value() {}

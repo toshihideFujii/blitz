@@ -408,7 +408,7 @@ impl HloParser {
 
   pub fn parse_shape_only(&mut self) -> Result<Shape, String> {
     self.lexer.lex(0);
-    let mut shape = Shape::new();
+    let mut shape = Shape::default();
     if !self.parse_shape(&mut shape, true) {
       let mut error_msg = "Syntax error:\n".to_string();
       error_msg.push_str(&self.get_error());
@@ -932,7 +932,7 @@ impl HloParser {
       return false;
     }
     let mut shape_loc: usize = 0;
-    let mut shape = Shape::new();
+    let mut shape = Shape::default();
     if self.can_be_param_list_to_shape() &&
       !self.parse_param_list_to_shape(&mut shape, &mut shape_loc)
     {
@@ -1049,7 +1049,7 @@ impl HloParser {
     name_loc: usize,
     allow_attributes: bool) -> bool
   {
-    let mut shape = Shape::new();
+    let mut shape = Shape::default();
     let mut opcode = HloOpcode::Abs;
     let mut async_wrapped_opcode = HloOpcode::Abs;
 
@@ -3249,7 +3249,7 @@ impl HloParser {
       // empty
     } else {
       loop {
-        let mut shape = Shape::new();
+        let mut shape = Shape::default();
         let mut name = String::new();
         if !self.parse_name(&mut name) ||
           !self.parse_shape(&mut shape, true)
@@ -3447,7 +3447,7 @@ impl HloParser {
     let mut element_size_in_bits = 0;
     let mut memory_space = 0;
     let split_configs = vec![];
-    let mut physical_shape = Some(Shape::new());
+    let mut physical_shape = Some(Shape::default());
     let mut dynamic_shape_metadata_prefix_bytes = 0;
     let mut tail_padding_alignment_in_elements = 1;
 
@@ -4037,7 +4037,7 @@ impl HloParserScope {
 
 // Creates and returns a schedule created using the order of the instructions in
 // the HloComputation::instructions() vectors in the module.
-fn schedule_from_instruction_order(module: &HloModule) -> HloSchedule {
+fn schedule_from_instruction_order(module: &HloModule) -> HloSchedule<'_> {
   let mut schedule = HloSchedule::new(module);
   for comp in module.computations() {
     if !comp.is_fusion_computation() {

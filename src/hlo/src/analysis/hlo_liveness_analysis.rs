@@ -20,7 +20,7 @@ impl<'module> HloLivenessAnalysis<'module> {
     }
   }
 
-  pub fn run(module: &HloModule) -> Result<HloLivenessAnalysis, String> {
+  pub fn run(module: &HloModule) -> Result<HloLivenessAnalysis<'_>, String> {
     println!("HloLivenessAnalysis::run on module {:?}", module.name());
     println!("{:?}", module.to_string());
 

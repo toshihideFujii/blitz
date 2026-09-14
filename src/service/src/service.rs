@@ -151,7 +151,7 @@ impl<'backend> Service<'backend> {
 
   // Deconstructs a tuple. Returns a newly created GlobalDataHandle for each
   // element in the tuple.
-  pub fn deconstruct_tuple(&self, data: &GlobalData) -> Result<Vec<GlobalData>, String> {
+  pub fn deconstruct_tuple(&self, data: &GlobalData) -> Result<Vec<GlobalData<'_, '_>>, String> {
     let elements =
       self.allocation_tracker.deconstruct_tuple(data.handle().clone());
     check_error(&elements);
@@ -215,7 +215,7 @@ impl<'backend> Service<'backend> {
     &mut self,
     handle: &ExecutionHandle,
     arguments: &Vec<GlobalData>,
-    _execution_profile: Option<ExecutionProfile>) -> Result<GlobalData, String>
+    _execution_profile: Option<ExecutionProfile>) -> Result<GlobalData<'_, '_>, String>
   {
     println!("running execute request");
     let executable = self.compilation_cache.lookup(handle);
@@ -311,7 +311,7 @@ impl<'backend> Service<'backend> {
   // computation.
   pub fn execute_graph_parallel(
     &self,
-    _computations: &Vec<BlitzComputationInstance>) -> Result<Vec<GlobalData>, String>
+    _computations: &Vec<BlitzComputationInstance>) -> Result<Vec<GlobalData<'_, '_>>, String>
   {
     unimplemented!()
   }
@@ -367,7 +367,7 @@ impl<'backend> Service<'backend> {
 
     let shaped_buffer = shaped_buffer_wrapper.unwrap();
     #[allow(unused_assignments)]
-    let mut return_shape = Shape::new();
+    let mut return_shape = Shape::default();
     if shape_with_layout.is_some() {
       return_shape = Shape::new_from(shape_with_layout.as_ref().unwrap());
       if !LayoutUtil::has_layout(&return_shape) {
@@ -416,7 +416,7 @@ impl<'backend> Service<'backend> {
   pub fn transfer_to_server(
     &mut self,
     literal: &Literal,
-    device_handle: Option<&DeviceHandle>) -> Result<GlobalData, String>
+    device_handle: Option<&DeviceHandle>) -> Result<GlobalData<'_, '_>, String>
   {
     let shape = literal.shape();
     #[allow(unused_assignments)]

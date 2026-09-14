@@ -501,8 +501,8 @@ impl PrimitiveTypeNameGenerator {
 }
 
 pub fn lowercase_primitive_type_name(t: &PrimitiveType) -> String {
-  let gen = PrimitiveTypeNameGenerator::new();
-  gen.lowercase_name(t)
+  let generator = PrimitiveTypeNameGenerator::new();
+  generator.lowercase_name(t)
 }
 
 pub fn integral_type_switch<R, F>(f: &mut F, t: &PrimitiveType) -> R

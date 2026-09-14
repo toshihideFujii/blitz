@@ -1,13 +1,7 @@
 #![allow(dead_code)]
 
 use crate::{
-  util::DimensionVector,
-  layout::{Layout, LayoutEqual},
-  blitz_data::PrimitiveType,
-  primitive_util,
-  layout_util::LayoutUtil,
-  shape_util::ShapeUtil,
-  printer::Printer,
+  blitz_data::PrimitiveType, layout::{Layout, LayoutEqual}, layout_util::LayoutUtil, primitive_util::{self, is_array_type}, printer::Printer, shape_util::ShapeUtil, util::DimensionVector
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -22,7 +16,7 @@ pub struct Shape {
 impl Shape {
   pub const UNBOUNDED_SIZE: i64 = i64::MIN;
 
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     Shape {
       element_type: PrimitiveType::Invalid,
       dimensions: Vec::new(),
@@ -48,6 +42,9 @@ impl Shape {
     }
   }
 
+  // Creates a token, opaque or buffer shape.
+  // Precondition:
+  //  - `element_type` must be TOKEN, OPAQUE_TYPE or BUFFER.
   pub fn new_from_type(t: &PrimitiveType) -> Self {
     Shape {
       element_type: t.clone(),
@@ -56,6 +53,28 @@ impl Shape {
       tuple_shapes: Vec::new(),
       layout: None,
     }
+  }
+
+  // Creates an array shape. `dimensions` can be empty, in which case the shape
+  // is a scalar (degenerated array).
+  // Precondition:
+  //  - `element_type` must be a valid array type.
+  //  - `dynamic_dimensions` must be either empty or have the same size as
+  //    `dimensions`. If it's empty (the default), all dimensions are static.
+  //    Otherwise, `dynamic_dimensions[i]` is true if the `i`th dimension is
+  //    dynamic.
+  pub fn new_from_type_and_dims(
+    element_type: &PrimitiveType,
+    dimensions: &Vec<i64>,
+    dynamic_dimensions: &Vec<bool>) -> Self
+  {
+    debug_assert!(is_array_type(element_type));
+    if !dynamic_dimensions.is_empty() {
+      debug_assert_eq!(dimensions.len(), dynamic_dimensions.len());
+    }
+    let instance = Shape::new_from_type(element_type);
+
+    instance
   }
 
   // Returns a human-readable string that represents the given shape, with or
@@ -174,10 +193,16 @@ impl Shape {
     self.dynamic_dimensions[dimension] = is_dynamic;
   }
 
+  // Returns a span to indicate whether each dimension is dynamic.
+  // Precondition: this is an array shape.
   pub fn dinamic_dimensions(&self) -> &Vec<bool> {
     &self.dynamic_dimensions
   }
 
+  // Removes the given dimension from the shape. Layout, if it exists, is
+  // adjusted to match the modified shape.
+  // Precondition: this is an array shape, and the input dimension indices are
+  // valid.
   pub fn delete_dimension(&mut self, dim_to_delete: i64) {
     assert!(self.is_array());
     assert!(dim_to_delete >= 0);
@@ -187,6 +212,12 @@ impl Shape {
     if LayoutUtil::has_layout(&self) {
       self.layout.as_mut().unwrap().delete_dimension(dim_to_delete);
     }
+  }
+
+  // Like the above, but deletes multiple dimensions at once. The dimensions
+  // must not contain duplicates.
+  pub fn delete_dimensions(&mut self, _dims_to_delete: Vec<i64>) {
+    unimplemented!()
   }
 
   pub fn element_type(&self) -> PrimitiveType {
@@ -528,7 +559,7 @@ impl ProgramShape {
     ProgramShape {
       parameters: Vec::new(),
       parameter_names: Vec::new(),
-      result: Shape::new(),
+      result: Shape::default(),
     }
   }
 
@@ -632,6 +663,11 @@ mod tests {
     
     let tuple_vec = vec![opaque.clone(), scalar.clone(), matrix.clone(), matrix2.clone()];
     ShapeUtil::make_tuple_shape(tuple_vec)
+  }
+
+  #[test]
+  fn test_array_ctor_treats_empty_dynamic_dimensions_as_all_static() {
+    unimplemented!()
   }
 
   #[test]

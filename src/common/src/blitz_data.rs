@@ -302,7 +302,7 @@ impl OpSharding {
   pub fn new() -> Self {
     OpSharding {
       t: OpShardingType::Unknown,
-      tile_shape: Shape::new(),
+      tile_shape: Shape::default(),
       tile_assignment_dimensions: Vec::new(),
       tile_assignment_devices: Vec::new()
     }

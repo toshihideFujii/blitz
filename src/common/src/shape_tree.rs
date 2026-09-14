@@ -680,6 +680,14 @@ mod tests {
   }
 
   #[test]
+  fn test_shape_tree_of_non_copyable_type() {
+    let mut shape_tree: ShapeTree<i64> = ShapeTree::new(&mut create_tuple_shape());
+    assert_eq!(shape_tree.element(&vec![2]), &0); // CHECK
+    *shape_tree.mutable_element(&vec![2]) = 42;
+    assert_eq!(shape_tree.element(&vec![2]), &42);
+  }
+
+  #[test]
   fn test_copy_subtree_from_array_shape() {
     let mut source: ShapeTree<i64> = ShapeTree::new(&mut create_array_shape());
     *source.mutable_element(&vec![]) = 42;
@@ -771,6 +779,51 @@ mod tests {
     assert_eq!(destination.element(&vec![]), &10);
     assert_eq!(destination.element(&vec![0]), &11);
     assert_eq!(destination.element(&vec![1]), &12);
+  }
+
+  #[test] // FAIL
+  fn test_operator_equals() {
+    let a = ShapeTree::new_with_value(
+      &mut create_array_shape(), 123);
+    let b = ShapeTree::new_with_value(
+      &mut create_array_shape(), 42);
+    let c = ShapeTree::new_with_value(
+      &mut create_array_shape(), 42);
+    assert!(a != b);
+    assert!(b == c);
+
+    let mut a1 = ShapeTree::new(&mut create_tuple_shape());
+    *a1.mutable_element(&vec![]) = 10;
+    *a1.mutable_element(&vec![0]) = 11;
+    *a1.mutable_element(&vec![1]) = 12;
+
+    let mut b1 = ShapeTree::new(&mut create_tuple_shape());
+    *b1.mutable_element(&vec![]) = 10;
+    *b1.mutable_element(&vec![0]) = 42;
+    *b1.mutable_element(&vec![1]) = 11;
+
+    let mut c1 = ShapeTree::new(&mut create_tuple_shape());
+    *c1.mutable_element(&vec![]) = 10;
+    *c1.mutable_element(&vec![0]) = 42;
+    *c1.mutable_element(&vec![1]) = 11;
+
+    assert!(a1 != b1);
+    assert!(b1 == c1);
+
+    let mut s1 = ShapeUtil::make_shape(
+      &PrimitiveType::F32, vec![1]);
+    let mut s2 = ShapeUtil::make_shape(
+      &PrimitiveType::F32, vec![2]);
+    let mut s3 = ShapeUtil::make_shape(
+      &PrimitiveType::S32, vec![1]);
+    let a2 = ShapeTree::new_with_value(
+      &mut s1, 7);
+    let b2 = ShapeTree::new_with_value(
+      &mut s2, 7);
+    let _c2 = ShapeTree::new_with_value(
+      &mut s3, 7);
+    assert!(a2 == b2);
+    //assert!(a2 == c2);
   }
 
   #[test]

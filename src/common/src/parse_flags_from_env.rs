@@ -41,7 +41,7 @@ use crate::{
   blitz_data::{
     AutotuneBackend, CommandBufferCmdType, DebugOptions, LibraryFusionType
   },
-  debug_options_flags::GLOBAL_FUEL,
+  //debug_options_flags::GLOBAL_FUEL,
   //debug_options_flags::Flag
 };
 
@@ -214,7 +214,9 @@ pub fn parse_flags_from_env_and_ignore_unknown(
 
 // Used only for testing.  Not to be used by clients.
 pub fn reset_flags_from_env_for_testing(envvar: &String) {
-  env::remove_var(envvar);
+  unsafe {
+    env::remove_var(envvar);
+  }
   debug_assert!(env::var(envvar).is_err());
 }
 
@@ -231,19 +233,21 @@ pub fn parse_flags(_argc: i64, argv: &Vec<String>, dbg_opts: &mut DebugOptions) 
     }
     // command line
     if key_value.contains("--blitz_fuel") {
-      unsafe {
-        if GLOBAL_FUEL.get().is_none() { GLOBAL_FUEL = HashMap::new().into(); }
-      }
+      //unsafe {
+       // if GLOBAL_FUEL.get().is_none() { GLOBAL_FUEL = HashMap::new().into(); }
+      //}
+      assert!(false);
       let key_values_str = key_value.strip_prefix("--blitz_fuel=").unwrap();
       let key_values: Vec<&str> = key_values_str.split(",").collect();
       
       for k_v_str in key_values {
         let k_v: Vec<&str> = k_v_str.split('=').collect();
-        let key = k_v[0].to_string();
-        let value = k_v[1].to_string().parse::<i64>().unwrap();
-        unsafe {
-          GLOBAL_FUEL.get_mut().unwrap().insert(key, value);
-        }
+        let _key = k_v[0].to_string();
+        let _value = k_v[1].to_string().parse::<i64>().unwrap();
+        //unsafe {
+          //GLOBAL_FUEL.get_mut().unwrap().insert(key, value);
+        //}
+        assert!(false);
       }
     }
     // command line

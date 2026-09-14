@@ -29,7 +29,8 @@ impl JitExecutable {
   pub fn all_executables_compiled() {}
 
   pub fn mlir_module(&self) -> String {
-    self.mlir_module
+    //self.mlir_module
+    unimplemented!()
   }
 
   pub fn num_functions(&self) -> usize {

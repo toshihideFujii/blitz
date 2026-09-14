@@ -2,7 +2,7 @@
 name = "blitz"
 version = "0.1.0"
 authors = ["toshihidefujii"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 regex = "1.12.2"

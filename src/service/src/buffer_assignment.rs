@@ -31,6 +31,7 @@ pub struct BufferAllocation {
   param_shape_index: Vec<i64>,
   maybe_live_out: bool,
   size: i64,
+  color: i64,
   heap_traces: Vec<HeapSimulatorTrace>,
   peak_buffers: Vec<HloValue>,
   assigned_buffers: HashMap<HloValue, OffsetSize>,
@@ -38,8 +39,24 @@ pub struct BufferAllocation {
 }
 
 impl BufferAllocation {
-  pub fn new() {
-      
+  pub fn new(index: i64, size: i64, color: i64) -> Self {
+    BufferAllocation {
+      index,
+      is_thread_local: false,
+      is_tuple: false,
+      is_entry_computation_parameter: false,
+      is_parameter_aliased_with_output: false,
+      is_constant: false,
+      parameter_number: 0,
+      param_shape_index: Vec::new(),
+      maybe_live_out: true,
+      size,
+      color,
+      heap_traces: Vec::new(),
+      peak_buffers: Vec::new(),
+      assigned_buffers: HashMap::new(),
+      fragmentation_bytes: 0
+    }
   }
 
   // Returns the index of this allocation.
@@ -249,7 +266,7 @@ impl BufferAllocation {
 
 // A Slice represents a contiguous portion of a memory allocation. It is used
 // to identify the memory range that a LogicalBuffer corresponds to.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BufferAllocationSlice {
   allocation: Option<BufferAllocation>,
   offset: i64,
@@ -285,6 +302,8 @@ impl BufferAllocationSlice {
     self.size
   }
 
+  // Returns true iff this slice's memory range has a non-empty intersection
+  // with the other slice's memory range.
   pub fn overlaps_with(&self, other: &BufferAllocationSlice) -> bool {
     let end = self.offset + self.size;
     let other_end = other.offset + other.size;
@@ -522,15 +541,15 @@ impl<'module> BufferAssignment<'module> {
     unimplemented!()  
   }
 
-  pub fn dataflow_analysis(&self) -> &HloDataflowAnalysis {
+  pub fn dataflow_analysis(&self) -> &HloDataflowAnalysis<'_> {
     self.alias_analysis.dataflow_analysis()    
   }
 
-  pub fn alias_analysis(&self) -> &HloAliasAnalysis {
+  pub fn alias_analysis(&self) -> &HloAliasAnalysis<'_> {
     &self.alias_analysis
   }
 
-  pub fn hlo_ordering(&self) -> &HloOrdering {
+  pub fn hlo_ordering(&self) -> &HloOrdering<'_> {
     &self.hlo_ordering
   }
 
@@ -780,7 +799,7 @@ impl<'module> BufferAssignment<'module> {
     let mut schedule_complete = true;
     let callback =
       |_module: &HloModule| -> Result<(Vec<Shape>, Shape), String> {
-        Ok((vec![], Shape::new()))
+        Ok((vec![], Shape::default()))
       };
     for computation in self.module.computations_with_cb(callback) {
       if !computation.is_fusion_computation() {

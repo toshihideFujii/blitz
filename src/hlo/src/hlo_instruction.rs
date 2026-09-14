@@ -509,7 +509,7 @@ impl HloInstruction {
       users: Users::new(),
       parent: None,
       sharding: None,
-      shape: Shape::new(),
+      shape: Shape::default(),
       name: "".to_string(),
       metadata: None,
       collective_instruction: None,

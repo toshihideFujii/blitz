@@ -487,13 +487,13 @@ impl HloModule {
   }
 
   // Returns the schedule of the module.
-  pub fn schedule(&self) -> &HloSchedule {
+  pub fn schedule(&self) -> &HloSchedule<'_> {
     //assert!(self.has_schedule());
     //&self.schedule.as_ref().unwrap()
     unimplemented!()
   }
 
-  pub fn mutable_schedule(&mut self) -> &mut HloSchedule {
+  pub fn mutable_schedule(&mut self) -> &mut HloSchedule<'_> {
     //assert!(self.has_schedule());
     //self.schedule.as_mut().unwrap()
     unimplemented!()

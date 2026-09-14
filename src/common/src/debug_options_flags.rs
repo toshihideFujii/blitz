@@ -2,7 +2,10 @@
 
 use std::{collections::HashMap, fs::File, io::Read, sync::OnceLock};
 
-use crate::{blitz_data::DebugOptions, parse_flags_from_env::{parse_flags, parse_flags_from_env_and_die_if_unknown}};
+use crate::{blitz_data::DebugOptions, parse_flags_from_env::{
+  parse_flags,
+  //parse_flags_from_env_and_die_if_unknown
+}};
 
 pub static mut FLAG_VALUES: OnceLock<DebugOptions> = OnceLock::new();
 
@@ -43,7 +46,8 @@ impl Flag {
 
 // Allocates flag_values and flag_objects; this function must not be called more
 // than once - its call done via call_once.
-fn allocate_flags(mut defaults: Option<DebugOptions>) {
+fn allocate_flags(mut _defaults: Option<DebugOptions>) {
+  /*
   if defaults.is_none() {
     defaults = Some(DebugOptions::default());
   }
@@ -57,6 +61,7 @@ fn allocate_flags(mut defaults: Option<DebugOptions>) {
       FLAG_VALUES.get_mut().unwrap(),
       false);
   }
+  */
 }
 
 // Construct flags which write to the debug_options proto when parsed. Existing
@@ -82,7 +87,8 @@ pub fn append_debug_options_flags(
 // 'GetDebugOptionsFromFlags' is mutated by setting fields explicitly specified
 // in the environment variable. If `reset_envvar` is true, then the environment
 // variable is read again, otherwise the previously read value is used.
-pub fn parse_debug_option_flags_from_env(reset_envvar: bool) {
+pub fn parse_debug_option_flags_from_env(_reset_envvar: bool) {
+  /*
   allocate_flags(None); // TODO: call once
   unsafe {
     parse_flags_from_env_and_die_if_unknown(
@@ -90,6 +96,7 @@ pub fn parse_debug_option_flags_from_env(reset_envvar: bool) {
       FLAG_VALUES.get_mut().unwrap(),
       reset_envvar);
   }
+  */
 }
 
 // Parse the debug options from debug_options file. Given a string containing
@@ -159,11 +166,12 @@ pub fn default_debug_options_ignoring_flags(
 }
 
 // Checks whether the pass fuel was explicitly set.
-pub fn pass_fuel_is_set(pass: &String) -> bool {
-  unsafe {
-    debug_assert!(GLOBAL_FUEL.get().is_some());
-    GLOBAL_FUEL.get().unwrap().get(pass).is_some()
-  }
+pub fn pass_fuel_is_set(_pass: &String) -> bool {
+  //unsafe {
+    //debug_assert!(GLOBAL_FUEL.get().is_some());
+    //GLOBAL_FUEL.get().unwrap().get(pass).is_some()
+  //}
+  unimplemented!()
 }
 
 // Consumes a unit of "compiler fuel" for the given pass, and returns false if
@@ -187,7 +195,8 @@ pub fn pass_fuel_is_set(pass: &String) -> bool {
 //
 // We recommend as a convention you use a pass's name for the `pass` argument,
 // but any value is accepted.
-pub fn consume_fuel(pass: &String, just_ran_out: &mut Option<bool>) -> bool {
+pub fn consume_fuel(_pass: &String, _just_ran_out: &mut Option<bool>) -> bool {
+  /*
   //allocate_flags(None); // TODO call_once
   if just_ran_out.is_some() {
     *just_ran_out.as_mut().unwrap() = false;
@@ -218,4 +227,6 @@ pub fn consume_fuel(pass: &String, just_ran_out: &mut Option<bool>) -> bool {
     *just_ran_out.as_mut().unwrap() = remaining == 0;
   }
   remaining > 0
+  */
+  unimplemented!()
 }

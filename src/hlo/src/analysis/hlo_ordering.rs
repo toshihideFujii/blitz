@@ -385,7 +385,7 @@ impl<'module> HloOrdering<'module> {
   }
 
   // Return the call graph of the module used to compute ordering.
-  pub fn call_graph(&self) -> &CallGraph {
+  pub fn call_graph(&self) -> &CallGraph<'_> {
     &self.call_graph
   }
   

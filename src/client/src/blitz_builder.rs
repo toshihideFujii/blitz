@@ -3109,7 +3109,7 @@ impl BlitzBuilder {
     check_error(&state_shape_wrapper);
 
     let state_shape = state_shape_wrapper.unwrap();
-    let mut output_shape = Shape::new();
+    let mut output_shape = Shape::default();
     if shape.is_array() {
       // Make output_shape the same as the input shape, but with an unsigned
       // integral type.

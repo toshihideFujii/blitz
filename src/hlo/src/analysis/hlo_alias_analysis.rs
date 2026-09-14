@@ -177,7 +177,7 @@ impl<'module> HloAliasAnalysis<'module> {
   }
 
   // Returns the underlying dataflow analysis used by this alias analysis.
-  pub fn dataflow_analysis(&self) -> &HloDataflowAnalysis {
+  pub fn dataflow_analysis(&self) -> &HloDataflowAnalysis<'_> {
     &self.dataflow_analysis
   }
 

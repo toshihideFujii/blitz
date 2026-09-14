@@ -29,7 +29,7 @@ fn scalar_shape(t: &PrimitiveType) -> Shape {
 
 // Create a nullary tuple.
 fn nil_shape() -> Shape {
-  //Shape::new()
+  //Shape::default()
   ShapeUtil::make_nil()
 }
 
@@ -2174,7 +2174,7 @@ pub struct Piece {
 impl Piece {
   pub fn new() -> Self {
     let mut instance = Piece {
-      subshape: Shape::new(),
+      subshape: Shape::default(),
       children: Some(Vec::new()), //None,
       data: Vec::new(),
       storage: Storage::default(),
@@ -2824,7 +2824,7 @@ pub struct LiteralSlice<'p> {
 }
 
 impl<'p> LiteralSlice<'p> {
-  pub fn new(literal: &Literal) -> LiteralSlice {
+  pub fn new(literal: &Literal) -> LiteralSlice<'_> {
     LiteralSlice { root_piece: &literal.root_piece }
   }
 

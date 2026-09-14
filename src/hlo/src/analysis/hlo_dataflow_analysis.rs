@@ -280,7 +280,7 @@ impl<'module> HloDataflowAnalysis<'module> {
   }
 
   // Returns the call graph used for computing the dataflow.
-  pub fn call_graph(&self) -> &CallGraph {
+  pub fn call_graph(&self) -> &CallGraph<'_> {
     &self.call_graph
   }
 
