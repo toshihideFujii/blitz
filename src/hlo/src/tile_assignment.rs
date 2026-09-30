@@ -237,18 +237,24 @@ impl TileAssignment {
 
   pub fn dimensions(&self) -> &Vec<i64> {
     if self.array.is_some() {
-      self.array.as_ref().unwrap().dimensions()
-    } else {
-      self.iota.as_ref().unwrap().dims()
+      return self.array.as_ref().unwrap().dimensions();
+    } else if self.array_2d.is_some() {
+      return self.array_2d.as_ref().unwrap().dimensions();
+    } else if self.iota.is_some() {
+      return self.iota.as_ref().unwrap().dims();
     }
+    unreachable!()
   }
 
   pub fn num_dimensions(&self) -> usize {
     if self.array.is_some() {
-      self.array.as_ref().unwrap().num_dimensions()
-    } else {
-      self.iota.as_ref().unwrap().ndims()
+      return self.array.as_ref().unwrap().num_dimensions();
+    } else if self.array_2d.is_some() {
+      return self.array_2d.as_ref().unwrap().num_elements();
+    } else if self.iota.is_some(){
+      return self.iota.as_ref().unwrap().ndims();
     }
+    unreachable!();
   }
 
   pub fn dim(&self, n: i64) -> i64 {
@@ -261,10 +267,13 @@ impl TileAssignment {
 
   pub fn num_elements(&self) -> i64 {
     if self.array.is_some() {
-      self.array.as_ref().unwrap().num_elements() as i64
-    } else {
-      self.iota.as_ref().unwrap().num_elements()
+      return self.array.as_ref().unwrap().num_elements() as i64;
+    } else if self.array_2d.is_some() {
+      return self.array_2d.as_ref().unwrap().num_elements() as i64;
+    } else if self.iota.is_some() {
+      return self.iota.as_ref().unwrap().num_elements();
     }
+    unreachable!()
   }
 
   pub fn first(&self) -> i64 {

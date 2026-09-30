@@ -1,27 +1,15 @@
 #![allow(dead_code)]
 
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}};
 
 use common::{
   blitz_data::{
-    Algorithm, CholeskyOptions, ConvolutionDimensionNumbers, DotDimensionNumbers,
-    FftType, FrontendAttributes, GatherDimensionNumbers, OpMetadata, PaddingConfig,
-    PaddingType, ParameterReplication, Precision, PrecisionConfig, PrimitiveType,
-    RandomAlgorithm, RandomDistribution, ReplicaGroup, ResultAccuracy,
-    ScatterDimensionNummbers, SliceDimensions, SparsityDescriptor, Statisitic,
-    StatisticsViz, TriangularSolveOptions, WhileLoopBackendConfig, Window
-  },
-  comparison_util::{ComparisonDirection, ComparisonType},
-  literal::Literal,
-  printer::{Printer, StringPrinter},
-  shape::Shape, shape_util::ShapeUtil
+    Algorithm, CholeskyOptions, ConvolutionDimensionNumbers, CustomCallApiVersion, CustomCallSchedule, DotDimensionNumbers, FftType, FrontendAttributes, GatherDimensionNumbers, OpMetadata, PaddingConfig, PaddingType, ParameterReplication, Precision, PrecisionConfig, PrimitiveType, RandomAlgorithm, RandomDistribution, ReplicaGroup, ResultAccuracy, ResultAccuracyMode, ScatterDimensionNummbers, SliceDimensions, SparsityDescriptor, Statisitic, StatisticsViz, TriangularSolveOptions, WhileLoopBackendConfig, Window
+  }, comparison_util::{ComparisonDirection, ComparisonType}, literal::Literal, printer::{Printer, StringPrinter}, shape::Shape, shape_util::ShapeUtil
 };
 
 use crate::{
-  collective_device_list::CollectiveDeviceList,
-  dfs_hlo_visitor_with_default::{DfsHloVisitor, DfsHloVisitorWithDefault},
-  hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata,
-  hlo_instructions::{
+  collective_device_list::CollectiveDeviceList, dfs_hlo_visitor_with_default::{DfsHloVisitor, DfsHloVisitorWithDefault}, hlo_computation::HloComputation, hlo_domain_metadata::DomainMetadata, hlo_instructions::{
     HloAsyncInstruction,
     HloAsyncStartInstruction,
     HloBatchNormGradInstruction,
@@ -54,9 +42,7 @@ use crate::{
     HloSortInstruction,
     HloTopKInstruction,
     HloTransposeInstruction
-  },
-  hlo_module::HloModule, hlo_opcode::HloOpcode, hlo_original_value::OriginalValue,
-  hlo_sharding::HloSharding, name_uniquer::NameUniquer
+  }, hlo_module::HloModule, hlo_opcode::{HloOpcode, hlo_opcode_is_async}, hlo_original_value::OriginalValue, hlo_sharding::HloSharding, name_uniquer::NameUniquer
 };
 
 #[derive(Clone, PartialEq)]
@@ -91,6 +77,7 @@ pub struct HloPrintOptions {
   print_extra_attributes: bool,
   syntax_sugar_async_ops: bool,
   print_name_after_closing_brace: bool,
+  compact_gte: bool,
 }
 
 impl HloPrintOptions {
@@ -119,6 +106,7 @@ impl HloPrintOptions {
       print_extra_attributes: true,
       syntax_sugar_async_ops: true,
       print_name_after_closing_brace: false,
+      compact_gte: false,
     }
   }
 
@@ -376,6 +364,12 @@ impl HloPrintOptions {
   pub fn print_name_after_closing_brace(&self) -> bool {
     self.print_name_after_closing_brace
   }
+
+  // If true, GTE (get-tuple-element) instructions will be compacted.
+  pub fn set_compact_gte(&mut self, value: bool) -> &mut Self {
+    self.compact_gte = value;
+    self
+  }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -405,8 +399,20 @@ struct Rare {
   //    z = add(x,y), frontend_attributes={y}
   // Could be simplified to:
   //    z' = const(20), frontend_attributes={?}
-  frontend_attributes: FrontendAttributes,
+
+  //frontend_attributes: FrontendAttributes,
   statistics_vis: StatisticsViz,
+}
+
+impl Rare {
+  pub fn default() -> Self {
+    Rare {
+      called_computations: Vec::new(),
+      control_predecessors: Vec::new(),
+      control_successors: Vec::new(),
+      statistics_vis: StatisticsViz::default()
+    }
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -493,6 +499,10 @@ pub struct HloInstruction {
   metadata: Option<OpMetadata>,
   collective_instruction: Option<HloCollectiveInstruction>,
   is_root: bool,
+  parameter_number: i64,
+  parameter_replicated_at_leaf_buffers: Vec<bool>,
+  original_value: OriginalValue,
+  backend_config: String,
 }
 
 impl HloInstruction {
@@ -514,6 +524,10 @@ impl HloInstruction {
       metadata: None,
       collective_instruction: None,
       is_root: false,
+      parameter_number: 0,
+      parameter_replicated_at_leaf_buffers: Vec::new(),
+      original_value: OriginalValue::default(),
+      backend_config: String::new(),
     }
   }
 
@@ -521,12 +535,32 @@ impl HloInstruction {
 
   // Creates a parameter-retrieving insstruction.
   pub fn create_parameter(
-    _parameter_number: i64,
-    _shape: &Shape,
-    _name: String) -> HloInstruction //HloParameterInstruction
+    parameter_number: i64,
+    shape: &Shape,
+    name: String) -> HloInstruction //HloParameterInstruction
   {
-    //HloParameterInstruction::new(parameter_number, shape, name)
-    unimplemented!()
+    HloInstruction {
+      unique_id: 0,
+      index_in_parent: 0,
+      opcode: HloOpcode::Abs,
+      is_default_config: false,
+      cleaned_up: false,
+      marked_as_dead: false,
+      operands: Vec::new(),
+      rare: None,
+      users: Users::new(),
+      parent: None,
+      sharding: None,
+      shape: shape.clone(),
+      name: name,
+      metadata: None,
+      collective_instruction: None,
+      is_root: false,
+      parameter_number: parameter_number,
+      parameter_replicated_at_leaf_buffers: Vec::new(),
+      original_value: OriginalValue::default(),
+      backend_config: String::new(),
+    }
   }
 
   // Creates a literal constant instruction.
@@ -1835,13 +1869,15 @@ impl HloInstruction {
   pub fn copy_backend_config_from() {}
 
     // Adds or overrides a single attribute in the HloInstruction.
-  pub fn set_frontend_attribute(&mut self, key: String, value: String) {
-    self.mutable_rare().frontend_attributes.set_attribute(key, value);
+  pub fn set_frontend_attribute(&mut self, _key: String, _value: String) {
+    //self.mutable_rare().frontend_attributes.set_attribute(key, value);
+    unimplemented!()
   }
 
-  pub fn set_frontend_attributes(&mut self, frontend_attributes: FrontendAttributes) {
-    if !self.has_rare() && frontend_attributes.map().is_empty() { return; }
-    self.mutable_rare().frontend_attributes = frontend_attributes;
+  pub fn set_frontend_attributes(&mut self, _frontend_attributes: FrontendAttributes) {
+    //if !self.has_rare() && frontend_attributes.map().is_empty() { return; }
+    //self.mutable_rare().frontend_attributes = frontend_attributes;
+    unimplemented!()
   }
 
   pub fn add_frontend_attributes(&mut self, _frontend_attributes: FrontendAttributes) {
@@ -1855,11 +1891,13 @@ impl HloInstruction {
   }
 
   pub fn frontend_attributes(&self) -> &FrontendAttributes {
-    &self.rare().frontend_attributes
+    //&self.rare().frontend_attributes
+    unimplemented!()
   }
 
   pub fn mutable_frontend_attributes(&mut self) -> &mut FrontendAttributes {
-    &mut self.mutable_rare().frontend_attributes
+    //&mut self.mutable_rare().frontend_attributes
+    unimplemented!()
   }
 
   pub fn has_frontend_attributes(&self) -> bool {
@@ -1900,11 +1938,11 @@ impl HloInstruction {
   // Getter/setter for raw JSON-encoded backend config.  Prefer the
   // functions above that deal in proto Messages where possible.
   pub fn raw_backend_config_string(&self) -> String {
-    unimplemented!()
+    self.backend_config.clone()
   }
 
-  pub fn set_raw_backend_config_string(&mut self, _config_str: String) {
-    unimplemented!()
+  pub fn set_raw_backend_config_string(&mut self, config_str: String) {
+    self.backend_config = config_str
   }
 
   pub fn is_default_config(&self) -> bool {
@@ -2163,7 +2201,7 @@ impl HloInstruction {
   }
 
   pub fn parameter_number(&self) -> i64 {
-    unimplemented!()
+    self.parameter_number
   }
 
   pub fn set_parameter_number(&mut self, _parameter_number: i64) {
@@ -2172,8 +2210,8 @@ impl HloInstruction {
 
   // Sets and gets the whether all replicas will receive the same parameter data
   // for each leaf buffer in data parallelism.
-  pub fn set_parameter_replicated_at_leaf_buffers(&mut self, _replicated: Vec<bool>) {
-    unimplemented!()
+  pub fn set_parameter_replicated_at_leaf_buffers(&mut self, replicated: Vec<bool>) {
+    self.parameter_replicated_at_leaf_buffers = replicated;
   }
 
   pub fn parameter_replicated_at_leaf_byffers(&self) -> Option<&Vec<bool>> {
@@ -2348,8 +2386,10 @@ impl HloInstruction {
     unimplemented!()
   }
 
+  // Returns true if the instruction is an async-start, async-update, or
+  // async-done.
   pub fn is_asynchronous(&self) -> bool {
-    unimplemented!()
+    hlo_opcode_is_async(&self.opcode)
   }
 
   pub fn async_chain_start() {}
@@ -2570,8 +2610,8 @@ impl HloInstruction {
     self.unique_indices()
   }
 
-  pub fn set_original_value(&mut self, _original_value: OriginalValue) {
-    unimplemented!()
+  pub fn set_original_value(&mut self, original_value: OriginalValue) {
+    self.original_value = original_value;
   }
 
   fn is_elementwise_impl(&self, _operand_idx: Option<i64>) -> bool {
@@ -2609,7 +2649,9 @@ impl HloInstruction {
   }
 
   fn mutable_rare(&mut self) -> &mut Rare {
-    assert!(self.has_rare());
+    if !self.has_rare() {
+      self.rare = Some(Rare::default());
+    }
     self.rare.as_mut().unwrap()
   }
 }
@@ -2640,8 +2682,52 @@ pub fn string_to_precision(_name: &String) -> Result<Precision, String> {
   unimplemented!()
 }
 
+pub fn string_to_result_accuracy(
+  name: &String) -> Result<ResultAccuracyMode, String>
+{
+  if name == "Default" {
+    Ok(ResultAccuracyMode::Default)
+  } else if name == "Highest" {
+    Ok(ResultAccuracyMode::Highest)
+  } else {
+    Err("Unknown result accuracy".to_string())
+  }
+}
+
 pub fn string_to_algorithm(_name: &String) -> Result<Algorithm, String> {
   unimplemented!()
+}
+
+pub fn string_to_custom_call_schedule(
+  name: &String) -> Result<CustomCallSchedule, String>
+{
+  if name == "None" {
+    Ok(CustomCallSchedule::None)
+  } else if name == "Latest" {
+    Ok(CustomCallSchedule::Latest)
+  } else if name == "Earliest" {
+    Ok(CustomCallSchedule::Earliest)
+  } else {
+    Err("Unknown custom call schedule".to_string())
+  }
+}
+
+pub fn string_to_custom_call_api_version(
+  name: &String) -> Result<CustomCallApiVersion, String>
+{
+  if name == "Unspecified" {
+    Ok(CustomCallApiVersion::Unspecified)
+  } else if name == "Original" {
+    Ok(CustomCallApiVersion::Original)
+  } else if name == "StatusReturning" {
+    Ok(CustomCallApiVersion::StatusReturning)
+  } else if name == "StatusReturningUnified" {
+    Ok(CustomCallApiVersion::StatusReturningUnified)
+  } else if name == "TypedFfi" {
+    Ok(CustomCallApiVersion::TypedFfi)
+  } else {
+    Err("Unknown custom call api version".to_string())
+  }
 }
 
 pub fn print_name(name: String, print_ids: bool) -> String {

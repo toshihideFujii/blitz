@@ -1,37 +1,64 @@
 #![allow(dead_code)]
 
-use std::vec;
-
-use common::{blitz_data::PrimitiveType, primitive_util, shape::{Shape, ShapeEqual}, shape_util::ShapeUtil};
-use hlo::{hlo_computation::HloComputation, hlo_instruction::HloInstruction, hlo_opcode::hlo_opcode_string};
+use std::{collections::HashSet, vec};
+use common::{
+  blitz_data::PrimitiveType, primitive_util,
+  shape::{Shape, ShapeEqual}, shape_util::ShapeUtil
+};
+use hlo::{
+  hlo_computation::HloComputation, hlo_instruction::HloInstruction, hlo_module::HloModule, hlo_opcode::hlo_opcode_string
+};
 
 use crate::shape_inference::ShapeInference;
 
+fn default_insstruction_can_change_layout_func(_instruction: &HloInstruction) -> bool
+{
+  true
+}
 
-pub struct HloVerifierOpts {
+fn default_shape_size_func(_shape: &Shape) -> i64 {
+  0
+}
+
+pub struct HloVerifierOpts<'func> {
   layout_sensitive: bool,
   allow_mixed_precision: bool,
   verify_broadcast_dimensions_order: bool,
   verify_reshape_is_bitcast: bool,
-  verify_custom_call_nested_computation_thread_name: bool,
+  verify_call_nested_computation_thread_name: bool,
   verify_sharding_device_numbers: bool,
   allow_bitcast_to_have_different_size: bool,
   allow_unbounded_dynamism: bool,
+  verify_no_collective_deadlocks: bool,
+  verify_instruction_name_unchanged: bool,
+  verify_no_host_memory_space: bool,
+  instruction_can_change_layout: Option<&'func dyn Fn(&HloInstruction)->bool>,
+  shape_size: Option<&'func dyn Fn(&Shape)->i64>,
+  check_replica_groups: bool,
 }
 
-impl HloVerifierOpts {
+impl<'func> HloVerifierOpts<'func> {
+  pub fn default() -> Self {
+    HloVerifierOpts {
+      layout_sensitive: false,
+      allow_mixed_precision: false,
+      verify_broadcast_dimensions_order: false,
+      verify_reshape_is_bitcast: false,
+      verify_call_nested_computation_thread_name: false,
+      verify_sharding_device_numbers: false,
+      allow_bitcast_to_have_different_size: false,
+      allow_unbounded_dynamism: false,
+      verify_no_collective_deadlocks: false,
+      verify_instruction_name_unchanged: false,
+      verify_no_host_memory_space: false,
+      instruction_can_change_layout: None, //&default_insstruction_can_change_layout_func,
+      shape_size: None, //&default_shape_size_func,
+      check_replica_groups: false,
+    }    
+  }
+
   pub fn make_layout_sensitive(&mut self) -> &mut Self {
     self.layout_sensitive = true;
-    self
-  }
-
-  pub fn with_layout_sensitive(&mut self, layout_sensitive: bool) -> &mut Self {
-    self.layout_sensitive = layout_sensitive;
-    self
-  }
-
-  pub fn with_allow_mixed_precision(&mut self, allow_mixed_precision: bool) -> &mut Self{
-    self.allow_mixed_precision = allow_mixed_precision;
     self
   }
 
@@ -40,60 +67,109 @@ impl HloVerifierOpts {
     self
   }
 
+  pub fn with_layout_sensitive(&mut self, layout_sensitive: bool) -> &mut Self {
+    self.layout_sensitive = layout_sensitive;
+    self
+  }
+
+  pub fn with_allow_mixed_precision(
+    &mut self, allow_mixed_precision: bool) -> &mut Self
+  {
+    self.allow_mixed_precision = allow_mixed_precision;
+    self
+  }
+
   pub fn verify_broadcast_dimensions_order(&mut self) -> &mut Self {
     self.verify_broadcast_dimensions_order = true;
     self
   }
-
   pub fn verify_reshape_is_bitcast(&mut self) -> &mut Self {
     self.verify_reshape_is_bitcast = true;
     self
   }
 
-  pub fn verify_custom_call_nested_computation_thread_name(&mut self) -> &mut Self {
-    self.verify_custom_call_nested_computation_thread_name = true;
+  pub fn verify_call_nested_computation_thread_name(&mut self) -> &mut Self {
+    self.verify_call_nested_computation_thread_name = true;
     self
   }
 
-  pub fn with_allow_bitcast_to_have_different_size(
-    &mut self, allow_bitcast_to_have_different_size: bool) -> &mut Self
-  {
-    self.allow_bitcast_to_have_different_size = allow_bitcast_to_have_different_size;
+  pub fn with_allow_bitcast_to_have_different_size(&mut self, allow: bool) -> &mut Self {
+    self.allow_bitcast_to_have_different_size = allow;
     self    
   }
 
-  pub fn with_instruction_can_change_layout() {
-      
-  }
-
-  pub fn with_verify_sharding_device_numbers(
-    &mut self, verify_sharding_device_numbers: bool) -> &mut Self
+  pub fn with_instruction_can_change_layout(
+    &mut self,
+    instruction_can_change_layout: &'func dyn Fn(&HloInstruction)->bool) -> &mut Self
   {
-    self.verify_sharding_device_numbers = verify_sharding_device_numbers;
-    self    
-  }
-
-  pub fn with_verify_s4_u4_usage(&mut self, _verify: bool) -> &mut Self {
+    self.instruction_can_change_layout = Some(instruction_can_change_layout);
     self
   }
 
-  pub fn with_allow_unbounded_dynamism(
-    &mut self, allow_unbounded_dynamism: bool) -> &mut Self
+  pub fn with_custom_shape_size(
+    &mut self, shape_size: &'func dyn Fn(&Shape)->i64) -> &mut Self
   {
-    self.allow_unbounded_dynamism = allow_unbounded_dynamism;
+    self.shape_size = Some(shape_size);
+    self
+  }
+
+  pub fn with_verify_sharding_device_numbers(&mut self, verify: bool) -> &mut Self {
+    self.verify_sharding_device_numbers = verify;
     self    
+  }
+
+  pub fn with_allow_unbounded_dynamism(&mut self, allow: bool) -> &mut Self {
+    self.allow_unbounded_dynamism = allow;
+    self    
+  }
+
+  pub fn verify_instruction_name_unchanged(&mut self) -> &mut Self {
+    self.verify_instruction_name_unchanged = true;
+    self
+  }
+
+  pub fn verify_no_host_memory_space(&mut self) -> &mut Self {
+    self.verify_no_host_memory_space = true;
+    self
+  }
+
+  pub fn with_verify_no_collective_deadlocks(
+    &mut self, verify_no_collective_deadlocks: bool) -> &mut Self
+  {
+    self.verify_no_collective_deadlocks = verify_no_collective_deadlocks;
+    self
+  }
+
+  pub fn with_check_replica_groups(&mut self, check_replica_groups: bool) -> &mut Self {
+    self.check_replica_groups = check_replica_groups;
+    self
   }
 
   pub fn is_layout_sensitive(&self) -> bool {
     self.layout_sensitive
   }
 
+  pub fn check_for_collective_deadlocks(&self) -> bool {
+    self.verify_no_collective_deadlocks
+  }
+
   pub fn allow_mixed_precision(&self) -> bool {
     self.allow_mixed_precision
   }
 
-  pub fn instruction_can_change_layout(&self) {
-      
+  pub fn instruction_can_change_layout(&self, instruction: &HloInstruction) -> bool {
+    if self.instruction_can_change_layout.is_some() {
+      return self.instruction_can_change_layout.unwrap()(instruction);
+    }
+    false
+  }
+
+  pub fn shape_size(&self, shape: &Shape) -> i64 {
+    self.shape_size.unwrap()(shape)
+  }
+
+  pub fn should_check_replica_groups(&self) -> bool {
+    self.check_replica_groups
   }
 }
 
@@ -580,4 +656,73 @@ pub fn check_operand_count(hlo: &HloInstruction, expected: usize) -> Result<(), 
     return Err(err_msg);
   }
   Ok(())
+}
+
+// An interface used to encapsulate target-specific verification quirks.
+pub struct TargetVerifierMetadata<'func> {
+  opts: HloVerifierOpts<'func>
+}
+
+impl<'func> TargetVerifierMetadata<'func> {
+  pub fn new(opts: HloVerifierOpts<'func>) -> Self {
+    TargetVerifierMetadata { opts }
+  }
+
+  pub fn get_verifier() {
+    unimplemented!()
+  }
+
+  pub fn get_verifier_opts(&self) -> &HloVerifierOpts<'_> {
+    &self.opts
+  }
+}
+
+// HLO pass that verifies invariants of HLO instructions for each computation in
+// the module.
+pub struct HloVerifier<'func> {
+  target_metadata: TargetVerifierMetadata<'func>,
+  context: String
+}
+
+impl<'func> HloVerifier<'func> {
+  pub fn new(
+    layout_sensitive: bool,
+    allow_mixed_precision: bool,
+    instruction_can_change_layout_func: &'func dyn Fn(&HloInstruction)->bool,
+    shape_size_func: &'func dyn Fn(&Shape)->i64,
+    verify_no_collective_deadlocks: bool) -> Self
+  {
+    let mut opts = HloVerifierOpts::default();
+    opts.with_layout_sensitive(layout_sensitive)
+      .with_allow_mixed_precision(allow_mixed_precision)
+      .with_instruction_can_change_layout(instruction_can_change_layout_func)
+      .with_custom_shape_size(shape_size_func)
+      .with_verify_no_collective_deadlocks(verify_no_collective_deadlocks);
+    HloVerifier::new_from_opts(opts)
+  }
+
+  pub fn new_from_opts(opts: HloVerifierOpts<'func>) -> Self {
+    HloVerifier {
+      target_metadata: TargetVerifierMetadata::new(opts),
+      context: "Unknown".to_string()
+    }
+  }
+
+  pub fn new_from_metadata(
+    target_metadata: TargetVerifierMetadata<'func>, context: String) -> Self
+  {
+    HloVerifier { target_metadata, context }
+  }
+
+  pub fn run(
+    &self,
+    _module: &HloModule,
+    _execution_threads: HashSet<String>) -> Result<bool, String>
+  {
+    unimplemented!()
+  }
+
+  pub fn name(&self) -> String {
+    "hlo-verifier".to_string()
+  }
 }

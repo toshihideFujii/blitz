@@ -29,7 +29,9 @@ impl Domain {
 pub struct DomainMetadata {}
 
 impl DomainMetadata {
-  pub fn new() {}
+  pub fn default() -> Self {
+    DomainMetadata {  }
+  }
 
   // Returns the matadata type.
   pub fn kind(&self) -> String {

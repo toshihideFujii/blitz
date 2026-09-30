@@ -601,3 +601,11 @@ impl HloModule {
     id
   }
 }
+
+pub struct OriginalValueRecoveryTable {}
+
+impl OriginalValueRecoveryTable {
+  pub fn default() -> Self {
+    OriginalValueRecoveryTable {  }
+  }
+}

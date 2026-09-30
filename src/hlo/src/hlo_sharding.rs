@@ -166,6 +166,23 @@ impl HloSharding {
     }    
   }
 
+  pub fn new_from_shardings(tuple_shardings: Vec<HloSharding>) -> Self {
+    HloSharding {
+      tile_assignment: TileAssignment::default(),
+      tuple_elements: tuple_shardings,
+      metadata: Vec::new(),
+      subgroup_types: Vec::new(),
+      replicated: false,
+      maximal: false,
+      tuple: false,
+      manual: false,
+      unknown: false,
+      unreduced: false,
+      replicate_on_last_tile_dim: false,
+      shard_group: ShardGroup::new(-1, false, false)
+    }
+  }
+
   // Creates a trivial sharding that replicates a maximal tile scross all
   // devices.
   pub fn replicate(metadata: Vec<OpMetadata>) -> Self {
@@ -396,7 +413,17 @@ impl HloSharding {
     unimplemented!()
   }
 
-  pub fn single_tuple(&self, _tuple_shape: &Shape, _sharding: &HloSharding) {}
+  // Creates a new sharding for a tuple type, with a single input sharding
+  // repeated on each leaf.
+  pub fn single_tuple(tuple_shape: &Shape, sharding: &HloSharding) -> Self {
+    debug_assert!(tuple_shape.is_tuple());
+    debug_assert!(!sharding.is_tuple());
+
+    let mut flattened_list = vec![];
+    let leaf_count = HloSharding::required_leaves(tuple_shape);
+    flattened_list.resize(leaf_count as usize, sharding.clone());
+    HloSharding::new_from_shardings(flattened_list)
+  }
 
   pub fn single() {}
 
@@ -780,8 +807,11 @@ impl HloSharding {
   // construct a sharding that is compatible with the shape by replicating the
   // current sharding across all tuple elements. Note that the returned
   // sharding is not guaranteed to be compatible with the input shape.
-  pub fn normalize_tuple_sharding(&self, _shape: &Shape) -> Self {
-    unimplemented!()
+  pub fn normalize_tuple_sharding(&self, shape: &Shape) -> Self {
+    if shape.is_tuple() && !self.is_tuple() {
+      return HloSharding::single_tuple(shape, self);
+    }
+    self.clone()
   }
 
   // Extracts the sharding that is common within the current sharding.

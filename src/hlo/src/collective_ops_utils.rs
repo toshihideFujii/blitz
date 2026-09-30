@@ -146,6 +146,32 @@ pub fn get_participating_ids(
   Ok(result)
 }
 
+pub fn collective_op_group_mode_to_string(
+  group_mode: &CollectiveOpGroupMode) -> String
+{
+  match group_mode {
+    CollectiveOpGroupMode::CrossReplica => "cross_replica".to_string(),
+    CollectiveOpGroupMode::CrossPartition => "cross_partition".to_string(),
+    CollectiveOpGroupMode::CrossReplicaAndPartition => "cross_replica_and_partition".to_string(),
+    CollectiveOpGroupMode::FlattenedID => "flattened_id".to_string()
+  }    
+}
+
+pub fn string_to_collective_op_group_mode(
+  name: String) -> Result<CollectiveOpGroupMode, String>
+{
+  if name.as_str() == "cross_replica" {
+    return Ok(CollectiveOpGroupMode::CrossReplica);
+  } else if name.as_str() == "cross_partition" {
+    return Ok(CollectiveOpGroupMode::CrossPartition);
+  } else if name.as_str() == "cross_replica_and_partition" {
+    return Ok(CollectiveOpGroupMode::CrossReplicaAndPartition);
+  } else if name.as_str() == "flattened_id" {
+    return Ok(CollectiveOpGroupMode::FlattenedID);
+  }
+  Err(name + "is not exist in CollectiveGroupMode")
+}
+
 // Returns the group formation mode implied by (a) whether the operation has
 // channel_id and (b) if it has use_global_device_ids and if yes, its value.
 pub fn get_collective_op_group_mode(

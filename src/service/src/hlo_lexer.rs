@@ -120,6 +120,10 @@ impl TokKind {
 
 const EOF: i64 = -1;
 const ERROR: i64 = -2;
+const NON_MASK: i64 = 0;
+pub const DIM_LABELS_DXD_PAD_DECIMAL_MASK: i64 =
+  (1 << TokKind::DimLabels as i64) | (1 << TokKind::DxD as i64) |
+  (1 << TokKind::Pad as i64) | (1 << TokKind::Decimal as i64);
 
 pub fn tok_kind_to_string(kind: &TokKind) -> String {
   kind.to_string()

@@ -1,37 +1,32 @@
 #![allow(dead_code)]
 
-use std::{any::Any, collections::{HashMap, HashSet}};
+use std::{any::Any, collections::{BTreeMap, HashMap, HashSet}};
 use common::{
   array::Array, blitz_data::{
-    Algorithm, ConvolutionDimensionNumbers, DimLevelType, FftType, FileLocation,
-    FrontendAttributes, OpMetadata, OpShardingType, PaddingConfig, ParameterReplication,
-    Precision, PrimitiveType, RandomAlgorithm, RandomDistribution, ReplicaGroup,
-    ResultAccuracy, ResultAccuracyMode, StackFrame, StackFrameIndex, Statisitic,
-    StatisticsViz, Window
-  },
-  comparison_util::{
+    Algorithm, ConvolutionDimensionNumbers, CustomCallApiVersion, CustomCallSchedule, DimLevelType, FftType, FileLocation, FrontendAttributes, OpMetadata, OpShardingType, PaddingConfig, PaddingType, ParameterReplication, Precision, PrimitiveType, RandomAlgorithm, RandomDistribution, ReplicaGroup, ResultAccuracy, ResultAccuracyMode, ResultAccuracyTolerance, StackFrame, StackFrameIndex, Statisitic, StatisticsViz, Window
+  }, comparison_util::{
     ComparisonDirection, ComparisonType, string_to_comparison_direction,
     string_to_comparison_type
-  },
-  layout::{Layout, SplitConfig, Tile}, layout_util::LayoutUtil, literal::Literal,
-  literal_util::LiteralUtil, primitive_util::{is_complex_type, is_floating_point_type, is_integral_type, primitive_type_name, primitive_type_switch}, shape::Shape,
-  shape_util::ShapeUtil
+  }, layout::{
+    Layout, SplitConfig, Tile}, layout_util::LayoutUtil, literal::Literal, literal_util::LiteralUtil, primitive_util::{
+    is_complex_type, is_floating_point_type, is_integral_type,
+    primitive_type_name, primitive_type_switch
+  }, shape::Shape, shape_layout::ShapeLayout, shape_util::ShapeUtil
 };
 use hlo::{
-  computation_layout::ComputationLayout, hlo_computation::{HloComputation, HloComputationBuilder},
-  hlo_domain_metadata::DomainMetadata, hlo_instruction::{self, FusionKind, HloInstruction},
-  hlo_module::HloModule, hlo_module_config::HloModuleConfig,
-  hlo_opcode::{HloOpcode, hlo_opcode_string, string_to_hlo_opcode},
-  hlo_original_value::OriginalValue, hlo_schdule::HloSchedule, hlo_sharding::HloSharding,
-  name_uniquer::NameUniquer, tile_assignment::TileAssignment
+  collective_ops_utils::{CollectiveOpGroupMode, string_to_collective_op_group_mode}, computation_layout::ComputationLayout, hlo_computation::{HloComputation, HloComputationBuilder}, hlo_domain_metadata::DomainMetadata, hlo_input_output_alias_config::{Alias, AliasKind}, hlo_instruction::{self, FusionKind, HloInstruction, string_to_custom_call_api_version, string_to_custom_call_schedule, string_to_result_accuracy}, hlo_module::{HloModule, OriginalValueRecoveryTable}, hlo_module_config::HloModuleConfig, hlo_opcode::{HloOpcode, hlo_opcode_string, string_to_hlo_opcode}, hlo_original_value::OriginalValue, hlo_schdule::HloSchedule, hlo_sharding::HloSharding, name_uniquer::NameUniquer, tile_assignment::TileAssignment
 };
 use num::complex::Complex64;
-use crate::{hlo_lexer::{HloLexer, TokKind, tok_kind_to_string}, shape_inference::ShapeInference};
+use crate::{
+  hlo_lexer::{DIM_LABELS_DXD_PAD_DECIMAL_MASK, HloLexer, TokKind,
+  tok_kind_to_string}, shape_inference::ShapeInference
+};
 
 pub struct HloParserOptions {
   fill_missing_layouts: bool,
   fill_shortform_constants_with_random_values: bool,
   keep_module_auto_layouts: bool,
+  max_recursion_depth: usize,
 }
 
 impl HloParserOptions {
@@ -39,7 +34,8 @@ impl HloParserOptions {
     HloParserOptions {
       fill_missing_layouts: false,
       fill_shortform_constants_with_random_values: false,
-      keep_module_auto_layouts: false
+      keep_module_auto_layouts: false,
+      max_recursion_depth: 8192,
     }
   }
 
@@ -71,6 +67,14 @@ impl HloParserOptions {
 
   pub fn keep_module_auto_layouts(&self) -> bool {
     self.keep_module_auto_layouts
+  }
+
+  pub fn set_max_recursion_depth(&mut self, value: usize) {
+    self.max_recursion_depth = value;
+  }
+
+  pub fn max_recursion_depth(&self) -> usize {
+    self.max_recursion_depth
   }
 }
 
@@ -305,6 +309,7 @@ enum AttrType {
   StringOrJsonDict,
   CollectiveDeviceList,
   ResultAccuracy,
+  ResultAccuracyType,
   OriginalValue,
   OriginalValueRecoveryTable,
   Mode
@@ -341,6 +346,15 @@ struct DomainData {
   exit_metadata: DomainMetadata,
 }
 
+impl DomainData {
+  pub fn default() -> Self {
+    DomainData {
+      entry_metadata: DomainMetadata::default(),
+      exit_metadata: DomainMetadata::default()
+    }
+  }
+}
+
 struct Scope {}
 
 pub struct HloParser {
@@ -348,10 +362,21 @@ pub struct HloParser {
   options: HloParserOptions,
   // Used to generate names for anonymous instructions.
   name_uniquer: NameUniquer,
+
+  // A stack for the instruction names. The top of the stack stores the
+  // instruction name table for the current scope.
+  //
+  // A instruction's name is unique among its scope (i.e. its parent
+  // computation), but it's not necessarily unique among all computations in the
+  // module. When there are multiple levels of nested computations, the same
+  // name could appear in both an outer computation and an inner computation. So
+  // we need a stack to make sure a name is only visible within its scope,
   scoped_name_tables: Vec<HashMap<String, (HloInstruction, usize)>>,
   computation_pool: HashMap<String, (HloComputation, usize)>,
   computations: Vec<HloComputation>,
-  error: Vec<String>
+  error: Vec<String>,
+  // Tracks recursion depth to prevent stack overflow from deeply nested input.
+  current_recursion_depth: usize,
 }
 
 impl HloParser {
@@ -364,6 +389,20 @@ impl HloParser {
       computation_pool: HashMap::new(),
       computations: Vec::new(),
       error: Vec::new(),
+      current_recursion_depth: 0
+    }
+  }
+
+  pub fn new_for_tests(str: String, options: HloParserOptions) -> Self {
+    HloParser {
+      lexer: HloLexer::new(str),
+      options: options,
+      name_uniquer: NameUniquer::new(".".to_string()),
+      scoped_name_tables: Vec::new(),
+      computation_pool: HashMap::new(),
+      computations: Vec::new(),
+      error: Vec::new(),
+      current_recursion_depth: 0
     }
   }
 
@@ -575,13 +614,13 @@ impl HloParser {
 
   // Returns the map from the instruction name to the instruction itself and its
   // location in the current scope.
-  fn current_name_table(&self) -> Option<&HashMap<String, (HloInstruction, usize)>> {
+  fn current_name_table(&self)
+    -> Option<&HashMap<String, (HloInstruction, usize)>> {
     self.scoped_name_tables.last()
   }
 
-  fn mutable_current_name_table(
-    &mut self) -> Option<&mut HashMap<String, (HloInstruction, usize)>>
-  {
+  fn mutable_current_name_table(&mut self)
+    -> Option<&mut HashMap<String, (HloInstruction, usize)>> {
     self.scoped_name_tables.last_mut()
   }
 
@@ -691,7 +730,7 @@ impl HloParser {
       if !self.parse_name(&mut name) {
         return false;
       }
-      if !self.parse_attributes(&attrs, true, &None) {
+      if !self.parse_attributes(&mut attrs, true, &None) {
         return false;
       }
       module.set_name(name.clone());
@@ -957,7 +996,7 @@ impl HloParser {
       false, AttrType::String, Box::new(Some(execution_thread.clone())));
     attrs.insert("execution_thread".to_string(), exec_thread_conf);
 
-    if !self.parse_attributes(&attrs, true, &None) {
+    if !self.parse_attributes(&mut attrs, true, &None) {
       return false;
     }
 
@@ -976,16 +1015,20 @@ impl HloParser {
     computation: &mut HloComputation,
     computation_name: &mut String) -> bool
   {
+    self.scoped_name_tables.push(HashMap::new());
+
     let mut builder =
       HloComputationBuilder::new(computation_name.clone());
     if !self.parse_token(&TokKind::Lbrace,
       "expects '{' at the beginning of instruction list".to_string())
     {
+      self.scoped_name_tables.pop();
       return false;
     }
     let mut root_name = String::new();
     loop {
       if !self.parse_instruction(&mut builder, &mut root_name) {
+        self.scoped_name_tables.pop();
         return false;
       }
       if self.lexer.get_kind() == TokKind::Rbrace {
@@ -995,6 +1038,7 @@ impl HloParser {
     if !self.parse_token(&TokKind::Rbrace,
       "expects '}' at the end of instruction list".to_string())
     {
+      self.scoped_name_tables.pop();
       return false;
     }
     let mut root = HloInstruction::default();
@@ -1006,6 +1050,7 @@ impl HloParser {
       if root_node.is_none() {
         assert!(false, "instruction {:?} was marked as ROOT but the parser has
           not seen it before", root_name);
+        self.scoped_name_tables.pop();
         return false;
       }
       root = root_node.unwrap().0.clone();
@@ -1015,6 +1060,8 @@ impl HloParser {
     // the root instruction.
     self.computations.push(builder.build(Some(&root)));
     *computation = self.computations.last().unwrap().clone();
+
+    self.scoped_name_tables.pop();
     true
   }
 
@@ -1049,9 +1096,15 @@ impl HloParser {
     name_loc: usize,
     allow_attributes: bool) -> bool
   {
+    self.current_recursion_depth += 1;
+    if self.current_recursion_depth > self.options.max_recursion_depth() {
+      assert!(false, "maximum recursion depth exceeded");
+    }
+
     let mut shape = Shape::default();
     let mut opcode = HloOpcode::Abs;
     let mut async_wrapped_opcode = HloOpcode::Abs;
+    //let mut operands = vec![];
 
     let parse_shape = self.can_be_shape();
     if parse_shape &&
@@ -1100,7 +1153,7 @@ impl HloParser {
       false, AttrType::OriginalValue, Box::new(original.clone()));
     attrs.insert("origin".to_string(), config_orig);
 
-    let metadata = OpMetadata::new();
+    let metadata = OpMetadata::default();
     let config_metadata = AttrConfig::new(
       false, AttrType::Metadata, Box::new(metadata.clone()));
     attrs.insert("metadata".to_string(), config_metadata);
@@ -1189,12 +1242,12 @@ impl HloParser {
         .set_raw_backend_config_string(backend_config);
     }
 
-    // frontend_attributes
-    instruction.set_frontend_attributes(frontend_attrs.clone());
-    if instruction.is_asynchronous() {
-      instruction.async_wrapped_mutable_instruction()
-        .set_frontend_attributes(frontend_attrs);
-    }
+    // frontend_attributes // TODO
+    //instruction.set_frontend_attributes(frontend_attrs.clone());
+    //if instruction.is_asynchronous() {
+      //instruction.async_wrapped_mutable_instruction()
+        //.set_frontend_attributes(frontend_attrs);
+    //}
 
     // statictics_vis
     instruction.set_statistics_vis(statistics_vis.clone());
@@ -1208,10 +1261,16 @@ impl HloParser {
 
   fn parse_control_predecessors() {}
 
+  // Similar to ParseLiteral(Literal* literal, const Shape& shape), but parse the
+// shape instead of accepting one as argument.
+  fn parse_literal(&mut self, _literal: &mut Literal) -> bool {
+    false
+  }
+
   // literal
   //  ::= tuple
   //  ::= non_tuple
-  fn parse_literal(&mut self, literal: &mut Literal, shape: &Shape) -> bool
+  fn parse_literal_with_shape(&mut self, literal: &mut Literal, shape: &Shape) -> bool
   {
     if shape.is_tuple() {
       self.parse_tuple_literal(literal, shape)
@@ -1245,7 +1304,7 @@ impl HloParser {
           self.parse_token(&TokKind::Comma,
             "expects ',' to separate tuple elements".to_string());
         }
-        if !self.parse_literal(&mut elements[i],
+        if !self.parse_literal_with_shape(&mut elements[i],
             ShapeUtil::get_tuple_element_shape(shape, i))
         {
           let mut err_msg = "expects the ".to_string();
@@ -1720,7 +1779,7 @@ impl HloParser {
       true
     };
 
-    let create_unary_instruction =
+    let mut create_unary_instruction =
       |parser: &mut HloParser,
        shape: &mut Option<Shape>,
        builder: &mut HloComputationBuilder| -> Option<HloInstruction>
@@ -1836,7 +1895,7 @@ impl HloParser {
         let mut literal: Literal = Literal::default();
         if !self.parse_token(&TokKind::Lparen,
           "expects '(' before constant literal".to_string()) ||
-          !self.parse_literal(&mut literal, shape.as_ref().unwrap()) ||
+          !self.parse_literal_with_shape(&mut literal, shape.as_ref().unwrap()) ||
           !self.parse_token(&TokKind::Rparen,
             "expects ')' after constant literal".to_string()) ||
           !self.parse_attributes(attrs, allow_attributes, shape)
@@ -2191,15 +2250,15 @@ impl HloParser {
   //
   fn parse_attributes(
     &mut self,
-    attrs: &HashMap<String, AttrConfig>,
+    attrs: &mut HashMap<String, AttrConfig>,
     allow_attributes: bool,
     shape: &Option<Shape>) -> bool
   {
     //let loc = self.lexer.get_loc();
-    let seen_attrs = HashSet::new();
+    let mut seen_attrs = HashSet::new();
     if allow_attributes {
       while self.eat_if_present(&TokKind::Comma) {
-        if !self.parse_attribute_helper(attrs, &seen_attrs, shape) {
+        if !self.parse_attribute_helper(attrs, &mut seen_attrs, shape) {
           return false;
         }
       }
@@ -2216,11 +2275,401 @@ impl HloParser {
 
   fn parse_attribute_helper(
     &mut self,
-    _attrs: &HashMap<String, AttrConfig>,
-    _seen_attrs: &HashSet<String>,
+    attrs: &mut HashMap<String, AttrConfig>,
+    seen_attrs: &mut HashSet<String>,
     _shape: &Option<Shape>) -> bool
   {
-    unimplemented!()
+    let loc = self.lexer.get_loc();
+    let mut name = String::new();
+    if !self.parse_attribute_name(&mut name) {
+      assert!(false, "error parsing attributes [loc: {:?}]", loc);
+    }
+    println!("Parsing attribute {:?}", name);
+    if !seen_attrs.insert(name.clone()) {
+      assert!(false, "attribute {:?} already exists [loc: {:?}]",name, loc);
+    }
+    let attrs_is_empty = attrs.is_empty();
+    let value = attrs.get_mut(&name);
+    if value.is_none() {
+      let mut allowed_attrs = String::new();
+      if attrs_is_empty {
+        allowed_attrs = "No attributes are allowed here.".to_string();
+      } else {
+        // TODO
+      }
+      assert!(false, "unexpected attribute {:?}. {:?}", name, allowed_attrs);
+    }
+    let mut success = |attr_config: &mut AttrConfig| -> bool {
+      match attr_config.attr_type {
+        AttrType::Bool => {
+          let mut result = false;
+          if !self.parse_bool(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Int64 => {
+          let mut result = 0;
+          if !self.parse_i64(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Int32 => {
+          let result: i32 = 0;
+          if !self.parse_i64(&mut (result as i64)) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Float => {
+          let mut result = 0.0;
+          if !self.parse_double(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::HloComputation => {
+          let mut result = HloComputation::default();
+          if !self.parse_hlo_computation(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::BracedHloComputationList => {
+          let mut result = vec![];
+          if !self.parse_hlo_computation_list(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::FftType => {
+          let mut result = FftType::FFT;
+          if !self.parse_fft_type(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::PaddingType => {
+          let mut result = PaddingType::Invalid;
+          if !self.parse_padding_type(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::ComparisonDirection => {
+          let mut result = ComparisonDirection::Eq;
+          if !self.parse_comparison_direction(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::ComparisonType => {
+          let mut result = ComparisonType::Float;
+          if !self.parse_comparison_type(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Enum => {
+          if self.lexer.get_kind() != TokKind::Ident {
+            assert!(false, "expects an enumeration value");
+            return false;
+          }
+          let result = self.lexer.get_str_val();
+          self.lexer.lex(0);
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Window => {
+          let mut result = Window::default();
+          if !self.parse_window(&mut result, true) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::ConvolutionDimensionNumbers => {
+          let mut result =
+            ConvolutionDimensionNumbers::default();
+          if !self.parse_convolution_demension_numbers(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Sharding => {
+          let mut result = HloSharding::default();
+          if !self.parse_sharding(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::CollectiveDeviceList =>{ // TODO
+          true
+        }
+        AttrType::FrontendAttributes => {
+          let mut result = FrontendAttributes::default();
+          if !self.parse_frontend_attributes(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::StatisticsViz => {
+          let mut result = StatisticsViz::default();
+          if !self.parse_statistics_viz(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::ParameterReplication => {
+          let mut result = ParameterReplication::default();
+          if !self.parse_parameter_replication(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::InstructionList => {
+          let mut result = vec![];
+          if !self.parse_instruction_names(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::FusionKind => {
+          let mut result = FusionKind::Custom;
+          if !self.parse_fusion_kind(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        // TODO: ConvKind
+        AttrType::BracedInt64List => {
+          let mut result = vec![];
+          if !self.parse_i64_list(&TokKind::Lbrace, &TokKind::Rbrace,
+            &TokKind::Comma, &mut result)
+          {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::BracedInt64ListList => {
+          let mut result = vec![];
+          if !self.parse_i64_list_list(&TokKind::Lbrace, &TokKind::Rbrace,
+            &TokKind::Comma, &mut result)
+          {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        // TODO: SliceRanges
+        AttrType::PaddingConfig => {
+          let mut result = PaddingConfig::default();
+          if !self.parse_padding_config(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::String => {
+          let mut result = String::new();
+          if !self.parse_string(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::StringOrJsonDict => {
+          let mut result = String::new();
+          if self.lexer.get_kind() == TokKind::String {
+            if !self.parse_string(&mut result) {
+              return false;
+            }
+          } else if self.lexer.get_kind() == TokKind::Lbrace {
+            if !self.parse_json_dict(&mut result) {
+              return false;
+            }
+          } else {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::OriginalValue => {
+          true
+        }
+        AttrType::OriginalValueRecoveryTable => {
+          let mut result =
+            OriginalValueRecoveryTable::default();
+          if !self.parse_original_value_recovery_table(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Metadata => {
+          let mut result = OpMetadata::default();
+          if !self.parse_metadata(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Distribution => {
+          let mut result = RandomDistribution::Invalid;
+          if !self.parse_random_distribution(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Domain => {
+          true
+        }
+        AttrType::PrecisionList => {
+          let mut result = vec![];
+          if !self.parse_precision_list(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Shape => {
+          let mut result = Shape::default();
+          if !self.parse_shape(&mut result, true) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::ShapeList => {
+          let mut result = vec![];
+          if !self.parse_shape_list(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::RandomAlgorithm => {
+          let mut result = RandomAlgorithm::Default;
+          if !self.parse_random_algorithm(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::PrecisionAlgorithm => {
+          let mut result = Algorithm::Unset;
+          if !self.parse_algorithm(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::ResultAccuracyType => {
+          let mut result = ResultAccuracyMode::Default;
+          if !self.parse_result_accuracy_type(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Aliasing => {
+          let mut aliasing_data = BTreeMap::new();
+          if !self.parse_aliasing(&mut aliasing_data) {
+            return false;
+          }
+          attr_config.result = Box::new(aliasing_data);
+          true
+        }
+        AttrType::BufferDonor => {
+          true
+        }
+        AttrType::ComputationLayout => {
+          let mut computation_layout =
+            ComputationLayout::new(ShapeLayout::new(Shape::default()));
+          if !self.parse_computation_layout(&mut computation_layout) {
+            return false;
+          }
+          attr_config.result = Box::new(computation_layout);
+          true
+        }
+        AttrType::InstructionAliasing => {
+          let mut aliasing_output_operand_pairs = vec![];
+          if !self.parse_instruction_output_operand_aliasing(
+            &mut aliasing_output_operand_pairs)
+          {
+            return false;
+          }
+          attr_config.result = Box::new(aliasing_output_operand_pairs);
+          true
+        }
+        AttrType::Literal => {
+          let mut result = Literal::default();
+          if !self.parse_literal(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::CustomCallSchedule => {
+          let mut result = CustomCallSchedule::None;
+          if !self.parse_parse_custom_call_schedule(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::CustomCallApiVersion => {
+          let mut result = CustomCallApiVersion::Unspecified;
+          if !self.parse_custom_call_api_version(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::ResultAccuracy => {
+          let mut result = ResultAccuracy::default();
+          if !self.parse_result_accuracy(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        AttrType::Mode => {
+          let mut result = CollectiveOpGroupMode::CrossPartition;
+          if !self.parse_collective_op_group_mode(&mut result) {
+            return false;
+          }
+          attr_config.result = Box::new(result);
+          true
+        }
+        // TODO: SparsityConfig
+        _ => return false
+      }
+    };
+    if !success(value.unwrap()) {
+      assert!(false, "error parsing attribute {:?}", name);
+    }
+    true
   }
 
   // sub_attributes ::= '{' (','? attribute)* '}'
@@ -2578,7 +3027,7 @@ impl HloParser {
   }
 
   // '{' metadata_string '}'
-  fn parse_metadata(&mut self, _metadata: &OpMetadata) -> bool {
+  fn parse_metadata(&mut self, _metadata: &mut OpMetadata) -> bool {
     let _attrs: HashMap<String, AttrConfig> = HashMap::new();
 
     let _op_type = String::new();
@@ -3175,7 +3624,11 @@ impl HloParser {
 
   //fn parse_replica_groups_only() {}
 
-  fn parse_domain() {}
+  // domain ::= '{' 'kind=' domain_kind ',' 'entry=' entry_sharding ','
+  //            'exit=' exit_sharding '}'
+  fn parse_domain(&mut self, _domain: &DomainData) -> bool {
+    unimplemented!()
+  }
 
   fn parse_dxd(&mut self, _name: &String, _result: &Vec<i64>) -> bool {
     unimplemented!()
@@ -3185,12 +3638,218 @@ impl HloParser {
     unimplemented!()
   }
 
-  fn parse_slice_ranges() {}
-  fn parse_precision_list() {}
-  fn parse_hlo_computation() {}
-  fn parse_hlo_computation_list() {}
-  fn parse_shape_list() {}
-  fn parse_int64_list_list() {}
+  // ::= '{' ranges '}'
+  //   ::= /*empty*/
+  //   ::= range (',' range)*
+  // range ::= '[' start ':' limit (':' stride)? ']'
+  //
+  // The slice ranges are printed as:
+  //
+  //  {[dim0_start:dim0_limit:dim0stride], [dim1_start:dim1_limit], ...}
+  //
+  // This function extracts the starts, limits, and strides as 3 vectors to the
+  // result. If stride is not present, stride is 1. For example, if the slice
+  // ranges is printed as:
+  //
+  //  {[2:3:4], [5:6:7], [8:9]}
+  //
+  // The parsed result will be:
+  //
+  //  {/*starts=*/{2, 5, 8}, /*limits=*/{3, 6, 9}, /*strides=*/{4, 7, 1}}
+  fn parse_slice_ranges(&mut self, result: &mut SliceRange) -> bool {
+    if !self.parse_token(
+      &TokKind::Lbrace, "expects '{' to start ranges".to_string())
+    {
+      return false;
+    }
+    let mut ranges: Vec<Vec<i64>> = vec![];
+    if self.lexer.get_kind() == TokKind::Rbrace {
+      // empty
+      return self.parse_token(
+      &TokKind::Rbrace, "expects '}' to end ranges".to_string());
+    }
+    loop {
+      ranges.push(vec![]);
+      let _loc = self.lexer.get_loc();
+      if !self.parse_i64_list(&TokKind::Lsquare, &TokKind::Rsquare,
+        &TokKind::Colon, ranges.last_mut().unwrap())
+      {
+        return false;
+      }
+      let range = ranges.last().unwrap();
+      if range.len() != 2 && range.len() != 3 {
+        let mut err_msg =
+          "expects [start:limit:step] or [start:limit] but sees ".to_string();
+        err_msg.push_str(&range.len().to_string());
+        err_msg.push_str("elements");
+        assert!(false, "{:?}", err_msg);
+      }
+      if !self.eat_if_present(&TokKind::Comma) {
+        break;
+      }
+    }
+    for range in &ranges {
+      result.starts.push(range[0]);
+      result.limits.push(range[1]);
+      let mut value = 1;
+      if range.len() == 3 { value = range[2]; }
+      result.strides.push(value);
+    }
+    self.parse_token(
+      &TokKind::Rbrace, "expects '}' to end ranges".to_string())
+  }
+
+  // precisionlist ::= start precision_elements end
+  // precision_elements
+  //   ::= /*empty*/
+  //   ::= precision_val (delim precision_val)*
+  fn parse_precision_list(&mut self, result: &mut Vec<Precision>) -> bool {
+    let mut parse_and_add_item
+      = |parser: &mut HloParser| -> bool
+    {
+      let mut item = Precision::Default;
+      if !parser.parse_precision(&mut item) {
+        return false;
+      }
+      result.push(item);
+      true
+    };
+    self.parse_list(
+      &TokKind::Lbrace,
+      &TokKind::Rbrace,
+      &TokKind::Comma,
+      Box::new(&mut parse_and_add_item))
+  }
+
+  fn parse_hlo_computation(&mut self, result: &mut HloComputation) -> bool {
+    self.current_recursion_depth += 1; // TODO
+    if self.current_recursion_depth >= self.options.max_recursion_depth() {
+      assert!(false, "maximum recursion depth exceeded");
+    }
+    if self.lexer.get_kind() == TokKind::Lbrace {
+      // This means it is a nested computation.
+      return self.parse_instruction_list(
+        result, &mut "_".to_string());
+    }
+    // This means it is a computation name.
+    self.parse_computation_name(result)
+  }
+
+  fn parse_hlo_computation_list(&mut self, result: &mut Vec<HloComputation>) -> bool {
+    let mut parse_and_add_item
+      = |parser: &mut HloParser| -> bool
+    {
+      let mut computation = HloComputation::default();
+      if !parser.parse_hlo_computation(&mut computation) {
+        return false;
+      }
+      println!("parsed computation {:?}", computation.name());
+      result.push(computation);
+      true
+    };
+    self.parse_list(
+      &TokKind::Lbrace,
+      &TokKind::Rbrace,
+      &TokKind::Comma,
+      Box::new(&mut parse_and_add_item))
+  }
+
+  // shapelist ::= '{' shapes '}'
+  // precision_elements
+  //   ::= /*empty*/
+  //   ::= shape (',' shape)*
+  fn parse_shape_list(&mut self, result: &mut Vec<Shape>) -> bool {
+    let mut parse_and_add_item
+      = |parser: &mut HloParser| -> bool
+    {
+      let mut shape = Shape::default();
+      if !parser.parse_shape(&mut shape, true) {
+        return false;
+      }
+      result.push(shape);
+      true
+    };
+    self.parse_list(
+      &TokKind::Lbrace,
+      &TokKind::Rbrace,
+      &TokKind::Comma,
+      Box::new(&mut parse_and_add_item))
+  }
+
+  // int64_tlist ::= start int64_elements end
+  // int64_elements
+  //   ::= /*empty*/
+  //   ::= int64_val (delim int64_val)*
+  fn parse_i64_list(
+    &mut self,
+    start: &TokKind,
+    end: &TokKind,
+    delim: &TokKind,
+    result: &mut Vec<i64>) -> bool
+  {
+    // Next token can be `end` or an int64. So, we pass skip_mask hint to the
+    // lexer to avoid parsing unnecessary expensive patterns.
+    let mut msg = "expects a list to end with".to_string();
+    msg.push_str(&tok_kind_to_string(end));
+    if self.parse_token(start, msg.clone()) {
+      return false;
+    }
+    if self.lexer.get_kind() == *end {
+      // empty
+    } else {
+      loop {
+        let mut i = 0;
+        // The next token must be a `delim` or the `end` token, both of which are
+        // small and lexing it fast. So, we don't pass any skip hint to the lexer.
+        if !self.parse_i64(&mut i) {
+          return false;
+        }
+        result.push(i);
+        if self.lexer.get_kind() != *delim {
+          break;
+        }
+        // The next token must be an int64. Otherwise, it would be a parsing
+        // error. So, we pass skip_mask hint to the lexer to avoid parsing
+        // unnecessary expensive patterns.
+        self.lexer.lex(DIM_LABELS_DXD_PAD_DECIMAL_MASK);
+      }
+    }
+    // After the `end` token, we don't have any idea on the next token. So, we
+    // don't pass any skip_mask hint to the lexer.
+    self.parse_token(end, msg)
+  }
+
+  // int64_tlistlist ::= start int64_tlist_elements end
+  // int64_tlist_elements
+  //   ::= /*empty*/
+  //   ::= int64_tlist (delim int64_tlist)*
+  // int64_tlist ::= start int64_elements end
+  // int64_elements
+  //   ::= /*empty*/
+  //   ::= int64_val (delim int64_val)*
+  fn parse_i64_list_list(
+    &mut self,
+    start: &TokKind,
+    end: &TokKind,
+    delim: &TokKind,
+    result: &mut Vec<Vec<i64>>) -> bool
+  {
+    let mut parse_and_add_item
+      = |parser: &mut HloParser| -> bool
+    {
+      let mut item = vec![];
+      if !parser.parse_i64_list(start, end, delim, &mut item) {
+        return false;
+      }
+      result.push(item);
+      true
+    };
+    self.parse_list(
+      &TokKind::Lbrace,
+      &TokKind::Rbrace,
+      &TokKind::Comma,
+      Box::new(&mut parse_and_add_item))
+  }
 
   // 'parse_and_add_item' is an lambda to parse an element in the list and add
   // the parsed element to the result. It's supposed to capture the result.
@@ -3704,7 +4363,16 @@ impl HloParser {
     true
   }
 
-  fn parse_padding_type() {}
+  fn parse_padding_type(&mut self, _result: &mut PaddingType) -> bool {
+    println!("parse_padding_type");
+    if self.lexer.get_kind() != TokKind::Ident {
+       return self.token_error("expects padding type".to_string());
+    }
+    let _val = self.lexer.get_str_val();
+    // TODO
+    self.lexer.lex(0);
+    true
+  }
 
   fn parse_primitive_type(&mut self, result: &mut PrimitiveType) -> bool {
     if self.lexer.get_kind() != TokKind::PrimitiveType {
@@ -3787,6 +4455,27 @@ impl HloParser {
     true
   }
 
+  fn parse_collective_op_group_mode(
+    &mut self, result: &mut CollectiveOpGroupMode) -> bool
+  {
+    println!("parse_collective_op_group_mode");
+    if self.lexer.get_kind() != TokKind::Ident {
+      assert!(false, "expects collective op group mode");
+      return false;
+    }
+    let val = self.lexer.get_str_val();
+    let status_or =
+      string_to_collective_op_group_mode(val.clone());
+    if status_or.is_err() {
+      assert!(false, "expects collective op group mode but sees {:?}, error: {:?}",
+        val, status_or.err().unwrap());
+      return false;
+    }
+    *result = status_or.unwrap();
+    self.lexer.lex(0);
+    true
+  }
+
   fn parse_random_algorithm(&mut self, result: &mut RandomAlgorithm) -> bool {
     println!("parse_random_algorithm");
     if self.lexer.get_kind() != TokKind::Ident {
@@ -3837,6 +4526,101 @@ impl HloParser {
     *result = algorithm.unwrap();
     self.lexer.lex(0);
     true
+  }
+
+  fn parse_result_accuracy_type(&mut self, result: &mut ResultAccuracyMode) -> bool {
+    println!("parse_result_accuracy_type");
+    if self.lexer.get_kind() != TokKind::Ident {
+      return self.token_error("expects ResultAccuracy type".to_string());
+    }
+    let val = self.lexer.get_str_val();
+    let mode = string_to_result_accuracy(&val);
+    if mode.is_err() {
+      let mut err_msg = "expects ResultAccuracy type but sees: ".to_string();
+      err_msg.push_str(&val);
+      err_msg.push_str(", error: ");
+      err_msg.push_str(&mode.err().unwrap());
+      return self.token_error(err_msg);
+    }
+    *result = mode.ok().unwrap();
+    self.lexer.lex(0);
+    true
+  }
+
+  fn parse_result_accuracy_tolerance(
+    &mut self, result_tolerance: &mut ResultAccuracyTolerance) -> bool
+  {
+    println!("parse_result_accuracy_tolerance");
+    if !self.parse_token(&TokKind::Lbrace,
+        "expected '{' to start result accuracy list".to_string())
+    {
+      return false;
+    }
+    let mut ulps = 0.0;
+    let mut rtol = 0.0;
+    let mut atol = 0.0;
+    if self.lexer.get_kind() != TokKind::Rbrace {
+      loop {
+        let mut name = String::new();
+        if !self.parse_attribute_name(&mut name) {
+          return self.error(self.lexer.get_loc(),
+            "expects string for result_accuracy tolerance type".to_string());
+        }
+        if name == "ulps" {
+          if self.parse_double(&mut ulps) {
+            result_tolerance.set_ulps(ulps);
+          }
+        } else if name == "rtol" {
+          if self.parse_double(&mut rtol) {
+            result_tolerance.set_rtol(rtol);
+          }
+        } else if name == "atol" {
+          if self.parse_double(&mut atol) {
+            result_tolerance.set_atol(atol);
+          }
+        } else {
+          let mut err_msg = "invalid attribute name: ".to_string();
+          err_msg.push_str(&name);
+          return self.error(self.lexer.get_loc(), err_msg);
+        }
+        if !self.eat_if_present(&TokKind::Comma) {
+          break;
+        }
+      }
+    }
+    self.parse_token(&TokKind::Rbrace,
+      "expects '}' at the end of result precision".to_string())
+  }
+
+  fn parse_result_accuracy(&mut self, result: &mut ResultAccuracy) -> bool {
+    println!("parse_result_accuracy");
+    if !self.parse_token(&TokKind::Lbrace,
+      "expected '{' to start result precision list".to_string())
+    {
+      return false;
+    }
+    let mut mode = ResultAccuracyMode::Default;
+    let mut result_tolerance = ResultAccuracyTolerance::default();
+    let mut name = String::new();
+    if !self.parse_attribute_name(&mut name) {
+      return self.error(self.lexer.get_loc(),
+      "expects string for result_accuracy spec".to_string());
+    }
+    if name == "mode" {
+      if self.parse_result_accuracy_type(&mut mode) {
+        result.set_mode(mode);
+      }
+    } else if name == "tolerance" {
+      if self.parse_result_accuracy_tolerance(&mut result_tolerance) {
+        *result.mutable_tolerance() = result_tolerance;
+      }
+    } else {
+      let mut err_msg = "invalid attribute name: ".to_string();
+      err_msg.push_str(&name);
+      return self.error(self.lexer.get_loc(), err_msg);
+    }
+    self.parse_token(&TokKind::Rbrace,
+      "expected '}' to end result_accuracy".to_string())
   }
 
   fn parse_i64(&mut self, result: &mut i64) -> bool {
@@ -3927,16 +4711,251 @@ impl HloParser {
     true
   }
 
+  // OriginalValueRecoveryTable ::= '{' OriginalArray ':' OriginalArray ','
+  //   HloModule | OriginalValueRecoveryTable '}'
+  pub fn parse_original_value_recovery_table(
+    &mut self, _table: &mut OriginalValueRecoveryTable) -> bool
+  {
+    unimplemented!()    
+  }
+
   fn parse_unsigned_integer_type() {}
 
-  fn parse_aliasing() {}
+  fn parse_shape_index(&mut self, out: &mut Vec<i64>) -> bool {
+    if self.parse_token(&TokKind::Lbrace,
+      "expects '{' at the start of shape index".to_string())
+    {
+      return false;
+    }
+    let mut idxs = vec![];
+    while self.lexer.get_kind() != TokKind::Rbrace {
+      let mut idx = 0;
+      if !self.parse_i64(&mut idx) {
+        return false;
+      }
+      idxs.push(idx);
+      if !self.eat_if_present(&TokKind::Comma) {
+        break;
+      }
+    }
+    if self.parse_token(&TokKind::Rbrace,
+      "expects '}' at the end of shape index".to_string())
+    {
+      return false;
+    }
+    *out = idxs;
+    true
+  }
+
+  fn parse_aliasing(
+    &mut self, aliasing_data: &mut BTreeMap<Vec<i64>, Alias>) -> bool
+  {
+    if self.parse_token(&TokKind::Lbrace,
+      "expects '{' at the start of aliasing description".to_string())
+    {
+      return false;
+    }
+    while self.lexer.get_kind() != TokKind::Rbrace {
+      let mut out = vec![];
+      if !self.parse_shape_index(&mut out) {
+        return false;
+      }
+      let err_msg = "expected format: (<output_shape_index>,
+        <input_param_shape_index>) or <output_shape_index>: <input_param>".to_string();
+      if self.parse_token(&TokKind::Colon, err_msg.clone()) {
+        return false;
+      }
+      if self.parse_token(&TokKind::Lparen, err_msg.clone()) {
+        return false;
+      }
+      let mut param_num = 0;
+      self.parse_i64(&mut param_num);
+      if self.parse_token(&TokKind::Comma, err_msg.clone()) {
+        return false;
+      }
+      let mut param_idx = vec![];
+      if self.parse_shape_index(&mut param_idx) {
+        return false;
+      }
+      let mut alias_kind = AliasKind::May;
+      if self.eat_if_present(&TokKind::Comma) {
+        let mut t = String::new();
+        self.parse_name(&mut t);
+        if &t == "must-alias" {
+          alias_kind = AliasKind::Must;
+        } else if &t == "may-alias" {
+          alias_kind = AliasKind::May;
+        } else {
+          return self.token_error(
+            "unexpected aliasing kind; expected SYSTEM or USER".to_string());
+        }
+      }
+      aliasing_data.insert(out, Alias::new(
+        param_num, param_idx, alias_kind));
+      if self.parse_token(&TokKind::Rparen, err_msg.clone()) {
+        return false;
+      }
+      if !self.eat_if_present(&TokKind::Comma) {
+        break;
+      }
+    }
+    if self.parse_token(&TokKind::Rbrace,
+      "expects '}' at the end of aliasing description".to_string())
+    {
+      return false;
+    }
+    true
+  }
+
   fn parse_buffer_donor() {}
-  fn parse_computation_layout() {}
-  fn parse_instruction_output_operand_aliasing() {}
-  fn parse_parse_custom_call_schedule() {}
-  fn parse_custom_call_api_version() {}
+
+  fn parse_computation_layout(
+    &mut self, computation_layout: &mut ComputationLayout) -> bool
+  {
+    if !self.parse_token(&TokKind::Lbrace,
+      "expects '{' at the start of aliasing description".to_string())
+    {
+      return false;
+    }
+    if !self.parse_token(&TokKind::Lparen,
+      "expects ( before parameter shape list".to_string())
+    {
+      return false;
+    }
+    while self.lexer.get_kind() != TokKind::Rparen {
+      let mut param = Shape::default();
+      if !self.parse_shape(&mut param,
+        !self.options.keep_module_auto_layouts())
+      {
+        return false;
+      }
+      computation_layout.add_parameter_layout(ShapeLayout::new(param));
+      if self.lexer.get_kind() == TokKind::Rparen {
+        break;
+      }
+      if !self.parse_token(&TokKind::Comma,
+        "expects , between parameter shapes".to_string())
+      {
+        return false
+      }
+    }
+    if !self.parse_token(&TokKind::Rparen,
+      "expects ) at end of parameter shape list".to_string())
+    {
+      return false;
+    }
+    if !self.parse_token(&TokKind::Arrow,
+      "expects -> before result shape".to_string())
+    {
+      return false;
+    }
+    let mut result = Shape::default();
+    if !self.parse_shape(&mut result,
+      !self.options.keep_module_auto_layouts())
+    {
+      return false;
+    }
+    *computation_layout.mutable_result_layout() = ShapeLayout::new(result);
+    if !self.parse_token(&TokKind::Rbrace,
+      "expects '}' at the end of computation layouts".to_string())
+    {
+      return false;
+    }
+    true
+  }
+
+  fn parse_instruction_output_operand_aliasing(
+    &mut self,
+    aliasing_output_operand_pairs: &mut Vec<(Vec<i64>, (i64, Vec<i64>))>) -> bool
+  {
+    if !self.parse_token(&TokKind::Lbrace,
+      "expects '{' at the start of instruction aliasing description".to_string())
+    {
+      return false;
+    }
+    while self.lexer.get_kind() != TokKind::Rbrace {
+      let mut out = vec![];
+      if !self.parse_shape_index(&mut out) {
+        return false;
+      }
+      let err_msg = "expected format: <output_shape_index>: (<operand_index>, 
+        <operand_shape_index>)".to_string();
+      if !self.parse_token(&TokKind::Colon, err_msg.clone()) {
+        return false;
+      }
+      if !self.parse_token(&TokKind::Lparen, err_msg.clone()) {
+        return false;
+      }
+      let mut operand_index = 0;
+      self.parse_i64(&mut operand_index);
+      if !self.parse_token(&TokKind::Comma, err_msg.clone()) {
+        return false;
+      }
+      let mut operand_shape_index = vec![];
+      if !self.parse_shape_index(&mut operand_shape_index) {
+        return false;
+      }
+      aliasing_output_operand_pairs.push((out, (operand_index, operand_shape_index)));
+      if !self.parse_token(&TokKind::Rparen, err_msg.clone()) {
+        return false;
+      }
+      if !self.eat_if_present(&TokKind::Comma) {
+        break;
+      }
+    }
+    if !self.parse_token(&TokKind::Rbrace,
+      "expects '}' at the end of instruction aliasing description".to_string())
+    {
+      return false;
+    }
+    true
+  }
+
+  fn parse_parse_custom_call_schedule(
+    &mut self, result: &mut CustomCallSchedule) -> bool
+  {
+    println!("parse_custom_call_schedule");
+    if self.lexer.get_kind() != TokKind::Ident {
+      return self.token_error("expects custom-call schedule".to_string());
+    }
+    let val = self.lexer.get_str_val();
+    let status_or_result =
+      string_to_custom_call_schedule(&val);
+    if status_or_result.is_err() {
+      let mut err_msg = "expects custom-call schedule but sees: ".to_string();
+      err_msg.push_str(&val);
+      err_msg.push_str(", error: ");
+      err_msg.push_str(&status_or_result.err().unwrap());
+      return self.token_error(err_msg);
+    }
+    *result = status_or_result.ok().unwrap();
+    self.lexer.lex(0);
+    true
+  }
+
+  fn parse_custom_call_api_version(
+    &mut self, result: &mut CustomCallApiVersion) -> bool
+  {
+    println!("parse_custom_call_api_version");
+    if self.lexer.get_kind() != TokKind::Ident {
+      return self.token_error("expects custom call API version".to_string());
+    }
+    let val = self.lexer.get_str_val();
+    let status_or_result =
+      string_to_custom_call_api_version(&val);
+    if status_or_result.is_err() {
+      let mut err_msg = "expects custom-call API version but sees: ".to_string();
+      err_msg.push_str(&val);
+      err_msg.push_str(", error: ");
+      err_msg.push_str(&status_or_result.err().unwrap());
+      return self.token_error(err_msg);
+    }
+    *result = status_or_result.ok().unwrap();
+    self.lexer.lex(0);
+    true
+  }
+
   fn parse_sparsity_descriptor() {}
-  fn parse_shape_index() {}
 
   fn can_be_shape(&mut self) -> bool {
     // A non-tuple shape starts with a PrimitiveType token; a tuple shape starts
@@ -4052,7 +5071,94 @@ fn schedule_from_instruction_order(module: &HloModule) -> HloSchedule<'_> {
 
 #[cfg(test)]
 mod tests {
+  use common::array2d::Array2D;
+use hlo::hlo_instruction::HloPrintOptions;
+
+use crate::hlo_verifier::HloVerifier;
+
   use super::*;
+
+  // An HLO module derived class which verifies itself on destruction. This class
+  // is intended to be used in unit tests. Any verification errors are raised via
+  // ADD_FAILURE.
+  pub struct VerifiedHloModule<'func> {
+    module: HloModule,
+    verifier: HloVerifier<'func>
+  }
+
+  impl<'func> VerifiedHloModule<'func> {
+    pub fn new(
+      name: String,
+      config: HloModuleConfig,
+      verifier_layout_sensitive: bool,
+      allow_mixed_precision_in_hlo_verifier: bool,
+      shape_size_func: &'func dyn Fn(&Shape)->i64,
+      instruction_can_change_layout_func: &'func dyn Fn(&HloInstruction)->bool) -> Self
+    {
+      VerifiedHloModule {
+        module: HloModule::new(name, config),
+        verifier: HloVerifier::new(verifier_layout_sensitive,
+          allow_mixed_precision_in_hlo_verifier,
+          instruction_can_change_layout_func, shape_size_func,
+          false)
+      }
+    }
+
+    // Given a string in the HloModule::ToString() format, parses the string and
+    // builds the VerifiedHloModule in place. Before calling this method, the
+    // module must be empty (no computations). Finally verifies the module using
+    // HloVerifier and returns the status.
+    pub fn parse_hlo_string_and_verify_module(
+      &mut self,
+      str: String,
+      options: HloParserOptions) -> Result<bool, String>
+    {
+      debug_assert!(self.module.computation_count() == 0);
+      let mut parser = HloParser::new_for_tests(str, options);
+      if parser.run(&mut self.module).is_err() {
+        return Err("parse error".to_string());
+      }
+      self.verify()
+    }
+
+    // Verifies the module and flags any error with ADD_FAILURE. 'message' is
+    // included in the failure message.
+    pub fn verify_or_add_failure(&self, message: String) {
+      let status = self.verify();
+      if status.is_err() {
+        let mut err_msg = "HloVerifier failed on module ".to_string();
+        err_msg.push_str(&self.module.name());
+        if !message.is_empty() {
+          err_msg.push_str("(");
+          err_msg.push_str(&message);
+          err_msg.push_str(")");
+          assert!(false, "{:?}", err_msg);
+        }
+      }
+    }
+
+    // Verifies the module using HloVerifier and returns the status.
+    pub fn verify(&self) -> Result<bool, String> {
+      if self.module.computation_count() == 0 {
+        // The computation was never built. Nothing to verify.
+        return Ok(true);
+      }
+      self.verifier.run(&self.module, HashSet::new())
+    }
+  }
+
+  fn parse_and_return_verified_module(hlo_text: String) -> Result<HloModule, String> {
+    parse_and_return_verified_module_inner(
+      "test_hlo_parser".to_string(), hlo_text, HloModuleConfig::default())
+  }
+
+  fn parse_and_return_verified_module_inner(
+    _name: String,
+    _hlo_text: String,
+    _config: HloModuleConfig) -> Result<HloModule, String>
+  {
+    unimplemented!()  
+  }
 
   #[test]
   fn test_empty() {
@@ -4089,7 +5195,9 @@ ENTRY %blabla (x: f32[], y: f32[]) -> f32[] {
   }
 
   #[test]
-  fn test_metadata_with_cholesky() {}
+  fn test_metadata_with_cholesky() {
+    unimplemented!()
+  }
 
   #[test]
   fn test_wrong_shape() {
@@ -4132,7 +5240,72 @@ ENTRY %blabla (x: f32[]) -> pred[] {
     assert!(result.is_err());
   }
 
+  #[test] // FAIL
+  fn test_compact_gte_non_tuple() {
+    let original = "HloModule test
+ENTRY test {
+  p0 = f32[10] parameter(0)
+  ROOT root = f32[10] add(f32[10] %p0#0, f32[10] %p0#0)
+}".to_string();
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_err()); // TODO: err msg
+  }
+
   #[test]
+  fn test_compact_gte_index_out_of_bounds() {
+    let original = "HloModule test
+ENTRY test {
+  p0 = (f32[10], f16[10]) parameter(0)
+  ROOT root = f32[10] add(f32[10] %p0#2, f32[10] %p0#2)
+}".to_string();
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_err()); // TODO: err msg
+  }
+
+  #[test]
+  fn test_compact_gte_negative_index() {
+    let original = "HloModule test
+ENTRY test {
+  p0 = (f32[10], f16[10]) parameter(0)
+  ROOT root = f32[10] add(f32[10] %p0#-1, f32[10] %p0#-1)
+}".to_string();
+    let result = parse_and_return_unverified_module(
+      original, HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(result.is_err()); // TODO: err msg
+  }
+
+  #[test] // FAIL
+  fn test_compact_gte_round_trip() {
+    let original = "
+HloModule test, entry_computation_layout={((f32[10]{0}, f16[10]{0}))->f32[10]{0}}
+
+ENTRY %test {
+  %p0 = (f32[10]{0}, f16[10]{0}) parameter(0)
+  ROOT %root = f32[10]{0} add(f32[10]{0} %p0#0, f32[10]{0} %p0#0)
+}".to_string();
+    let module_wrapper = parse_and_return_unverified_module(
+      original.clone(), HloModuleConfig::default(),
+      HloParserOptions::default());
+    assert!(module_wrapper.is_ok());
+    let module = module_wrapper.unwrap();
+
+    let mut options = HloPrintOptions::short_parsable();
+    options.set_compact_gte(true);
+    options.set_print_operand_shape(true);
+    options.set_print_percent(true);
+
+    let printed = module.to_string();
+    let original_splitted: String = original.split_ascii_whitespace().collect();
+    let printed_splitted: String = printed.split_ascii_whitespace().collect();
+    assert_eq!(original_splitted, printed_splitted);
+  }
+
+  #[test] // FAIL
   fn test_more_constants() {
     let original = "HloModule SelectScalarS32True_module
 ENTRY %SelectScalarS32True.v4 () -> s32[] {
@@ -4151,7 +5324,7 @@ ENTRY %SelectScalarS32True.v4 () -> s32[] {
     // but the constant names will not be exactly the same.
   }
 
-  #[test]
+  #[test] // FAIL
   fn test_configuration_field() {
     let original = "HloModule AModule
 ENTRY %configuration_test() -> s32[] {
@@ -4166,7 +5339,7 @@ ENTRY %configuration_test() -> s32[] {
       //"foo bar".to_string());
   }
 
-  #[test]
+  #[test] // FAIL
   fn test_literal_dimensions_error() {
     let original = "HloModule some_2x3_module
 
@@ -4192,12 +5365,17 @@ ENTRY %some_2x3 () -> f32[2,3] {
 
   #[test]
   fn test_parse_sharding_partial_replication() {
-    let original = "{devices=[2,2]0,1,2,3 last_tile_dim_replicate}".to_string();
+    let original =
+      "{devices=[2,2]0,1,2,3 last_tile_dim_replicate}".to_string();
     let sharding = parse_sharding(original.clone());
     assert!(sharding.is_ok());
     assert_eq!(sharding.unwrap().to_string(false), original);
-
-    // TODO
+    let array_2d: Array2D<i64> =
+      Array2D::new_from(vec![vec![0, 1], vec![2, 3]]);
+    let tiling_last_dim_replicated =
+      TileAssignment::new_from_array_2d(array_2d);
+    assert_eq!(HloSharding::partial_tile(tiling_last_dim_replicated,
+      vec![]).to_string(false), original);
   }
 
   #[test]

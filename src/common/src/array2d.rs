@@ -2,18 +2,25 @@ use crate::util::log_2_ceiling;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Array2D<T> {
+  sizes: Vec<i64>,
   values: Vec<Vec<T>>
 }
 
 impl<T> Array2D<T> where T: Default + Clone {
   pub fn default() -> Self {
-    let mut instance = Array2D { values: vec![vec![]] };
+    let mut instance = Array2D {
+      sizes: vec![0, 0],
+      values: vec![vec![]]
+    };
     instance.values.resize(0, vec![T::default(); 0]);
     instance
   }
 
   pub fn new(n1: usize, n2: usize) -> Self {
-    let mut instance = Array2D { values: vec![vec![]] };
+    let mut instance = Array2D {
+      sizes: vec![n1 as i64, n2 as i64],
+      values: vec![vec![]]
+    };
     instance.values.resize(n1, vec![T::default(); n2]);
     for i in 0..n1 {
       let vec = &mut instance.values[i];
@@ -29,7 +36,10 @@ impl<T> Array2D<T> where T: Default + Clone {
   }
 
   pub fn new_from(values: Vec<Vec<T>>) -> Self {
-    Array2D { values: values }
+    Array2D {
+      sizes: vec![values.len() as i64, values[0].len() as i64],
+      values: values
+    }
   }
 
   pub fn n1(&self) -> usize {
@@ -52,6 +62,10 @@ impl<T> Array2D<T> where T: Default + Clone {
 
   pub fn num_elements(&self) -> usize {
     self.n1() * self.n2()
+  }
+
+  pub fn dimensions(&self) -> &Vec<i64> {
+    &self.sizes
   }
 
   // Fills the array with the specified value.

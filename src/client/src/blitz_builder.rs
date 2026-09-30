@@ -187,7 +187,7 @@ impl BlitzBuilder {
       next_id: 0,
       input_output_aliases: Vec::new(),
       handle_to_index: HashMap::new(),
-      metadata: OpMetadata::new(),
+      metadata: OpMetadata::default(),
       oneshot_metadata: None,
       sharding: None,
       frontend_attributes: FrontendAttributes::default(),

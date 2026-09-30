@@ -131,7 +131,7 @@ pub struct OpMetadata {
 }
 
 impl OpMetadata {
-  pub fn new() -> Self {
+  pub fn default() -> Self {
     OpMetadata {
       op_type: "".to_string(),
       op_name: "".to_string(),
@@ -171,15 +171,15 @@ impl OpMetadata {
 
 // Generic map of attributes used to pass hints / configuration options from
 // the Python frontend to the Blitz backend.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrontendAttributes {
-  //map: HashMap<String, String>
+  map: HashMap<String, String>
 }
 
 impl FrontendAttributes {
   pub fn default() -> Self {
     FrontendAttributes {
-      //map: HashMap::new()
+      map: HashMap::new()
     }
   }
 
@@ -364,13 +364,19 @@ impl DotDimensionNumbers {
 // parameter data at each buffer.
 #[derive(Debug, Clone)]
 pub struct ParameterReplication {
+  // A list of boolean values for the flattened leaf buffers. Each value
+  // indicates whether the corresponding leaf buffer is replicated.
+  //
+  // If this field is empty, it means no buffer is replicated. Otherwise, the
+  // number of elements in this field must match the number of leaf buffers in
+  // the HLO instruction's shape.
   replicated_at_leaf_buffers: Vec<bool>
 }
 
 impl ParameterReplication {
   pub fn default() -> Self {
     ParameterReplication {
-      replicated_at_leaf_buffers: Vec::new()
+      replicated_at_leaf_buffers: vec![false; 1]
     }
   }
 
@@ -2627,7 +2633,7 @@ pub enum CustomCallSchedule {
 
 // The version of the API used by the custom call function. The signatures for
 // each version are given below.
-pub enum CustomCallApiVersion {
+pub enum Ersion {
   Unspecified,
   Original,
   StatusReturning,
@@ -2664,16 +2670,24 @@ impl SliceDimensions {
 // multiple implementations.
 #[derive(Debug, Clone)]
 pub struct ResultAccuracy {
-  mode: ResultAccuracyMode
+  mode: ResultAccuracyMode,
+  tolerance: ResultAccuracyTolerance,
 }
 
 impl ResultAccuracy {
   pub fn default() -> Self {
-    ResultAccuracy { mode: ResultAccuracyMode::Default }
+    ResultAccuracy {
+      mode: ResultAccuracyMode::Default,
+      tolerance: ResultAccuracyTolerance::default()
+    }
   }
 
   pub fn set_mode(&mut self, mode: ResultAccuracyMode) {
     self.mode = mode;
+  }
+
+  pub fn mutable_tolerance(&mut self) -> &mut ResultAccuracyTolerance {
+    &mut self.tolerance
   }
 }
 
@@ -2681,6 +2695,35 @@ impl ResultAccuracy {
 pub enum ResultAccuracyMode {
   Default,
   Highest,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResultAccuracyTolerance {
+  // Absolute error tolerance for unary instructions.
+  atol: f64,
+  // Relative error tolerance for unary instructions.
+  rtol: f64,
+  // The error in ulps (units in the last place) is relative to machine
+  // precision.
+  ulps: f64,
+}
+
+impl ResultAccuracyTolerance {
+  pub fn default() -> Self {
+    ResultAccuracyTolerance { atol: 0.0, rtol: 0.0, ulps: 0.0 }
+  }
+
+  pub fn set_atol(&mut self, atol: f64) {
+    self.atol = atol;
+  }
+
+  pub fn set_rtol(&mut self, rtol: f64) {
+    self.rtol = rtol;
+  }
+
+  pub fn set_ulps(&mut self, ulps: f64) {
+    self.ulps = ulps;
+  }
 }
 
 // A trace of a HeapSimulator run.
@@ -2829,4 +2872,16 @@ impl IntRangeInclusive {
   pub fn set_last(&mut self, last: i64) {
     self.last = last;
   }
+}
+
+// The version of the API used by the custom call function. The signatures for
+// each version are given below.
+// TODO(b/189822916): Remove this enum when all clients are migrated to the
+// status-returning API.
+pub enum CustomCallApiVersion {
+  Unspecified,
+  Original,
+  StatusReturning,
+  StatusReturningUnified,
+  TypedFfi,
 }
