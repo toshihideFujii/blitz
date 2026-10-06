@@ -397,7 +397,7 @@ impl HloSharding {
   }
 
   pub fn subgroup_from_array(
-    tile_assignment: Array,
+    tile_assignment: Array<i64>,
     subgroup_types: Vec<OpShardingType>,
     metadata: Vec<OpMetadata>) -> Self
   {

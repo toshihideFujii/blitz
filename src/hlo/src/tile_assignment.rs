@@ -29,7 +29,7 @@ impl IotaTileAssignment {
     reshape_dims: &Vec<i64>,
     transpose_perm: &Vec<i64>) -> Self
   {
-    let mut instance = IotaTileAssignment::new(
+    let mut instance = IotaTileAssignment::new_from_ndims(
       dims.len() as i64, reshape_dims.len() as i64);
     debug_assert!(reshape_dims.len() == transpose_perm.len());
     instance.dims.clone_from(dims);
@@ -38,7 +38,7 @@ impl IotaTileAssignment {
     instance
   }
 
-  pub fn new(ndims: i64, reshape_ndims: i64) -> Self {
+  pub fn new_from_ndims(ndims: i64, reshape_ndims: i64) -> Self {
     IotaTileAssignment {
       ndims: ndims,
       reshape_ndims: reshape_ndims,
@@ -49,12 +49,12 @@ impl IotaTileAssignment {
     }
   }
 
-  pub fn create(dims: &Vec<i64>) -> Self {
+  pub fn new(dims: &Vec<i64>) -> Self {
     IotaTileAssignment::new_detail(
       dims, &vec![product(dims)], &vec![0])
   }
 
-  pub fn create_from_vecs(
+  pub fn new_from_vecs(
     dims: &Vec<i64>, reshape_dims: &Vec<i64>, transpose_perm: &Vec<i64>) -> Self
   {
     let mut dims_span = vec![];
@@ -149,13 +149,13 @@ impl IotaTileAssignment {
   }
 
   // Materializes array representation of IotaTileAssignment.
-  pub fn to_array(&self) -> Array {
+  pub fn to_array(&self) -> Array<i64> {
     let mut reshape_dims = vec![];
     reshape_dims.clone_from(self.reshape_dims());
-    let mut array = Array::new(reshape_dims);
+    let mut array = Array::new(&reshape_dims);
     array.fill_iota(0);
-    //array.transpose_dimensions(self.transpose_perm());
-    //array.reshape(self.dims());
+    array.transpose_dimensions(self.transpose_perm());
+    array.reshape(self.dims());
     array
   }
 }
@@ -172,7 +172,7 @@ impl IotaTileAssignment {
 pub struct TileAssignment {
   iota: Option<IotaTileAssignment>,
   // Pointer to the storage of the fully materialized array format.
-  array: Option<Array>,
+  array: Option<Array<i64>>,
   array_2d: Option<Array2D<i64>>
 }
 
@@ -187,13 +187,13 @@ impl TileAssignment {
 
   pub fn new_from_vec(dims: &Vec<i64>) -> Self {
     TileAssignment {
-      iota: Some(IotaTileAssignment::create(dims)),
+      iota: Some(IotaTileAssignment::new(dims)),
       array: None,
       array_2d: None
     }
   }
 
-  pub fn new_from_array(array: Array) -> Self {
+  pub fn new_from_array(array: Array<i64>) -> Self {
     TileAssignment {
       iota: None,
       array: Some(array),
@@ -210,7 +210,8 @@ impl TileAssignment {
   }
 
   pub fn new_from_device_id(device_id: i64) -> Self {
-    let array = Array::new_fill(vec![1], device_id);
+    let array =
+      Array::new_with_value(&vec![1], device_id);
     TileAssignment::new_from_array(array)
   }
 
@@ -228,7 +229,7 @@ impl TileAssignment {
     transpose_perm: &Vec<i64>) -> Self
   {
     TileAssignment {
-      iota: Some(IotaTileAssignment::create_from_vecs(
+      iota: Some(IotaTileAssignment::new_from_vecs(
         dims, reshape_dims, transpose_perm)),
       array: None,
       array_2d: None
@@ -287,7 +288,7 @@ impl TileAssignment {
   #[allow(dead_code)]
   fn value_at(&self, pos: &Vec<i64>) -> i64 {
     if self.array.is_some() {
-      return self.array.as_ref().unwrap().value_at(pos);
+      return *self.array.as_ref().unwrap().at(pos);
     } else {
       assert!(self.iota.is_some());
       return self.iota.as_ref().unwrap().value_at(pos);   
@@ -374,12 +375,12 @@ impl TileAssignment {
 
   // Returns reference to the full array representation. If it holds iota
   // format, reference to a lazily materialized array is returned.
-  pub fn array(&self) -> &Array {
+  pub fn array(&self) -> &Array<i64> {
     self.array.as_ref().unwrap()
   }
 
-  fn replicated_array() -> Array {
-    Array::new(vec![0])
+  fn replicated_array() -> Array<i64> {
+    Array::new(&vec![0])
   }
 
   fn maybe_materializa_full_array(&mut self) {
@@ -482,6 +483,20 @@ mod tests {
     };
     tile.each(&mut func);
     result
+  }
+
+  #[test]
+  fn test_iota_create() {
+    // Test with dims only
+    let iota_1 =
+      IotaTileAssignment::new(&vec![2, 3]);
+    assert_eq!(iota_1.dims(), &vec![2, 3]);
+    assert_eq!(iota_1.reshape_dims(), &vec![6]);
+    assert_eq!(iota_1.transpose_perm(), &vec![0]);
+    assert_eq!(iota_1.num_elements(), 6);
+
+    // Test with reshape_dims and transpose_perm
+    //let iota_2 = IotaTileAssignment::new(&vec![])
   }
 
   #[test]

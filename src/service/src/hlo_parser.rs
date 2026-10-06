@@ -3527,7 +3527,7 @@ impl HloParser {
         }
         let mut tiles: Vec<i64> = vec![];
         tiles.clone_from(&tile_assignment_dimensions);
-        let mut array = Array::new(tiles);
+        let mut array = Array::new(&tiles);
         array.set_values(&devices);
         if subgroup_types.is_empty() {
           *sharding = HloSharding::tile(
@@ -5387,7 +5387,7 @@ ENTRY %some_2x3 () -> f32[2,3] {
     assert!(sharding.is_ok());
     assert_eq!(sharding.unwrap().to_string(false), original);
 
-    let mut tile_assignment = Array::new(vec![2, 2, 2, 2]);
+    let mut tile_assignment = Array::new(&vec![2, 2, 2, 2]);
     tile_assignment.fill_iota(0);
     let subgroup_types =
       vec![OpShardingType::Manual, OpShardingType::Replicated];

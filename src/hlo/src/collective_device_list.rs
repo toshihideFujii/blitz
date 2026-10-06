@@ -16,7 +16,7 @@ pub struct IotaReplicaGroupList {
 impl IotaReplicaGroupList {
   pub fn new(num_replica_groups: i64, num_devices_per_group: i64) -> Self {
     IotaReplicaGroupList {
-      iota_tile_assignment: IotaTileAssignment::create(
+      iota_tile_assignment: IotaTileAssignment::new(
         &vec![num_replica_groups, num_devices_per_group]),
       num_replica_groups: num_replica_groups,
       num_devices_per_group: num_devices_per_group
@@ -39,7 +39,7 @@ impl IotaReplicaGroupList {
     self.iota_tile_assignment.transpose_perm()
   }
 
-  pub fn to_array(&self) -> Array {
+  pub fn to_array(&self) -> Array<i64> {
     self.iota_tile_assignment.to_array()
   }
 
